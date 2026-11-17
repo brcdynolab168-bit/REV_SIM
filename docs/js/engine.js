@@ -1,0 +1,394 @@
+// Rev Lab (เว็บ): โมเดลเครื่องยนต์ + ตัวรถ + CVT + ผู้ช่วยจูน  (พอร์ตจากเวอร์ชัน C#/WinForms)
+export const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
+const PI = Math.PI;
+
+// ---------------------------------------------------------------- น้ำมัน / ท่อ
+export const PipeNames = ['ท่อเดิม', 'ท่อผ่าหมก', 'ท่อผ่าเปิด', 'ท่อสูตร'];
+export const Fuels = [
+  { name: 'เบนซิน 91', ron: 91, power: 0.99 },
+  { name: 'เบนซิน 95', ron: 95, power: 1.0 },
+  { name: 'แก๊สโซฮอล์ E20', ron: 98, power: 1.01 },
+  { name: 'น้ำมันแข่ง RON 100', ron: 100, power: 1.015 },
+  { name: 'E85 (เอทานอล 85%)', ron: 105, power: 1.045 },
+  { name: 'เมทานอล', ron: 109, power: 1.08 },
+  { name: 'เมทานอล + ไนโตร 20%', ron: 120, power: 1.22 },
+];
+const fuelOf = d => Fuels[clamp(Math.round(d.Fuel), 0, Fuels.length - 1)];
+
+// ---------------------------------------------------------------- แบบเครื่อง
+export function newDesign(o = {}) {
+  return Object.assign({
+    Bore: 52.4, Stroke: 57.9, Rod: 90, CrankKg: 2.8, FlywheelKg: 0.6, Valves: 2, Throttle: 20,
+    Lsa: 114, Duration: 225, DurationEx: 225, Lift: 7.5, LiftEx: 7.5, Cr: 9.3, Seal: 1,
+    RealHp: 0, RealHpRpm: 0, RealTq: 0, RealTqRpm: 0, CalK: 1,
+    Limiter: 9500, ResumeGap: 80, SoftGap: 0,
+    SprocketF: 14, SprocketR: 36, RiderKg: 65, Auto: 0,
+    RampDeg: 13.5, Rollers: 6, RollerG: 8.5, RollerG2: 8.5, GearF: 13, GearR: 40, FirstRed: 3.0,
+    BikeKg: 107, CdA: 0.415, RimInch: 17, RimW: 1.4, TireW: 80, TireAsp: 90,
+    SpringK: 20, Primary: 3.35, Gear1: 2.5, Gear2: 1.55, Gear3: 1.15, Gear4: 0.923, Pipe: 0, Fuel: 1,
+  }, o);
+}
+export const crankPsi = cr => 14.7 * Math.pow(cr, 1.15);
+export const crFromPsi = psi => Math.pow(psi / 14.7, 1 / 1.15);
+export const camLoss = d => 1 - 0.002 * Math.max(0, d.Duration - 220);
+export const crDynamic = d => d.Cr * camLoss(d);
+export const psiOf = d => crankPsi(crDynamic(d)) * d.Seal;
+export const tireCode = d => `${Math.round(d.TireW)}/${Math.round(d.TireAsp)}-${Math.round(d.RimInch)}`;
+
+const CVT125 = { Auto: 1, RampDeg: 13.5, Rollers: 6, RollerG: 8.5, RollerG2: 8.5, GearF: 13, GearR: 40, FirstRed: 3.0, BikeKg: 113, RimInch: 14, RimW: 1.6, TireW: 90, TireAsp: 90 };
+export const Presets = [
+  ['Wave 125i เดิม', newDesign()],
+  ['เวฟ 110 เดิม*', newDesign({ Bore: 50, Stroke: 55.6, Rod: 89, CrankKg: 2.6, FlywheelKg: 0.6, Throttle: 22, Cr: 9.0, Limiter: 9000 })],
+  ['ลูก 53 แคมแต่ง*', newDesign({ Bore: 53, Stroke: 55.6, Rod: 89, CrankKg: 2.2, FlywheelKg: 0.5, Throttle: 26, Lsa: 108, Duration: 245, DurationEx: 245, Lift: 7, LiftEx: 7, Cr: 10, Limiter: 10500 })],
+  ['ลูก 67 ซิ่ง*', newDesign({ Bore: 67, Stroke: 55.6, Rod: 89, CrankKg: 1.4, FlywheelKg: 0.4, Throttle: 34, Lsa: 104, Duration: 290, DurationEx: 290, Lift: 9, LiftEx: 9, Cr: 11.5, Limiter: 12800 })],
+  ['ออโต้ 125 (CVT)*', newDesign(CVT125)],
+  ['XMAX 300 (CVT)', newDesign({ Bore: 70, Stroke: 75.8, Rod: 118, CrankKg: 4.7, FlywheelKg: 0.8, Valves: 4, Throttle: 30, Lsa: 110, Duration: 225, DurationEx: 225, Lift: 7.5, LiftEx: 7.5, Cr: 10.9, Limiter: 8800,
+    Auto: 1, RampDeg: 13.5, Rollers: 6, RollerG: 13.5, RollerG2: 13.5, SpringK: 20, GearF: 13, GearR: 37, FirstRed: 48 / 18, BikeKg: 180, RimInch: 14, RimW: 3.5, TireW: 140, TireAsp: 70, RiderKg: 75, CdA: 0.32 })],
+  ['สตรีท 150 ลูก 58*', newDesign({ Bore: 58, Stroke: 57.9, Rod: 90, CrankKg: 2.5, FlywheelKg: 0.5, Throttle: 28, Lsa: 110, Duration: 240, DurationEx: 240, Lift: 8, LiftEx: 8, Cr: 10.5, Limiter: 10500, Fuel: 2 })],
+  ['เดี่ยว 300 ลูก 80*', newDesign({ Bore: 80, Stroke: 60, Rod: 100, CrankKg: 4.8, FlywheelKg: 0.7, Valves: 4, Throttle: 38, Lsa: 108, Duration: 255, DurationEx: 255, Lift: 9.5, LiftEx: 9.5, Cr: 11.5, Limiter: 11000, Fuel: 3, BikeKg: 120 })],
+  ['เดี่ยว 600 ลูก 100*', newDesign({ Bore: 100, Stroke: 76.5, Rod: 125, CrankKg: 7.2, FlywheelKg: 1.3, Valves: 4, Throttle: 46, Lsa: 108, Duration: 250, DurationEx: 250, Lift: 10.5, LiftEx: 10.5, Cr: 12.5, Limiter: 10500, Fuel: 3, BikeKg: 140 })],
+  ['ดรักเมทานอล 1000 ลูก 120*', newDesign({ Bore: 120, Stroke: 88, Rod: 150, CrankKg: 10, FlywheelKg: 2.0, Valves: 4, Throttle: 60, Lsa: 106, Duration: 270, DurationEx: 270, Lift: 13, LiftEx: 13, Cr: 14.5, Limiter: 9500, Fuel: 5, BikeKg: 160 })],
+];
+
+// ---------------------------------------------------------------- รายการค่าที่ปรับได้ในอู่
+const fmt = (v, f) => v.toFixed(f === '0' ? 0 : f.length - 2);
+// P(key, name, unit, min, max, step, format, get, set, hint, {visible, text, persist})
+function P(key, name, unit, min, max, step, format, get, set, hint, o = {}) {
+  return { key, name, unit, min, max, step, format, get, set, hint, visible: o.visible || null, text: o.text || null, hidden: !!o.hidden };
+}
+const pr = (k, p) => [d => d[p], (d, v) => { d[p] = v; }];
+const num = (key, name, unit, min, max, step, format, prop, hint, o) => P(key, name, unit, min, max, step, format, ...pr(key, prop), hint, o);
+const manual = d => d.Auto === 0, auto = d => d.Auto === 1;
+export const Params = [
+  num('bore', 'ขนาดลูกสูบ', 'มม.', 47, 120, 0.5, '0.0', 'Bore', 'ลูกใหญ่ = ซีซีเยอะ แรงขึ้น แต่น็อกง่ายขึ้น'),
+  num('stroke', 'ระยะชัก', 'มม.', 49.5, 100, 0.1, '0.0', 'Stroke', 'ชักยาว = แรงบิดดี แต่ลูกสูบวิ่งเร็ว ลากรอบสูงไม่ได้'),
+  num('rod', 'ก้านสูบ', 'มม.', 80, 200, 0.5, '0.0', 'Rod', 'ก้านยาว = แรงเสียดทาน/แรงกระชากลูกสูบน้อยลง'),
+  num('crank', 'นน.ข้อเหวี่ยง', 'กก.', 1.2, 16, 0.1, '0.0', 'CrankKg', 'เบา = รอบขึ้น-ลงไว แต่เดินเบาไม่นิ่ง'),
+  num('fly', 'นน.จานไฟ', 'กก.', 0.2, 3, 0.05, '0.00', 'FlywheelKg', 'จานไฟหนัก = ความเฉื่อยสูง รอบขึ้นช้า/ออกตัวนิ่ง เดินเบาเรียบ  เบา = เร่งรอบไว แต่เดินเบาสะดุด'),
+  num('valves', 'จำนวนวาล์ว', 'วาล์ว', 2, 4, 2, '0', 'Valves', '4 วาล์ว = ไอดีเข้าเยอะ วาล์วเบา ลากรอบสูงได้'),
+  num('throttle', 'ขนาดเรือน', 'มม.', 20, 60, 1, '0', 'Throttle', 'เรือนใหญ่ = ปลายไหล แต่ต้องมีวาล์ว/แคมรองรับ'),
+  P('pipe', 'ท่อไอเสีย', '', 0, 3, 1, '0', ...pr('pipe', 'Pipe'),
+    'เดิม = เงียบ  ผ่าหมก = ปลายขึ้นนิดหน่อย เสียงดังขึ้น  ผ่าเปิด = ปลายดีแต่รอบต่ำตก เสียงแผดดังมาก  ท่อสูตร = จูนรอบเดียว พีคแรงขึ้นชัดแต่ช่วงล่างหาย', { text: v => PipeNames[clamp(Math.round(v), 0, 3)] }),
+  num('lsa', 'มุมแคม (LSA)', '°', 98, 118, 1, '0', 'Lsa', 'มุมแคบ = แรงบิดพีคสูงแต่ช่วงแคบ โอเวอร์แลปมาก เดินเบาสะดุด'),
+  num('duration', 'องศาแคม ไอดี (IN)', '°', 200, 320, 2, '0', 'Duration', 'องศามาก = แรงย้ายไปรอบสูง เดินเบาสั่น  ไอดีปิดช้า = กำลังอัดจริงลด'),
+  num('durationex', 'องศาแคม ไอเสีย (EX)', '°', 200, 320, 2, '0', 'DurationEx', 'ไอเสียยาวกว่าไอดี = ปลายไหลดี แต่โอเวอร์แลปมาก  สั้นกว่าไอดีมาก = ไอเสียอั้น ปลายตก'),
+  num('lift', 'ระยะยกแคม ไอดี (IN)', 'มม.', 5, 16, 0.1, '0.0', 'Lift', 'ยกสูง = ไอดีไหลดี แต่วาล์วลอยที่รอบต่ำลง'),
+  num('liftex', 'ระยะยกแคม ไอเสีย (EX)', 'มม.', 5, 16, 0.1, '0.0', 'LiftEx', 'ยกไอเสียน้อยกว่าไอดีมาก = ไอเสียอั้น ปลายตก  ยกมากกว่า = ไหลดีขึ้นเล็กน้อย แต่วาล์วลอยง่ายขึ้น'),
+  P('cr', 'อัตราส่วนกำลังอัด (CR)', ':1', 7, 20, 0.1, '0.0', ...pr('cr', 'Cr'),
+    'ค่าเรขาคณิต สูง = ประสิทธิภาพเชิงความร้อนดี เสียงแผด  แยกจากแรงดันอัด (psi) ที่ปรับอีกบรรทัด', { text: v => v.toFixed(1) + ' : 1' }),
+  P('psi', 'แรงดันอัด (วัดจริง)', 'psi', 100, 480, 5, '0', d => psiOf(d), (d, v) => { d.Seal = clamp(v / crankPsi(crDynamic(d)), 0.6, 1.5); },
+    'ค่าที่เกจวัดตอนสตาร์ท ปรับแยกจาก CR: ซีลแน่น = แรงบิดดีขึ้นแต่น็อกง่าย  ต่ำ = รั่ว กำลังตก จุดไม่ติด (Wave ~190, แต่งถนน 200-230, แข่ง 260-300+)', { text: v => Math.round(v) + ' psi' }),
+  P('fuel', 'ชนิดน้ำมัน', '', 0, 6, 1, '0', ...pr('fuel', 'Fuel'), 'ออกเทนสูง = ทนกำลังอัดสูงก่อนน็อก  E85/เมทานอล/ไนโตร ฉีดหนาขึ้นได้กำลังเพิ่มด้วย',
+    { text: v => { const f = Fuels[clamp(Math.round(v), 0, 6)]; return `${f.name}  (RON ${f.ron})`; } }),
+  num('limiter', 'รอบตัด (hard cut)', 'rpm', 6000, 15000, 100, '0', 'Limiter', 'ถึงรอบนี้ตัดไฟทั้งหมดทันที ตั้งเกินที่เครื่องรับไหว = พัง'),
+  P('resume', 'รอบเด้งกลับหลัง hard cut', 'rpm', 20, 3000, 10, '0', ...pr('resume', 'ResumeGap'),
+    'ตัดแล้วรอบต้องตกลงถึงรอบนี้จึงติดใหม่  ตัดน้อย = รัวถี่  ตัดมาก = รอบตกลึก', { text: (v, d) => `${Math.round(d.Limiter - v)} rpm  (ตกลง ${Math.round(v)})` }),
+  P('softcut', 'Soft cut ห่างใต้ hard cut', 'rpm', 0, 2000, 50, '0', ...pr('softcut', 'SoftGap'),
+    'หน่วงไฟ/ข้ามจังหวะระเบิดตั้งแต่ใต้ hard cut ลงมา 0 = ไม่ใช้', { text: (v, d) => (v <= 0 ? 'ปิด' : `${Math.round(d.Limiter - v)} rpm  (ห่าง ${Math.round(v)})`) }),
+  num('prim', 'อัตราทดขั้นต้น', ':1', 2.5, 4.5, 0.01, '0.000', 'Primary', 'ทดขั้นต้นสูง = ทุกเกียร์ทดจัดขึ้นเท่ากัน (Wave 125i = 3.350)', { visible: manual }),
+  num('g1', 'อัตราทดเกียร์ 1', ':1', 1.6, 4, 0.01, '0.000', 'Gear1', 'ตัวเลขมาก = ทดจัด ออกตัวแรง (Wave 2.500)', { visible: manual }),
+  num('g2', 'อัตราทดเกียร์ 2', ':1', 1.1, 2.8, 0.01, '0.000', 'Gear2', 'ช่วงห่างเกียร์ 1-2 กว้าง = รอบตกมากตอนเปลี่ยน (Wave 1.550)', { visible: manual }),
+  num('g3', 'อัตราทดเกียร์ 3', ':1', 0.8, 2, 0.01, '0.000', 'Gear3', 'เกียร์ชิดไล่ต่อเนื่อง แต่ท็อปสปีดไม่ไกล (Wave 1.150)', { visible: manual }),
+  num('g4', 'อัตราทดเกียร์ 4', ':1', 0.6, 1.5, 0.01, '0.000', 'Gear4', 'ต่ำกว่า 1 = โอเวอร์ไดรฟ์ ปลายยาว (Wave 0.923)', { visible: manual }),
+  num('sprf', 'สเตอร์หน้า', 'ฟัน', 11, 18, 1, '0', 'SprocketF', 'เล็กลง = ออกตัวดี แต่ปลายสั้น', { visible: manual }),
+  num('sprr', 'สเตอร์หลัง', 'ฟัน', 28, 46, 1, '0', 'SprocketR', 'ใหญ่ขึ้น = ทดจัด ออกตัวแรง ท็อปสปีดต่ำ  เล็กลง = ปลายยาว', { visible: manual }),
+  num('rider', 'น้ำหนักคนขี่', 'กก.', 40, 110, 1, '0', 'RiderKg', 'น้ำหนักรวมมาก = ออกตัวช้า ไต่เนินช้า'),
+  num('bikekg', 'น้ำหนักรถเปล่า', 'กก.', 80, 260, 1, '0', 'BikeKg', 'รถหนัก = ออกตัวและไต่ความเร็วช้า (Wave ~107, สกู๊ตเตอร์ 125 ~113, XMAX ~180)'),
+  num('cda', 'พื้นที่ลมต้าน (CdA)', 'ตร.ม.', 0.25, 0.8, 0.01, '0.00', 'CdA', 'ต่ำ = ลู่ลม ท็อปสปีดสูง (สกู๊ตเตอร์ ~0.32, รถซิ่งนั่งตรง ~0.42-0.5)'),
+  num('rim', 'ขนาดขอบล้อ', 'นิ้ว', 10, 19, 1, '0', 'RimInch', 'ขอบใหญ่ = รัศมีล้อโต ความเร็วต่อรอบสูงขึ้น ล้อหนักขึ้น  ขอบเล็ก = ออกตัวไว'),
+  num('rimw', 'ความกว้างขอบล้อ', 'นิ้ว', 1, 4, 0.05, '0.00', 'RimW', 'ใส่ให้พอดีหน้ายาง (1.10/1.20/1.40/1.60…) ไม่พอดี = แรงเกาะตก'),
+  num('tirew', 'หน้ายาง', 'มม.', 50, 190, 5, '0', 'TireW', 'ยางกว้าง = เกาะดีขึ้น แต่ต้านการกลิ้งมากขึ้นและล้อหนักขึ้น'),
+  num('tireasp', 'แก้มยาง', '%', 40, 100, 5, '0', 'TireAsp', 'แก้มสูง = รัศมีล้อโต ความเร็วต่อรอบสูงขึ้น  แก้มต่ำ = ทดจัดขึ้น'),
+  P('auto', 'ระบบส่งกำลัง', '', 0, 1, 1, '0', ...pr('auto', 'Auto'), 'ออโต้ = สายพาน CVT ไม่ต้องเปลี่ยนเกียร์ ปรับชามเม็ด/น้ำหนักเม็ดเพื่อจูน', { text: v => (v > 0.5 ? 'ออโต้ (CVT)' : 'เกียร์ธรรมดา') }),
+  num('ramp', 'องศาชาม', '°', 11, 16, 0.5, '0.0', 'RampDeg', 'องศาน้อย = ไล่รอบเร็ว ถือรอบต่ำ (ปลายยาว)  องศามาก = ถือรอบสูง ออกตัวจัด', { visible: auto }),
+  num('rollers', 'จำนวนเม็ด', 'เม็ด', 4, 6, 2, '0', 'Rollers', '6 เม็ด = มวลรวมมาก ไล่รอบเร็ว  4 เม็ด = ถือรอบสูงกว่า', { visible: auto }),
+  num('rollerg', 'น้ำหนักเม็ด', 'กรัม', 4, 20, 0.5, '0.0', 'RollerG', 'เม็ดหนัก = ไล่รอบไว ถือรอบต่ำ  เม็ดเบา = ถือรอบสูง ปลายไปไกล', { visible: auto }),
+  num('rollerg2', 'น้ำหนักเม็ดสลับ', 'กรัม', 4, 20, 0.5, '0.0', 'RollerG2', 'เม็ดตำแหน่งที่ 2, 4, 6 ผสมหนัก/เบาเพื่อจูนละเอียด', { visible: auto }),
+  num('fdf', 'เฟืองท้าย ตัวหน้า', 'ฟัน', 10, 20, 1, '0', 'GearF', 'ฟันหน้าน้อย/ฟันหลังมาก = ทดจัด ออกตัวแรง ท็อปสปีดลด', { visible: auto }),
+  num('fdr', 'เฟืองท้าย ตัวหลัง', 'ฟัน', 28, 50, 1, '0', 'GearR', 'ฟันมาก = ทดจัดขึ้น  ฟันน้อย = ปลายยาว', { visible: auto }),
+  num('firstred', 'ลดขั้นแรก (ในเรือนเกียร์)', ':1', 2, 4, 0.01, '0.000', 'FirstRed', 'ตายตัวตามรถ (XMAX 300 = 48/18 = 2.667)', { visible: auto }),
+  num('spring', 'สปริงทอค (ความแข็ง)', 'N/มม.', 10, 40, 1, '0', 'SpringK', 'แข็ง = CVT ไล่รอบช้า ถือรอบสูง  นิ่ม = ไล่รอบไว ถือรอบต่ำ', { visible: auto }),
+  num('realhp', 'แรงม้ารถจริง (อ้างอิง)', 'HP', 0, 500, 0.5, '0.0', 'RealHp', 'ใส่แรงม้าสูงสุดจากรถจริง (0 = ไม่ระบุ) แล้วกดปรับเทียบ', { text: v => (v <= 0 ? 'ไม่ระบุ' : v.toFixed(1) + ' HP') }),
+  num('realhprpm', 'รอบที่ได้แรงม้าสูงสุด', 'rpm', 0, 16000, 100, '0', 'RealHpRpm', 'รอบของแรงม้าสูงสุดรถจริง (ใช้เทียบ)', { text: v => (v <= 0 ? 'ไม่ระบุ' : Math.round(v) + ' rpm') }),
+  num('realtq', 'แรงบิดรถจริง (อ้างอิง)', 'N·m', 0, 500, 0.1, '0.0', 'RealTq', 'ใส่แรงบิดสูงสุดจากรถจริง (ใช้ปรับเทียบถ้าไม่ได้ใส่แรงม้า)', { text: v => (v <= 0 ? 'ไม่ระบุ' : v.toFixed(1) + ' N·m') }),
+  num('realtqrpm', 'รอบที่ได้แรงบิดสูงสุด', 'rpm', 0, 16000, 100, '0', 'RealTqRpm', 'รอบของแรงบิดสูงสุดรถจริง (ใช้เทียบ)', { text: v => (v <= 0 ? 'ไม่ระบุ' : Math.round(v) + ' rpm') }),
+  num('calk', 'ตัวคูณปรับเทียบโมเดล', 'x', 0.3, 3, 0.01, '0.00', 'CalK', 'คูณแรงบิดของโมเดลทั้งช่วงรอบ ปกติกดปรับเทียบอัตโนมัติ ค่านี้คงที่เมื่อเปลี่ยนอะไหล่'),
+];
+export const paramByKey = Object.fromEntries(Params.map(p => [p.key, p]));
+export function paramDisplay(p, d) {
+  const v = p.get(d);
+  if (p.text) return p.text(v, d);
+  const dec = p.format === '0' ? 0 : p.format.length - 2;
+  return v.toFixed(dec) + (p.unit ? ' ' + p.unit : '');
+}
+export function nudge(p, d, dir, coarse) {
+  const step = p.step * (coarse && p.step < 2 ? 10 : 1);
+  let v = p.get(d) + dir * step;
+  v = Math.round(v / p.step) * p.step;
+  p.set(d, clamp(+v.toFixed(6), p.min, p.max));
+}
+
+// ---------------------------------------------------------------- แท็บอู่
+export const GarageTabs = [
+  ['อะไหล่', []],
+  ['เครื่องยนต์', ['bore', 'stroke', 'rod', 'crank', 'fly', 'valves']],
+  ['ไอดี·แคม·ท่อ', ['throttle', 'lsa', 'duration', 'durationex', 'lift', 'liftex', 'pipe']],
+  ['อัด·น้ำมัน', ['cr', 'psi', 'fuel', 'limiter', 'resume', 'softcut']],
+  ['ส่งกำลัง', ['auto', 'prim', 'g1', 'g2', 'g3', 'g4', 'sprf', 'sprr', 'ramp', 'rollers', 'rollerg', 'rollerg2', 'fdf', 'fdr', 'firstred', 'spring']],
+  ['ตัวรถ', ['rider', 'bikekg', 'rim', 'rimw', 'tirew', 'tireasp', 'cda']],
+  ['รถจริง', ['realhp', 'realhprpm', 'realtq', 'realtqrpm', 'calk']],
+];
+
+// ---------------------------------------------------------------- อะไหล่
+const near = (a, b, t) => Math.abs(a - b) <= t;
+const item = (name, apply, is) => ({ name, apply, is });
+export const PartCats = [
+  { name: 'ลูกสูบ + กระบอกสูบ', hint: 'ขนาดลูกยิ่งโตยิ่งซีซีเยอะ แต่น็อกง่ายขึ้น',
+    items: [47, 50, 52.4, 54, 57, 59, 62, 65, 67, 70, 75, 80, 90, 100, 110, 120].map(b => item(`ลูก ${b} มม.`, d => { d.Bore = b; }, d => near(d.Bore, b, 0.26))) },
+  { name: 'ชุดข้อเหวี่ยง + ก้านสูบ', hint: 'ชัก / ก้าน / นน.ข้อเหวี่ยง (ไม่รวมจานไฟ)',
+    items: [[49.5, 80, 2.2], [55.6, 89, 2.6], [57.9, 90, 2.8], [63, 100, 3.4], [68, 108, 4.0], [75.8, 118, 4.7], [80, 124, 5.6], [90, 140, 8], [100, 155, 11]]
+      .map(([s, r, k]) => item(`ชัก ${s} / ก้าน ${r} / ${k} กก.`, d => { d.Stroke = s; d.Rod = r; d.CrankKg = k; }, d => near(d.Stroke, s, 0.15) && near(d.Rod, r, 0.6) && near(d.CrankKg, k, 0.06))) },
+  { name: 'จานไฟ (โรเตอร์)', hint: 'หนัก = รอบขึ้นช้า ออกตัวนิ่ง เดินเบาเรียบ  เบา = เร่งรอบไว แต่เดินเบาสะดุด',
+    items: [0.3, 0.45, 0.6, 0.8, 1.0, 1.3, 1.6, 2.0, 2.5].map(w => item(`จานไฟ ${w.toFixed(2)} กก.`, d => { d.FlywheelKg = w; }, d => near(d.FlywheelKg, w, 0.026))) },
+  { name: 'ฝาสูบ (วาล์ว)', hint: '4 วาล์วหายใจดี ลากรอบสูงได้',
+    items: [item('2 วาล์ว', d => { d.Valves = 2; }, d => d.Valves === 2), item('4 วาล์ว', d => { d.Valves = 4; }, d => d.Valves === 4)] },
+  { name: 'แคมชาฟท์ (IN=EX)', hint: 'LSA / องศา / ยก  องศามาก = แรงย้ายไปรอบสูง เดินเบาสะดุด',
+    items: [['แคมเดิมโรงงาน', 114, 225, 7.5], ['แคมแต่งเบา', 112, 235, 8], ['แคมแต่งถนน', 108, 245, 8.5], ['แคมแข่ง', 106, 270, 9.5], ['แคมซิ่ง', 104, 290, 10], ['แคมสายแข่งหนัก', 102, 310, 12]]
+      .map(([n, l, du, h]) => item(`${n}  ${l}°/${du}°/${h} มม.`, d => { d.Lsa = l; d.Duration = du; d.DurationEx = du; d.Lift = h; d.LiftEx = h; },
+        d => near(d.Lsa, l, 0.6) && near(d.Duration, du, 1.1) && near(d.DurationEx, du, 1.1) && near(d.Lift, h, 0.06) && near(d.LiftEx, h, 0.06))) },
+  { name: 'แคมไอเสีย (EX) แยก', hint: 'องศาไอเสียแยกจากไอดี',
+    items: [215, 225, 235, 245, 255, 270, 290, 310].map(x => item(`ไอเสีย ${x}°`, d => { d.DurationEx = x; }, d => near(d.DurationEx, x, 1.1))) },
+  { name: 'ยกไอเสีย (EX) แยก', hint: 'ระยะยกไอเสียแยกจากไอดี',
+    items: [6, 7, 7.5, 8, 8.5, 9, 9.5, 10, 11, 12, 13].map(x => item(`ยกไอเสีย ${x} มม.`, d => { d.LiftEx = x; }, d => near(d.LiftEx, x, 0.06))) },
+  { name: 'เรือนลิ้นเร่ง', hint: 'เรือนใหญ่ = ปลายไหล แต่ต้องมีวาล์ว/แคมรองรับ',
+    items: [20, 22, 24, 26, 28, 30, 32, 34, 38, 42, 46, 50, 54, 60].map(t => item(`เรือน ${t} มม.`, d => { d.Throttle = t; }, d => near(d.Throttle, t, 0.5))) },
+  { name: 'อัตราส่วนกำลังอัด (CR)', hint: 'ค่าเรขาคณิต: สูง = ประสิทธิภาพดี แต่ต้องใช้น้ำมันออกเทนสูง',
+    items: [8.5, 9.3, 10, 10.5, 11, 11.5, 12.5, 13.5, 14.5, 16].map(c => item(`CR ${c.toFixed(1)}:1`, d => { d.Cr = c; }, d => near(d.Cr, c, 0.05))) },
+  { name: 'แรงดันอัด (psi)', hint: 'แยกจาก CR: ซีลแน่น = แรงบิดเพิ่มแต่น็อกง่าย  ต่ำ = รั่ว กำลังตก',
+    items: [140, 160, 180, 200, 230, 260, 300, 350, 400].map(p => item(`${p} psi`, d => { d.Seal = clamp(p / crankPsi(crDynamic(d)), 0.6, 1.5); }, d => near(psiOf(d), p, 7))) },
+  { name: 'ขนาดล้อ (ขอบ+ยาง)', hint: 'ขอบล้อ / กว้างขอบ / ยาง  ขอบใหญ่/แก้มสูง = ความเร็วต่อรอบสูง  ยางกว้าง = เกาะดี',
+    items: [[17, 1.2, 70, 90], [17, 1.4, 80, 90], [17, 1.4, 90, 80], [17, 1.6, 100, 80], [17, 1.85, 110, 70], [17, 2.15, 120, 70], [17, 1.6, 90, 80], [14, 1.4, 80, 90], [14, 1.6, 90, 90], [14, 2.15, 110, 80], [14, 3.5, 140, 70], [12, 1.4, 100, 90], [10, 1.6, 90, 90]]
+      .map(([r, w, t, a]) => item(`${t}/${a}-${r}  ขอบ ${w.toFixed(2)}`, d => { d.RimInch = r; d.RimW = w; d.TireW = t; d.TireAsp = a; },
+        d => near(d.RimInch, r, 0.1) && near(d.RimW, w, 0.03) && near(d.TireW, t, 2) && near(d.TireAsp, a, 2))) },
+  { name: 'ชนิดน้ำมัน', hint: 'ออกเทนสูง = ทนกำลังอัดสูงก่อนน็อก',
+    items: Fuels.map((f, i) => item(`${f.name}  RON ${f.ron}`, d => { d.Fuel = i; }, d => d.Fuel === i)) },
+  { name: 'ชุดเกียร์ (4 สปีด)', hint: 'ชิด = ไล่เกียร์ต่อเนื่อง  ห่าง = ออกตัวแรงแต่รอบตกมาก',
+    items: [['เดิม Wave 125i', 3.35, 2.5, 1.55, 1.15, 0.923], ['เกียร์ชิด', 3.35, 2.4, 1.7, 1.3, 1.05], ['ออกตัวจัด', 3.35, 2.9, 1.8, 1.3, 1.0], ['ปลายยาว', 3.35, 2.5, 1.55, 1.15, 0.85], ['ดรัก (ชิดจัด)', 3.6, 2.7, 1.9, 1.45, 1.15]]
+      .map(([n, p, a, b, c, dd]) => item(`${n}  ${a}/${b}/${c}/${dd}`, d => { d.Primary = p; d.Gear1 = a; d.Gear2 = b; d.Gear3 = c; d.Gear4 = dd; },
+        d => near(d.Primary, p, 0.006) && near(d.Gear1, a, 0.006) && near(d.Gear2, b, 0.006) && near(d.Gear3, c, 0.006) && near(d.Gear4, dd, 0.006))) },
+  { name: 'ท่อไอเสีย', hint: 'เดิม = เงียบ / ผ่าหมก / ผ่าเปิด / ท่อสูตร = พีคแรงเฉพาะรอบ',
+    items: PipeNames.map((n, i) => item(n, d => { d.Pipe = i; }, d => d.Pipe === i)) },
+  { name: 'รอบตัด (hard cut)', hint: 'ตั้งสูงเกินที่วาล์ว/ลูกสูบรับไหว = กำลังตก',
+    items: [8000, 9000, 9500, 10000, 10500, 11500, 12800, 14000, 15000].map(r => item(`รอบตัด ${r.toLocaleString()}`, d => { d.Limiter = r; }, d => near(d.Limiter, r, 60))) },
+  { name: 'รอบเด้งกลับหลัง hard cut', hint: 'ตัดแล้วต้องตกลงมาเท่าไรจึงติดใหม่',
+    items: [30, 80, 150, 200, 300, 500, 800, 1200].map(g => item(`ตกลง ${g} rpm`, d => { d.ResumeGap = g; }, d => near(d.ResumeGap, g, 5))) },
+  { name: 'Soft cut (ห่างใต้ hard cut)', hint: 'หน่วงไฟก่อนถึงรอบตัดแรง',
+    items: [0, 50, 100, 200, 300, 500, 800].map(g => item(g <= 0 ? 'ไม่ใช้' : `ห่าง ${g} rpm`, d => { d.SoftGap = g; }, d => near(d.SoftGap, g, 1))) },
+];
+export const partCurrent = (cat, d) => cat.items.findIndex(i => i.is(d));
+
+// ---------------------------------------------------------------- โมเดลเครื่อง
+export const MaxRpm = 16000, RStep = 50, NB = Math.floor(MaxRpm / RStep) + 2;
+const lerpT = (t, rpm) => { const x = clamp(rpm, 0, MaxRpm) / RStep; const i = Math.floor(x); return t[i] + (t[i + 1] - t[i]) * (x - i); };
+export const PsToHp = 0.98632;
+export const Ps = (tq, rpm) => tq * rpm / 7023;
+export const Hp = (tq, rpm) => tq * rpm / 7121;
+
+export class EngineModel {
+  constructor(d0) {
+    const D = this.D = { ...d0 };
+    const bore = D.Bore, stroke = D.Stroke;
+    this.Cc = PI / 4 * bore * bore * stroke / 1000;
+    const Cc = this.Cc;
+    this.RodRatio = D.Rod / stroke;
+    const durAvg = 0.5 * (D.Duration + D.DurationEx);
+    this.Overlap = Math.max(0, durAvg - 2 * D.Lsa);
+    this.RpmCam = 6300 + (durAvg - 220) * 82 + (D.Lsa - 108) * 60;
+    const lsaN = D.Lsa / 108;
+    const wLow = this.RpmCam * 0.55 * Math.pow(lsaN, 1.5), wHigh = this.RpmCam * 0.42 * lsaN;
+    const peakBoost = 1 + (108 - D.Lsa) * 0.006;
+
+    const nIn = D.Valves === 4 ? 2 : 1;
+    const vd = bore * (D.Valves === 4 ? 0.40 : 0.52);
+    const area = nIn * PI / 4 * vd * vd;
+    const curtain = nIn * PI * vd * D.Lift;
+    const valveEff = 0.6 * Math.min(area, curtain);
+    const tbEff = 0.85 * PI / 4 * D.Throttle * D.Throttle;
+    const aEff = 1 / Math.sqrt(1 / (valveEff * valveEff) + 1 / (tbEff * tbEff));
+    this.RpmFlow = 4770 * aEff / Cc;
+    const exDiff = D.DurationEx - D.Duration;
+    const exLift = D.LiftEx / D.Lift;
+    this.RpmFlow *= exLift < 1 ? Math.max(0.6, 1 - 0.8 * (1 - exLift)) : 1 + 0.15 * Math.min(exLift - 1, 0.4);
+    this.RpmFlow *= exDiff < 0 ? Math.max(0.6, 1 + 0.012 * exDiff) : 1 + 0.0025 * Math.min(exDiff, 40);
+
+    const ld = D.Lift / vd;
+    const liftF = Math.sqrt(Math.min(1, ld / 0.28));
+    const camPower = clamp((durAvg - 225) / 65, 0, 1);
+    const valveGain = D.Valves === 4 ? 1.10 + 0.12 * camPower : 1;
+    const camGain = 1 + 0.07 * clamp((durAvg - 250) / 50, 0, 1);
+    const vePeak = 0.92 * liftF * valveGain * camGain * peakBoost;
+    this.FloatRpm = 14200 - 400 * (Math.max(D.Lift, D.LiftEx) - 6) + (D.Valves === 4 ? 2500 : 0) + (durAvg - 220) * 6;
+
+    const octane = fuelOf(D).ron, fuelPower = fuelOf(D).power;
+    this.CrLimit = 12.6 - 0.05 * (bore - 50) + 0.30 * (octane - 95);
+    const sealPow = Math.pow(D.Seal, 1 / 1.15);
+    this.CrDyn = crDynamic(D) * sealPow;
+    this.Psi = psiOf(D);
+    this.CrEff = D.Cr * sealPow;
+    this.SealGain = D.Seal < 1 ? Math.max(0.3, 1 - 0.8 * (1 - D.Seal)) : 1 + 0.2 * (D.Seal - 1);
+    this.CrAmp = clamp(0.90 + 0.035 * (this.CrEff - 9.5), 0.75, 1.35);
+    this.LowCrMisfire = clamp((8.8 - this.CrEff) * 0.12, 0, 0.3);
+    this.PitchStretch = clamp(Math.pow(Cc / 196, 0.25), 0.8, 1.5);
+    const bright = 0.07 * D.Cr + 0.6 * (bore / stroke) + 0.0018 * durAvg + (D.Valves === 4 ? 0.12 : 0) - 0.25 * (this.RodRatio - 1.55);
+    const brightRef = 0.07 * 11.5 + 0.6 * (67 / 55.6) + 0.0018 * 290 - 0.25 * (89 / 55.6 - 1.55);
+    const pipeBr = [0, 0.25, 0.5, 0.7][D.Pipe] || 0;
+    this.SoundBright = clamp((bright - brightRef) * 1.5 + 0.3 + pipeBr, -0.9, 1.7);
+    const eff = 1 - Math.pow(D.Cr, -0.3);
+
+    const rodF = clamp(1 + 0.25 * (1.65 - this.RodRatio), 0.85, 1.3);
+    this.FrictionScale = Math.pow(Cc / 150, 0.6) * (D.Valves === 4 ? 1.08 : 1) * rodF;
+    this.Inertia = 0.0076 + D.CrankKg * 0.0016 + D.FlywheelKg * 0.0040;
+    this.IdleSteady = clamp(0.0144 / this.Inertia, 0.55, 1.8);
+    this.IdleRpm = 1400 + Math.max(0, this.Overlap - 10) * 10;
+    this.AirK = 40000 * (D.Throttle / 28) ** 2 * (Cc / 110);
+    this.Lope = clamp((this.Overlap - 20) / 70 + (D.Pipe === 3 ? 0.12 : 0), 0, 1);
+    this.Hunt = clamp((durAvg - 245) / 45, 0, 1);
+    this.RpmPipe = this.RpmCam * 1.04;
+    const pipeLoud = [1, 1.25, 1.55, 1.7][D.Pipe] || 1;
+    this.Loudness = Math.min(2.0, Math.pow(Cc / 196, 0.45) * (0.85 + 0.15 * D.Throttle / 34) * pipeLoud);
+
+    this._veN = new Float64Array(NB); this._tInd = new Float64Array(NB); this._fric = new Float64Array(NB);
+    const dispL = Cc / 1000;
+    let peakPs = 0, peakPsRpm = 0, peakTq = 0, peakTqRpm = 0;
+    for (let i = 0; i < NB; i++) {
+      const rpm = i * RStep;
+      const dw = (rpm - this.RpmCam) / (rpm < this.RpmCam ? wLow : wHigh);
+      let ve = vePeak * (0.55 + 0.45 * Math.exp(-dw * dw));
+      ve /= Math.pow(1 + Math.pow(rpm / this.RpmFlow, 4), 0.25);
+      if (rpm > this.FloatRpm) { const f = (rpm - this.FloatRpm) / 900; ve *= Math.exp(-f * f); }
+      ve *= this._pipeGain(rpm);
+      this._veN[i] = ve;
+      this._tInd[i] = ve * dispL * 245 * eff * fuelPower * this.SealGain;
+      const vp = 2 * stroke * rpm / 60000;
+      const vpPen = vp > 24 ? 0.35 * (vp - 24) ** 2 * this.FrictionScale : 0;
+      this._fric[i] = (0.35 + 0.00018 * rpm + 1.0e-8 * rpm * rpm) * this.FrictionScale + vpPen;
+      if (rpm >= 2000 && rpm <= D.Limiter) {
+        const tq = this.BrakeTorqueWot(rpm), ps = tq * rpm / 7023;
+        if (tq > peakTq) { peakTq = tq; peakTqRpm = rpm; }
+        if (ps > peakPs) { peakPs = ps; peakPsRpm = rpm; }
+      }
+    }
+    let veMax = 1e-6;
+    for (let i = 0; i < NB; i++) veMax = Math.max(veMax, this._veN[i]);
+    for (let i = 0; i < NB; i++) this._veN[i] /= veMax;
+    this.PeakPs = peakPs; this.PeakPsRpm = peakPsRpm; this.PeakTq = peakTq; this.PeakTqRpm = peakTqRpm;
+    this.PeakHp = peakPs * PsToHp;
+  }
+  _pipeGain(rpm) {
+    switch (this.D.Pipe) {
+      case 1: return 0.99 + 0.04 * clamp((rpm - 3500) / 5000, 0, 1);
+      case 2: return 0.96 + 0.09 * clamp((rpm - 4000) / 5000, 0, 1);
+      case 3: { const dw = (rpm - this.RpmPipe) / (0.28 * this.RpmPipe); return 0.89 + 0.21 * Math.exp(-dw * dw); }
+      default: return 1;
+    }
+  }
+  TorqueInd(rpm) { return lerpT(this._tInd, rpm) * this.D.CalK; }
+  Friction(rpm) { return lerpT(this._fric, rpm); }
+  Load(thr, rpm) { return 1 - Math.exp(-thr * this.AirK / Math.max(rpm, 400)); }
+  VeNorm(rpm) { return lerpT(this._veN, rpm); }
+  Knock(rpm, load) {
+    const k = (this.CrDyn - this.CrLimit) / 1.5;
+    if (k <= 0) return 0;
+    return clamp(k, 0, 1) * load * load * clamp(1.4 - rpm / 8000, 0.3, 1);
+  }
+  BrakeTorqueWot(rpm) {
+    const load = this.Load(1, rpm), kn = this.Knock(rpm, load);
+    return this.TorqueInd(rpm) * load * (1 - 0.5 * kn) - this.Friction(rpm);
+  }
+  PistonSpeed(rpm) { return 2 * this.D.Stroke * rpm / 60000; }
+}
+
+/** หาตัวคูณปรับเทียบให้พีคตรงรถจริง (แรงม้าก่อน ไม่มีก็แรงบิด) null = ไม่ได้ใส่ค่ารถจริง */
+export function calibrate(d) {
+  if (d.RealHp <= 0 && d.RealTq <= 0) return null;
+  const t = { ...d, CalK: 1 };
+  for (let i = 0; i < 8; i++) {
+    const m = new EngineModel(t);
+    const have = d.RealHp > 0 ? m.PeakHp : m.PeakTq, want = d.RealHp > 0 ? d.RealHp : d.RealTq;
+    if (have < 0.01) return null;
+    t.CalK = clamp(t.CalK * want / have, 0.3, 3);
+  }
+  return t.CalK;
+}
+
+// ---------------------------------------------------------------- ตัวรถ
+export const Veh = {
+  DriveEff: 0.93, Crr: 0.012, AirRho: 1.18, Mu: 0.95, CgRear: 0.5, CgHeight: 0.4, G: 9.81, BrakeDecel: 7.0, WheelInertia: 0.9,
+  mass: d => d.BikeKg + d.RiderKg,
+  wheelRadius: d => (d.RimInch * 12.7 + d.TireW * d.TireAsp / 100) * 0.992 / 1000,
+  idealRim: tw => 0.000125 * tw * tw + 0.0075 * tw,
+  rimFit(d) { const ideal = Veh.idealRim(d.TireW); const m = Math.max(0, Math.abs(d.RimW - ideal) - 0.2) / ideal; return clamp(1 - 0.5 * m, 0.7, 1); },
+  muFor(d) { return Veh.Mu * Math.pow(d.TireW / 90, 0.3) * Veh.rimFit(d); },
+  crrFor(d) { return Veh.Crr * Math.pow(d.TireW / 90, 0.25) / (0.5 + 0.5 * Veh.rimFit(d)); },
+  wheelInertiaFor(d) { const r = Veh.wheelRadius(d) / 0.285; return Veh.WheelInertia * r * r * (0.7 + 0.3 * d.TireW / 80) * (0.85 + 0.15 * d.RimW / 1.4); },
+  effMass(d) { const r = Veh.wheelRadius(d); return Veh.mass(d) + Veh.wheelInertiaFor(d) / (r * r); },
+  tractionMax(d) { const mu = Veh.muFor(d); return mu * Veh.mass(d) * Veh.G * Veh.CgRear / (1 - mu * Veh.CgHeight); },
+  final: d => d.SprocketR / d.SprocketF,
+  gearOf: (d, g) => [d.Gear1, d.Gear2, d.Gear3, d.Gear4][clamp(g, 1, 4) - 1],
+  total: (d, g) => (g <= 0 ? 0 : d.Primary * Veh.gearOf(d, g) * Veh.final(d)),
+  resist(d, v, slopePct) {
+    const m = Veh.mass(d), s = slopePct / 100, sin = s / Math.sqrt(1 + s * s), cos = 1 / Math.sqrt(1 + s * s);
+    return Veh.crrFor(d) * m * Veh.G * cos + 0.5 * Veh.AirRho * d.CdA * v * Math.abs(v) + m * Veh.G * sin;
+  },
+  topSpeed(m, gear, slope = 0) {
+    const d = m.D, ratio = Veh.total(d, gear), r = Veh.wheelRadius(d);
+    let best = 0, bestRpm = 0;
+    for (let v = 1; v < 80; v += 0.1) {
+      const rpm = v / r * ratio * 9.5493;
+      if (rpm > d.Limiter) break;
+      if (rpm < 2500) continue;
+      const fav = Math.max(0, m.BrakeTorqueWot(rpm)) * ratio * Veh.DriveEff / r;
+      if (fav >= Veh.resist(d, v, slope)) { best = v; bestRpm = rpm; }
+    }
+    return { kmh: best * 3.6, rpm: bestRpm };
+  },
+  topSpeedAuto(m, slope = 0) {
+    const d = m.D, r = Veh.wheelRadius(d), hold = Cvt.holdRpm(m);
+    let best = 0, bestRpm = 0;
+    for (let v = 1; v < 80; v += 0.1) {
+      const rpmHi = v / r * Cvt.ratio(1) * Cvt.final(d) * 9.5493;
+      const rpm = Math.max(hold, rpmHi);
+      if (rpm > d.Limiter) break;
+      const ratio = rpm / 9.5493 * r / v;
+      const fav = Math.max(0, m.BrakeTorqueWot(rpm)) * ratio * Veh.DriveEff / r;
+      if (fav >= Veh.resist(d, v, slope)) { best = v; bestRpm = rpm; }
+    }
+    return { kmh: best * 3.6, rpm: bestRpm };
+  },
+};
+
+export const Cvt = {
+  RLow: 2.5, RHigh: 0.77, R0: 0.032, R1: 0.05, FBase: 1000, SpringPreloadMm: 25, SpringTravelMm: 35, KCam: 250, FScale: 1500, Rate: 1.5,
+  ratio: s => Cvt.RLow * Math.pow(Cvt.RHigh / Cvt.RLow, clamp(s, 0, 1)),
+  mass(d) { const n = d.Rollers, a = Math.floor((n + 1) / 2), b = Math.floor(n / 2); return (a * d.RollerG + b * d.RollerG2) / 1000; },
+  ff(d, omega, s) { const tanA = Math.tan(d.RampDeg * PI / 180); return Cvt.mass(d) * omega * omega * (Cvt.R0 + (Cvt.R1 - Cvt.R0) * s) / tanA; },
+  final: d => d.FirstRed * d.GearR / d.GearF,
+  fr: (d, torque, s) => Cvt.FBase + d.SpringK * (Cvt.SpringPreloadMm + Cvt.SpringTravelMm * s) + Cvt.KCam * Math.max(0, torque),
+  holdRpm(m, d = m.D) {
+    for (let rpm = 2500; rpm < MaxRpm; rpm += 50) {
+      const omega = rpm / 9.5493, t = Math.max(0, m.BrakeTorqueWot(rpm));
+      if (Cvt.ff(d, omega, 0.5) >= Cvt.fr(d, t, 0.5)) return rpm;
+    }
+    return MaxRpm;
+  },
+  suggestRoller(m) {
+    const target = m.PeakPsRpm * 0.97, d = { ...m.D };
+    let bestG = m.D.RollerG, bestHold = Cvt.holdRpm(m), bestErr = Infinity;
+    for (let g = 4; g <= 20; g += 0.1) {
+      d.RollerG = g; d.RollerG2 = g;
+      const hold = Cvt.holdRpm(m, d), err = Math.abs(hold - target);
+      if (err < bestErr) { bestErr = err; bestG = g; bestHold = hold; }
+    }
+    return { g: Math.round(bestG * 2) / 2, hold: bestHold };
+  },
+};
