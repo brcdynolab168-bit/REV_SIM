@@ -148,6 +148,49 @@ window.addEventListener('keydown', e => {
 window.addEventListener('keyup', e => keys.delete(e.key.toLowerCase()));
 window.addEventListener('blur', () => { keys.clear(); mouseThrottle = mouseStarter = mouseClutch = mouseBrake = false; ui?.releaseAll(); });
 
+// ---------- ขับเอง: สตาร์ท ออกตัว ไล่เกียร์ เบรก วิ่งซ้ำ (เหมือนเวอร์ชัน C#) ----------
+let autoDrive = false, apState = 'start', apT = 0, apClutchUntil = 0, apShiftAt = 0, apGearAt = 0, apDist0 = 0, apRuns = 0, apGearPending = -1;
+function toggleAutopilot() {
+  autoDrive = !autoDrive; apState = 'start'; apRuns = 0; apGearPending = -1;
+  toast(autoDrive ? 'ขับเอง: เปิด (สตาร์ท ออกตัว ไล่เกียร์ เบรก วิ่งซ้ำให้เอง)  กด P อีกครั้งเพื่อหยุด' : 'ขับเอง: ปิด');
+}
+function apShiftTo(g, t) {
+  if (S.isAuto || g === gearSel) return;
+  if (save.clutchSys) { apClutchUntil = t + 0.45; apGearPending = g; apGearAt = t + 0.12; } else gearSel = g;
+}
+/** คืนค่า {thr, brake, starter} ที่ระบบขับเองต้องการ */
+function autopilotStep(t) {
+  if (apGearPending >= 0 && t >= apGearAt) { gearSel = apGearPending; apGearPending = -1; }
+  const o = { thr: 0, brake: 0, starter: false }, m = installed, kmh = S.speed * 3.6;
+  switch (apState) {
+    case 'start':
+      send('ignition', true);
+      if (!S.isAuto && gearSel !== 0) gearSel = 0;
+      if (!S.running) o.starter = true; else { apState = 'ready'; apT = t; }
+      break;
+    case 'ready':
+      if (!S.running) { apState = 'start'; break; }
+      if (kmh > 1) { apState = 'brake'; break; }
+      if (t - apT > 0.8) { apShiftTo(1, t); apDist0 = S.dist; apT = t; apShiftAt = t; apState = 'launch'; }
+      break;
+    case 'launch': o.thr = 1; if (t - apT > 0.5) apState = 'run'; break;
+    case 'run': {
+      o.thr = 1;
+      const shiftRpm = Math.min(S.limiter - 250, m.PeakPsRpm * 1.05);
+      if (!S.isAuto && gearSel < 4 && apGearPending < 0 && t - apShiftAt > 0.7 && S.rpm >= shiftRpm) { apShiftTo(gearSel + 1, t); apShiftAt = t; }
+      if (S.dist - apDist0 >= 520 || t - apT > 40) { apState = 'brake'; apT = t; }
+      break;
+    }
+    case 'brake':
+      o.brake = 1;
+      if (kmh < 1) { apRuns++; apState = 'wait'; apT = t; if (!S.isAuto) apShiftTo(0, t); }
+      break;
+    default: if (t - apT > 2.5) { apState = 'ready'; apT = t; }
+  }
+  return o;
+}
+const apText = () => ({ start: 'กำลังสตาร์ท…', ready: 'เตรียมออกตัว…', launch: 'กำลังวิ่ง…', run: 'กำลังวิ่ง…', brake: 'เบรกจนหยุด…', wait: 'พักก่อนวิ่งซ้ำ…' }[apState]) + `  (วิ่งแล้ว ${apRuns} ครั้ง)`;
+
 function driveKey(k) {
   if (k === 'k') send('ignition', !S.ignition);
   else if (k === 'd') startDynoRun();
@@ -156,6 +199,7 @@ function driveKey(k) {
   else if (k === 'arrowdown' || k === 'q') shiftGear(-1);
   else if (k === 'n') selectGear(0);
   else if (k === 'c') toggleClutchSys();
+  else if (k === 'p') toggleAutopilot();
   else if (k === '[') changeSlope(-1);
   else if (k === ']') changeSlope(1);
   else if (k === 'escape') goTo('menu');
@@ -282,7 +326,7 @@ function drawSettings() {
 const gaugeMaxOf = lim => Math.max(10000, Math.ceil((lim + 1000) / 1000) * 1000);
 let needle = 0;
 function drawDrive() {
-  drawTopBar('ห้องทดสอบ', 'W เร่งสุด  •  X ค่อย ๆ เร่ง (ไม่ตัดรอบ)  •  Z ค่อย ๆ เร่ง (แตะรอบตัดเบา ๆ)  •  Space เบรก  •  S สตาร์ท  •  E/Q เกียร์  •  C ครัตช์  •  D ไดโน  •  [ ] ความชัน  •  G อู่');
+  drawTopBar('ห้องทดสอบ', 'W เร่งสุด  •  X ค่อย ๆ เร่ง (ไม่ตัดรอบ)  •  Z ค่อย ๆ เร่ง (แตะรอบตัดเบา ๆ)  •  Space เบรก  •  S สตาร์ท  •  E/Q เกียร์  •  C ครัตช์  •  P ขับเอง  •  D ไดโน  •  [ ] ความชัน  •  G อู่');
   const m = installed, d = m.D, auto = d.Auto === 1;
   drawGauge(640, 552, 335);
   drawThrottle(1056, 170, 64, 660);
@@ -300,6 +344,8 @@ function drawDrive() {
     ui.txt(`${f0(m.Cc)} cc  •  ${f1(m.PeakHp)} HP @ ${fmtN(m.PeakPsRpm)}`, F.sm, C.Dim, px + 20, 184);
     ui.txt(`ทดสุดท้าย ${Veh.final(d).toFixed(3)}   รถ+คน ${f0(Veh.mass(d))} กก.`, F.sm, C.Dim, px + 20, 222);
   }
+  ui.btn(R(px + pw - 236, 108, 216, 34), autoDrive ? 'P ขับเอง: เปิด' : 'P ขับเอง: ปิด', autoDrive, C.Green, toggleAutopilot, F.xs);
+  if (autoDrive) ui.txt(apText(), F.xs, C.Green, px + 20, 278);
   const bw = 163, bg = 16, by = 316, bh = 70;
   ui.btn(R(px, by, bw, bh), 'S สตาร์ท', mouseStarter || down('s'), C.Green, null, F.md, () => { send('ignition', true); mouseStarter = true; }, () => { mouseStarter = false; });
   ui.btn(R(px + (bw + bg), by, bw, bh), 'K ดับเครื่อง', !S.ignition, C.Red, () => send('ignition', !S.ignition), F.md);
@@ -719,11 +765,12 @@ function tick() {
     if (down(' ') || down('b') || mouseBrake) brake = 1;
     starter = down('s') || mouseStarter;
     if (starter && down('s')) send('ignition', true);
-  } else gradThr = 0;
+    if (autoDrive) { const o = autopilotStep(t); thr = o.thr; brake = o.brake; starter = o.starter; }
+  } else { gradThr = 0; autoDrive = false; }
   send('throttleInput', +thr.toFixed(3)); send('brakeInput', brake); send('starterHeld', starter);
   send('clutchEnabled', save.clutchSys);
   const shiftHeld = down('shift');
-  send('clutchInput', page === 'drive' && !showDyno && (shiftHeld || mouseClutch || t < assistUntil) ? 1 : 0);
+  send('clutchInput', page === 'drive' && !showDyno && (shiftHeld || mouseClutch || t < assistUntil || t < apClutchUntil) ? 1 : 0);
   send('gearInput', gearSel); send('slopePct', slope);
   if (dt > 0) { rpmRate += ((S.rpm - lastRpmG) / dt - rpmRate) * 0.3; lastRpmG = S.rpm; }
   needle += (S.rpm - needle) * Math.min(1, dt * 25);

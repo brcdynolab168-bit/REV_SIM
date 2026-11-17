@@ -13,7 +13,7 @@ public sealed partial class MainForm
     private void DrawDrive(Graphics g)
     {
         DrawTopBar(g, "ห้องทดสอบ",
-            "W เร่งสุด  •  X ค่อย ๆ เร่ง (ไม่ตัดรอบ)  •  Z ค่อย ๆ เร่ง (แตะรอบตัดเบา ๆ)  •  Space เบรก  •  S สตาร์ท  •  E/Q เกียร์  •  D ไดโน  •  [ ] ความชัน  •  G อู่");
+            "W เร่งสุด  •  X ค่อย ๆ เร่ง (ไม่ตัดรอบ)  •  Z ค่อย ๆ เร่ง (แตะรอบตัดเบา ๆ)  •  Space เบรก  •  S สตาร์ท  •  E/Q เกียร์  •  D ไดโน  •  [ ] ความชัน  •  P ขับเอง  •  G อู่");
 
         var m = _eng.Model;
         var d = m.D;
@@ -42,6 +42,9 @@ public sealed partial class MainForm
             Txt(g, $"{m.Cc:0} cc  •  {m.PeakHp:0.0} HP @ {m.PeakPsRpm:N0}", _fSm, Palette.Dim, px + 20, 184);
             Txt(g, $"ทดสุดท้าย {Vehicle.Final(d):0.000}   รถ+คน {Vehicle.Mass(d):0} กก.", _fSm, Palette.Dim, px + 20, 222);
         }
+
+        Btn(g, new RectangleF(px + pw - 236, 108, 216, 34), _autoDrive ? "P ขับเอง: เปิด" : "P ขับเอง: ปิด", _autoDrive, Palette.Green, ToggleAutopilot, _fXs);
+        if (_autoDrive) Txt(g, AutopilotText(), _fXs, Palette.Green, px + 20, 278);
 
         // ปุ่มควบคุม
         const float bw = 163, bg = 16, by = 316, bh = 70;

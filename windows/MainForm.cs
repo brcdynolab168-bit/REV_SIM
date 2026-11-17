@@ -226,6 +226,7 @@ public sealed partial class MainForm : Form
             case Keys.Down: case Keys.Q: Shift(-1); break;
             case Keys.N: SelectGear(0); break;
             case Keys.C: ToggleClutchSystem(); break;
+            case Keys.P: ToggleAutopilot(); break;
             case Keys.OemOpenBrackets: ChangeSlope(-1); break;
             case Keys.OemCloseBrackets: ChangeSlope(+1); break;
             case Keys.Escape: GoTo(Page.Menu); break;
@@ -322,12 +323,14 @@ public sealed partial class MainForm : Form
             if (Down(Keys.Space) || Down(Keys.B)) brake = 1f;
             starter = Down(Keys.S) || _mouseStarter;
             if (starter && Down(Keys.S)) _eng.Ignition = true;
+            if (_autoDrive) AutopilotStep(dt, ref thr, ref brake, ref starter);
         }
+        else if (_autoDrive) { _autoDrive = false; }
         _eng.ThrottleInput = thr;
         _eng.BrakeInput = brake;
         _eng.StarterHeld = starter;
         bool shiftHeld = Down(Keys.ShiftKey) || Down(Keys.LShiftKey) || Down(Keys.RShiftKey);
-        _eng.ClutchInput = _page == Page.Drive && !_showDyno && (shiftHeld || _mouseClutch) ? 1f : 0f;
+        _eng.ClutchInput = _page == Page.Drive && !_showDyno && (shiftHeld || _mouseClutch || _clock.Elapsed.TotalSeconds < _apClutchUntil) ? 1f : 0f;
         _eng.GearInput = _gearSel;
         _eng.SlopePct = _slope;
 
