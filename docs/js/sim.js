@@ -42,7 +42,7 @@ export class EngineSim {
     this.model = new EngineModel(design); this.pending = null;
     // อินพุต
     this.throttleInput = 0; this.starterHeld = false; this.ignition = true; this.volume = 0.8;
-    this.gearInput = 0; this.clutchInput = 0; this.slopePct = 0; this.brakeInput = 0;
+    this.gearInput = 0; this.clutchInput = 0; this.clutchEnabled = true; this.slopePct = 0; this.brakeInput = 0;
     this._lever = 0; this._cfLock = 0;
     this._roadReset = false; this._dynoRequest = false;
     // สถานะ
@@ -135,7 +135,7 @@ export class EngineSim {
   _stepDrivetrain(m, rpm, netEngine, dt) {
     const d = m.D, auto = d.Auto === 1, g = this.gearInput;
     if (!auto) {
-      const want = clamp(this.clutchInput, 0, 1);
+      const want = this.clutchEnabled ? clamp(this.clutchInput, 0, 1) : 0;
       this._lever += (want - this._lever) * Math.min(1, dt * (want > this._lever ? 30 : 7));
       if (g !== this._gearApplied) { this._gearApplied = g; this.gear = g; this._shiftT = ShiftTime; }
       if (this._shiftT > 0) this._shiftT -= dt;

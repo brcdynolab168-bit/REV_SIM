@@ -28,17 +28,21 @@
 </header>
 
 <main>
-  <section id="v-test" class="view"></section>
+  <section id="v-home" class="view"></section>
+  <section id="v-test" class="view" hidden></section>
   <section id="v-garage" class="view" hidden></section>
   <section id="v-adv" class="view" hidden></section>
   <section id="v-set" class="view" hidden></section>
 </main>
 
 <nav id="nav">
-  <button data-v="test" class="on">ทดสอบ</button>
-  <button data-v="garage">อู่</button>
-  <button data-v="adv">ที่ปรึกษา</button>
-  <button data-v="set">ตั้งค่า</button>
+  <div class="side-logo"><b class="logo">REV LAB</b><span class="dim small">ห้องทดลองเครื่องยนต์</span></div>
+  <button data-v="home" class="on"><span>ภาพรวม</span><small>OVERVIEW</small></button>
+  <button data-v="garage"><span>อู่ออกแบบ</span><small>WORKSHOP</small></button>
+  <button data-v="test"><span>ห้องทดสอบ</span><small>TEST BENCH</small></button>
+  <button data-v="adv"><span>ที่ปรึกษา</span><small>ADVISOR</small></button>
+  <button data-v="set"><span>ตั้งค่า</span><small>SETTINGS</small></button>
+  <div class="side-info" id="sideInfo"></div>
 </nav>
 
 <div id="modal" hidden>
