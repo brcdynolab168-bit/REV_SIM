@@ -56,7 +56,7 @@ export class EngineSim {
     this._rng = 0x1234ABCD; this._wantOn = false; this._cycCut = false;
     this._ola = new Float32Array(OlaMask + 1); this._olaR = 0; this._olaLead = 3200; this._dcX = 0; this._dcY = 0;
     this._cursor = 0; this._runLeft = 0; this._recent = new Int32Array(40).fill(-100); this._recentPos = 0; this._cand = new Int32Array(1024);
-    this._gearApplied = 0; this._shiftT = 0; this._tcSmooth = 0;
+    this.scope = new Float32Array(2048); this.scopeW = 0; this._gearApplied = 0; this._shiftT = 0; this._tcSmooth = 0;
   }
 
   assemble(design) { this.pending = new EngineModel(design); this._roadReset = true; }
@@ -284,7 +284,9 @@ export class EngineSim {
       const o = e * this.model.Loudness * 0.95 * vol;
       const dc = o - this._dcX + 0.9975 * this._dcY;
       this._dcX = o; this._dcY = dc;
-      out[i] = Math.tanh(dc * 1.2);
+      const os = Math.tanh(dc * 1.2);
+      out[i] = os;
+      this.scope[this.scopeW] = os; this.scopeW = (this.scopeW + 1) & 2047;
     }
   }
 }

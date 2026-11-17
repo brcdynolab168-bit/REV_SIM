@@ -34,7 +34,7 @@ class RevProcessor extends AudioWorkletProcessor {
         type: 'state', rpm: sim.rpm, thr: sim.thr, cut: sim.cut, softK: sim.softK, speed: sim.speed, dist: sim.dist, gear: sim.gear,
         clutchLock: sim.clutchLock, cfLock: sim._cfLock, lever: sim._lever, cvtS: sim.cvtS, running: sim.running, ignition: sim.ignition,
         dynoPhase: sim.dynoPhase, dynoVersion: sim.dynoVersion, dynoFailed: sim.dynoFailed,
-        limiter: sim.model.D.Limiter, isAuto: sim.isAuto,
+        limiter: sim.model.D.Limiter, isAuto: sim.isAuto, scope: sim.scope.slice(), scopeW: sim.scopeW,
       };
       if (sim.dynoVersion !== this.lastVer) { this.lastVer = sim.dynoVersion; msg.dynoTq = Array.from(sim.dynoTq); }
       this.port.postMessage(msg);

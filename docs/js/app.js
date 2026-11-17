@@ -1,16 +1,17 @@
-// Rev Lab (เว็บ/มือถือ): UI + ลูปเกม  (เสียง/ฟิสิกส์อยู่ใน AudioWorklet: worklet.js + sim.js)
+// Rev Lab (เว็บ/มือถือ): หน้าจอเหมือนเวอร์ชัน C# (วาดบนผืน 1920x1080) + ลูปเกม
+// เสียง/ฟิสิกส์อยู่ใน AudioWorklet: worklet.js + sim.js
 import {
-  EngineModel, Presets, Params, paramByKey, paramDisplay, nudge, GarageTabs, PartCats, partCurrent, Fuels, newDesign,
-  Veh, Cvt, clamp, Hp, Ps, PsToHp, calibrate, tireCode,
+  EngineModel, Presets, Params, paramDisplay, nudge, GarageTabs, PartCats, partCurrent, Fuels, newDesign,
+  Veh, Cvt, clamp, Hp, Ps, PsToHp, calibrate, tireCode, MaxRpm,
 } from './engine.js';
 import * as Adv from './advisor.js';
+import { Ui, Palette as C, Fonts as F, VW, VH, R, inRect, rgbf } from './ui.js';
 
-const $ = (s, r = document) => r.querySelector(s);
-const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const fmtN = v => Math.round(v).toLocaleString('en-US');
+const f1 = v => v.toFixed(1), f0 = v => v.toFixed(0), f2 = v => v.toFixed(2);
 
 // ================================================================= บันทึก
-const KEY = 'revlab.web.v1';
+const KEY = 'revlab.web.v2';
 const save = (() => {
   const s = { design: null, best: { b060: -1, b100: -1, b402: -1, top: 0 }, volume: 0.8, assist: matchMedia('(pointer:coarse)').matches, clutchSys: true };
   try { Object.assign(s, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch { /* เริ่มใหม่ */ }
@@ -34,14 +35,14 @@ let dynoRes = null;
 
 // ================================================================= เสียง / worklet
 let ctx = null, node = null, ready = false;
-const S = { rpm: 0, thr: 0, cut: false, softK: 0, speed: 0, dist: 0, gear: 0, clutchLock: 0, cfLock: 0, lever: 0, cvtS: 0, running: false, ignition: true, dynoPhase: 0, dynoVersion: 0, dynoFailed: false, limiter: 9500, isAuto: false };
+const S = { rpm: 0, thr: 0, cut: false, softK: 0, speed: 0, dist: 0, gear: 0, clutchLock: 0, cfLock: 0, lever: 0, cvtS: 0, running: false, ignition: true,
+  dynoPhase: 0, dynoVersion: 0, dynoFailed: false, limiter: 9500, isAuto: false, scope: null, scopeW: 0 };
 const sent = {};
 function send(key, value) {
   if (!node || sent[key] === value) return;
   sent[key] = value;
   node.port.postMessage({ type: 'set', key, value });
 }
-
 function parseWav(buf) {
   const dv = new DataView(buf);
   let pos = 12, fs = 0, ch = 1;
@@ -50,8 +51,7 @@ function parseWav(buf) {
     const len = dv.getInt32(pos + 4, true);
     if (id === 'fmt ') { ch = dv.getInt16(pos + 10, true); fs = dv.getInt32(pos + 12, true); }
     if (id === 'data') {
-      const n = Math.floor(Math.min(len, dv.byteLength - pos - 8) / 2 / ch);
-      const x = new Float32Array(n);
+      const n = Math.floor(Math.min(len, dv.byteLength - pos - 8) / 2 / ch), x = new Float32Array(n);
       for (let i = 0; i < n; i++) x[i] = dv.getInt16(pos + 8 + i * 2 * ch, true) / 32768;
       return { x, fs };
     }
@@ -65,7 +65,7 @@ function resample(x, from, to) {
   for (let i = 0; i < n; i++) { const p = i * k, i0 = Math.floor(p), f = p - i0; y[i] = x[i0] + ((x[i0 + 1] ?? x[i0]) - x[i0]) * f; }
   return y;
 }
-
+let audioError = null;
 async function startAudio() {
   const AC = window.AudioContext || window.webkitAudioContext;
   ctx = new AC({ latencyHint: 'interactive' });
@@ -74,16 +74,12 @@ async function startAudio() {
   node = new AudioWorkletNode(ctx, 'rev-engine', { numberOfInputs: 0, outputChannelCount: [1] });
   node.connect(ctx.destination);
   const [wavBuf, marks] = await Promise.all([fetch('assets/engine_ref.wav').then(r => r.arrayBuffer()), fetch('assets/engine_ref.marks').then(r => r.text())]);
-  const { x, fs } = parseWav(wavBuf);
-  const ratio = ctx.sampleRate / fs;
-  const wav = resample(x, fs, ctx.sampleRate);
+  const { x, fs } = parseWav(wavBuf), ratio = ctx.sampleRate / fs, wav = resample(x, fs, ctx.sampleRate);
   const scaled = ratio === 1 ? marks : marks.split(/\r?\n/).map(l => (/^\d+$/.test(l.trim()) ? String(Math.round(+l * ratio)) : l)).join('\n');
   node.port.onmessage = onWorkletMsg;
   node.port.postMessage({ type: 'init', wav, marks: scaled, design, volume: save.volume }, [wav.buffer]);
   document.addEventListener('visibilitychange', () => { if (document.hidden) ctx.suspend(); else ctx.resume(); });
 }
-
-let dynoSeen = 0;
 function onWorkletMsg(e) {
   const m = e.data;
   if (m.type === 'ready') { ready = true; return; }
@@ -93,311 +89,76 @@ function onWorkletMsg(e) {
   if (dynoTq) finishDyno(dynoTq);
 }
 
-// ================================================================= toast
-let toastT = 0;
-function toast(msg) {
-  const el = $('#toast');
-  el.textContent = msg; el.classList.add('show');
-  clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('show'), 3200);
+// ================================================================= หน้า / ข้อความ
+let page = 'menu', prevPage = 'drive', showDyno = false, showFps = false;
+let toastText = '', toastUntil = 0;
+const now = () => performance.now() / 1000;
+const toast = s => { toastText = s; toastUntil = now() + 3.5; };
+function goTo(p) {
+  if (p === 'menu' && page !== 'menu') prevPage = page;
+  page = p; mouseThrottle = mouseStarter = mouseClutch = mouseBrake = false; ui.releaseAll();
 }
 
-// ================================================================= ตัวควบคุม
+// ================================================================= อินพุต
 const keys = new Set();
-const held = { start: false, clutch: false, brake: false, full: false, x: false, z: false };
-let thrPointer = false, thrVal = 0, gradThr = 0, rpmRate = 0, lastRpmG = 0;
-let gearSel = 0, slope = 0, assistUntil = 0;
-let view = 'home';
-
-function holdBtn(el, key, extra) {
-  const dn = e => { e.preventDefault(); held[key] = true; el.classList.add('hold'); try { el.setPointerCapture(e.pointerId); } catch { /* ok */ } extra?.(true); };
-  const up = () => { if (!held[key]) return; held[key] = false; el.classList.remove('hold'); extra?.(false); };
-  el.addEventListener('pointerdown', dn);
-  el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up); el.addEventListener('lostpointercapture', up);
-  el.addEventListener('contextmenu', e => e.preventDefault());
-}
-const releaseAll = () => { keys.clear(); Object.keys(held).forEach(k => { held[k] = false; }); thrPointer = false; $$('.hold').forEach(b => b.classList.remove('hold')); };
-window.addEventListener('blur', releaseAll);
+let mouseThrottle = false, mouseThrottleValue = 0, mouseStarter = false, mouseClutch = false, mouseBrake = false;
+let gradThr = 0, rpmRate = 0, lastRpmG = 0, gearSel = 0, slope = 0, assistUntil = 0;
+const down = k => keys.has(k);
 
 function selectGear(gi) {
   if (S.isAuto || gi === gearSel) return;
-  const doIt = () => { gearSel = gi; };
   if (save.clutchSys && S.running && S.lever < 0.6 && S.cfLock > 0.05) {
-    if (save.assist) { assistUntil = performance.now() / 1000 + 0.5; setTimeout(doIt, 130); return; }
-    toast('กำครัตช์ก่อน: กดปุ่มครัตช์ค้าง (Shift) แล้วเปลี่ยนเกียร์'); return;
+    if (save.assist) { assistUntil = now() + 0.5; setTimeout(() => { gearSel = gi; }, 130); return; }
+    toast('กำครัตช์ก่อน: ค้าง Shift (หรือกดค้างแถบครัตช์) แล้วกดเปลี่ยนเกียร์'); return;
   }
-  doIt();
+  gearSel = gi;
 }
 const shiftGear = d => selectGear(clamp(gearSel + d, 0, 4));
 const changeSlope = d => { slope = clamp(slope + d, -6, 20); };
-
+function toggleClutchSys() {
+  save.clutchSys = !save.clutchSys; persist();
+  toast(save.clutchSys ? 'ระบบครัตช์มือ: เปิด (ค้าง Shift = กำครัตช์)' : 'ระบบครัตช์มือ: ปิด (เปลี่ยนเกียร์ได้ทันที คลัตช์แรงเหวี่ยงจับเอง)');
+}
 function startDynoRun() {
   if (S.isAuto) { if (S.speed * 3.6 > 1) return toast('หยุดรถก่อนวิ่งไดโน'); }
   else if (gearSel !== 0) return toast('ใส่เกียร์ว่าง (N) ก่อนวิ่งไดโน');
-  if (!S.running) return toast('ต้องสตาร์ทเครื่องให้ติดก่อน (กดปุ่มสตาร์ทค้าง)');
+  if (!S.running) return toast('ต้องสตาร์ทเครื่องให้ติดก่อน (กด S ค้าง)');
   node?.port.postMessage({ type: 'dyno' });
+}
+function setVolume(v) { save.volume = clamp(v, 0, 1); send('volume', save.volume); persist(); }
+function toggleFullscreen() {
+  try { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen?.(); } catch { /* ok */ }
 }
 
 window.addEventListener('keydown', e => {
-  if (e.target.matches?.('input[type=number],input[type=text],select')) return;
   const k = e.key.toLowerCase();
-  if (view === 'test' && $('#modal').hidden) {
-    if (['arrowup', 'arrowdown', ' '].includes(k)) e.preventDefault();
-    if (!e.repeat) {
-      if (k === 'k') send('ignition', !S.ignition);
-      else if (k === 'd') startDynoRun();
-      else if (k === 'e' || k === 'arrowup') shiftGear(1);
-      else if (k === 'q' || k === 'arrowdown') shiftGear(-1);
-      else if (k === 'n') selectGear(0);
-      else if (k === 'c') toggleClutchSys();
-      else if (k === 'g') setView('garage');
-      else if (k === 'escape') setView('home');
-      else if (k === '[') changeSlope(-1);
-      else if (k === ']') changeSlope(1);
-      else if (k === 's') send('ignition', true);
-    }
-    keys.add(k === ' ' ? 'space' : k);
-  }
-  if (view === 'garage' && !e.repeat && $('#modal').hidden) {
-    if (/^[1-6]$/.test(k)) { draft = { ...Presets[+k - 1][1] }; draftChanged(); renderGarage(); toast('โหลดแบบ: ' + Presets[+k - 1][0]); }
-    else if (k === 'a' && draft.Auto === 1) $('#bTune')?.click();
-    else if (k === 'enter') assemble();
-    else if (k === 'tab') { e.preventDefault(); gTab = (gTab + (e.shiftKey ? -1 : 1) + GarageTabs.length) % GarageTabs.length; renderGarage(); }
-    else if (k === 't') setView('adv');
-    else if (k === 'g') setView('test');
-    else if (k === 'escape') setView('home');
-  } else if (view === 'home' && !e.repeat) {
-    if (k === 'enter') setView('test'); else if (k === 'g') setView('garage');
-  }
-  if (k === '+' || k === '=') setVolume(clamp(save.volume + 0.05, 0, 1));
-  if (k === '-') setVolume(clamp(save.volume - 0.05, 0, 1));
+  if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' ', 'tab'].includes(k)) e.preventDefault();
+  const first = !keys.has(k); keys.add(k);
+  if (first) {
+    if (k === 'f11') { e.preventDefault(); toggleFullscreen(); }
+    else if (showDyno) { if (k === 'enter' || k === 'escape') showDyno = false; }
+    else if (page === 'menu') { if (k === 'enter') goTo('drive'); else if (k === 'g') goTo('garage'); else if (k === 'escape') goTo(prevPage); }
+    else if (page === 'settings') { if (k === 'escape') goTo('menu'); }
+    else if (page === 'garage') garageKey(k, e.shiftKey);
+    else if (page === 'drive') driveKey(k);
+  } else if (page === 'garage' && !showDyno && (k === 'arrowleft' || k === 'arrowright')) garageKey(k, e.shiftKey);
+  if (k === '+' || k === '=') setVolume(save.volume + 0.05);
+  if (k === '-') setVolume(save.volume - 0.05);
 });
-window.addEventListener('keyup', e => { const k = e.key.toLowerCase(); keys.delete(k === ' ' ? 'space' : k); });
+window.addEventListener('keyup', e => keys.delete(e.key.toLowerCase()));
+window.addEventListener('blur', () => { keys.clear(); mouseThrottle = mouseStarter = mouseClutch = mouseBrake = false; ui?.releaseAll(); });
 
-function toggleClutchSys() {
-  save.clutchSys = !save.clutchSys; persist();
-  toast(save.clutchSys ? 'ระบบครัตช์มือ: เปิด (ค้างปุ่มครัตช์/Shift = กำครัตช์)' : 'ระบบครัตช์มือ: ปิด (เปลี่ยนเกียร์ได้ทันที คลัตช์แรงเหวี่ยงจับเอง)');
-  if (view === 'test') buildTest(); else if (view === 'set') renderSettings();
-}
-
-function setVolume(v) { save.volume = v; send('volume', v); persist(); const el = $('#volRange'); if (el) el.value = v; }
-
-// ================================================================= ทดสอบ: DOM
-function buildTest() {
-  const auto = design.Auto === 1;
-  const el = $('#v-test');
-  el.innerHTML = `
-  <div class="test-land">
-   <div>
-    <div class="test-top">
-      <div class="gauge-wrap"><canvas id="gauge"></canvas><div class="status" id="status"></div></div>
-      <div class="thr" id="thr"><div class="cap">คันเร่ง</div><div class="fill" id="thrFill"></div><div class="lbl" id="thrLbl">0%</div></div>
-    </div>
-   </div>
-   <div>
-    <div class="ctrl">
-      <button id="bStart" class="green">สตาร์ท (ค้าง)</button>
-      <button id="bKill" class="red">ดับเครื่อง</button>
-      <button id="bDyno" class="blue">ไดโน</button>
-      <button id="bBrake" class="red">เบรก (ค้าง)</button>
-      ${auto ? `<div class="wide panel" style="margin:0;padding:6px 10px"><div class="small dim">ออโต้ CVT <span id="cvtTxt"></span></div><div class="bar"><i id="cvtBar"></i></div></div>
-      <button id="bFull">เร่งสุด (ค้าง)</button><button id="bGradX">ค่อย ๆ เร่ง (ค้าง)</button>` :
-      `${save.clutchSys ? '<button id="bClutch">ครัตช์ (ค้าง)</button>' : '<button id="bClutchSys" class="blue" style="opacity:.0;pointer-events:none">-</button>'}<button id="bGdn">เกียร์ −</button><button id="bGear" class="act" style="pointer-events:none">เกียร์ N</button><button id="bGup">เกียร์ +</button>
-      <button id="bFull">เร่งสุด (ค้าง)</button><button id="bGradX">ค่อย ๆ เร่ง (ค้าง)</button><button id="bGradZ" class="wide">ค่อย ๆ เร่ง แตะรอบตัด (ค้าง)</button>`}
-      ${auto ? '' : `<button id="bClutchTgl" class="blue ${save.clutchSys ? 'on' : ''}" style="grid-column:1/-1">ระบบครัตช์มือ: ${save.clutchSys ? 'เปิด' : 'ปิด (เปลี่ยนเกียร์ได้ทันที)'}  [C]</button>`}
-      ${auto ? '<button id="bGradZ" class="wide">ค่อย ๆ เร่ง แตะรอบตัด (ค้าง)</button>' : ''}
-    </div>
-    <div class="panel" style="margin-top:10px"><h3>ถนน / ความชัน</h3>
-      <div class="row"><button id="bSlM" class="sm">−</button><div class="grow" style="text-align:center" id="slopeTxt">ถนนราบ</div><button id="bSlP" class="sm">+</button></div>
-      <div class="btns" style="margin-top:6px"><button class="sm" data-sl="0">ราบ</button><button class="sm" data-sl="6">เนิน 6%</button><button class="sm" data-sl="12">ชัน 12%</button><button class="sm" data-sl="-4">ลง −4%</button></div>
-    </div>
-    <div class="panel"><h3>สถิติ  <span class="small dim">(ดีสุด = สถิติสูงสุดที่เก็บไว้ • ก่อนแก้ = ชุดเครื่องก่อนหน้า • ต่าง + = ดีกว่า)</span></h3>
-      <table class="stats" id="statTbl"></table>
-      <div class="row" style="margin-top:6px"><span class="small dim">วิธีวัด: หยุดนิ่งแล้วออกตัว ระบบจับเวลา 0–60, 100 ม., 402 ม. ให้เอง</span></div>
-    </div>
-   </div>
-  </div>`;
-
-  $('#bStart') && holdBtn($('#bStart'), 'start', dn => { if (dn) send('ignition', true); });
-  holdBtn($('#bBrake'), 'brake'); holdBtn($('#bFull'), 'full'); holdBtn($('#bGradX'), 'x'); holdBtn($('#bGradZ'), 'z');
-  if (!auto) {
-    if ($('#bClutch')) holdBtn($('#bClutch'), 'clutch');
-    $('#bClutchTgl').onclick = toggleClutchSys;
-    $('#bGup').onclick = () => shiftGear(1); $('#bGdn').onclick = () => shiftGear(-1);
-    $('#bGear').onclick = () => selectGear(0);
-  }
-  $('#bKill').onclick = () => send('ignition', !S.ignition);
-  $('#bDyno').onclick = startDynoRun;
-  $('#bSlM').onclick = () => changeSlope(-1); $('#bSlP').onclick = () => changeSlope(1);
-  $$('[data-sl]').forEach(b => { b.onclick = () => { slope = +b.dataset.sl; }; });
-
-  // คันเร่งแบบลาก (ปล่อยแล้วคืนศูนย์)
-  const thr = $('#thr');
-  const setFrom = e => { const r = thr.getBoundingClientRect(); thrVal = clamp(1 - (e.clientY - r.top) / r.height, 0, 1); };
-  thr.addEventListener('pointerdown', e => { e.preventDefault(); thrPointer = true; thr.setPointerCapture(e.pointerId); setFrom(e); });
-  thr.addEventListener('pointermove', e => { if (thrPointer) setFrom(e); });
-  const end = () => { thrPointer = false; thrVal = 0; };
-  thr.addEventListener('pointerup', end); thr.addEventListener('pointercancel', end); thr.addEventListener('lostpointercapture', end);
-  thr.addEventListener('contextmenu', e => e.preventDefault());
-  statCache = '';
-}
-
-// ----------------------------------------------------------------- เกจ
-let gaugeMax = 11000;
-function drawGauge() {
-  const cv = $('#gauge');
-  if (!cv) return;
-  const dpr = Math.min(window.devicePixelRatio || 1, 2.5), w = cv.clientWidth, h = cv.clientHeight;
-  if (!w) return;
-  if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
-  const g = cv.getContext('2d');
-  g.setTransform(dpr, 0, 0, dpr, 0, 0);
-  g.clearRect(0, 0, w, h);
-  const cx = w / 2, cy = h / 2, r = Math.min(w, h) / 2 - 18, k = r / 215;
-  const lim = installed.D.Limiter, red = lim - 600;
-  gaugeMax = Math.max(10000, Math.ceil((lim + 1000) / 1000) * 1000);
-  const ang = rpm => (135 + 270 * clamp(rpm, 0, gaugeMax) / gaugeMax) * Math.PI / 180;
-  g.lineCap = 'butt';
-  g.lineWidth = 10 * k; g.strokeStyle = '#464c58'; g.beginPath(); g.arc(cx, cy, r, ang(0), ang(red)); g.stroke();
-  g.strokeStyle = '#ef4b4b'; g.beginPath(); g.arc(cx, cy, r, ang(red), ang(gaugeMax)); g.stroke();
-  g.fillStyle = '#e8ecf1'; g.font = `${Math.max(12, 26 * k)}px system-ui`; g.textAlign = 'center'; g.textBaseline = 'middle';
-  for (let rpm = 0; rpm <= gaugeMax; rpm += 500) {
-    const a = ang(rpm), major = rpm % 1000 === 0, c = Math.cos(a), s = Math.sin(a);
-    g.strokeStyle = major ? '#e8ecf1' : '#8b95a3'; g.lineWidth = (major ? 3 : 1.5) * k;
-    g.beginPath(); g.moveTo(cx + c * (r - 8 * k), cy + s * (r - 8 * k)); g.lineTo(cx + c * (r - (major ? 30 : 20) * k), cy + s * (r - (major ? 30 : 20) * k)); g.stroke();
-    if (major) { g.fillStyle = rpm >= red ? '#ef4b4b' : '#e8ecf1'; g.fillText(String(rpm / 1000), cx + c * (r - 54 * k), cy + s * (r - 54 * k)); }
-  }
-  g.fillStyle = '#8b95a3'; g.font = `${Math.max(10, 16 * k)}px system-ui`; g.fillText('x1000 rpm', cx, cy - 80 * k);
-  // ตัวเลขรอบ
-  g.fillStyle = '#e8ecf1'; g.font = `600 ${Math.max(22, 70 * k)}px system-ui`;
-  g.fillText(String(Math.round(needle / 10) * 10), cx, cy + 95 * k);
-  // ความเร็ว + เกียร์
-  g.fillStyle = '#ffa21a'; g.font = `600 ${Math.max(22, 78 * k)}px system-ui`; g.fillText(String(Math.round(S.speed * 3.6)), cx, cy + 165 * k);
-  g.fillStyle = '#e8ecf1'; g.font = `${Math.max(11, 20 * k)}px system-ui`;
-  const gearTxt = S.isAuto ? 'ออโต้ ' + Cvt.ratio(S.cvtS).toFixed(2) : 'เกียร์ ' + (S.gear === 0 ? 'N' : S.gear);
-  g.fillText(`กม./ชม.   ${gearTxt}`, cx, cy + 205 * k);
-  if (S.dynoPhase !== 0) { g.fillStyle = '#3ccf7a'; g.font = `${Math.max(12, 24 * k)}px system-ui`; g.fillText('กำลังวัดไดโน...', cx, cy - 112 * k); }
-  else if (!S.running) { g.fillStyle = '#ffa21a'; g.font = `${Math.max(12, 22 * k)}px system-ui`; g.fillText(S.ignition ? 'กดสตาร์ทค้าง' : 'ดับเครื่องอยู่ - กดสตาร์ท', cx, cy - 112 * k); }
-  // เข็ม
-  const na = ang(needle);
-  g.strokeStyle = '#ffa21a'; g.lineWidth = 9 * k; g.lineCap = 'round';
-  g.beginPath(); g.moveTo(cx + Math.cos(na + Math.PI) * 26 * k, cy + Math.sin(na + Math.PI) * 26 * k); g.lineTo(cx + Math.cos(na) * (r - 26 * k), cy + Math.sin(na) * (r - 26 * k)); g.stroke();
-  g.fillStyle = '#3c424e'; g.beginPath(); g.arc(cx, cy, 16 * k, 0, 7); g.fill();
-}
-
-// ----------------------------------------------------------------- สถิติ (ตาราง)
-let statCache = '';
-function updateStats() {
-  const b = before ?? newRun();
-  const fmt = (v, f, u = '') => (v > 0 ? v.toFixed(f) + u : '-');
-  const row = (name, best, bef, last, lowerBetter, f, lastTxt) => {
-    const ref = before ? bef : best;
-    let diff = '-', cls = 'dim';
-    if (ref > 0 && last > 0) {
-      const d = lowerBetter ? ref - last : last - ref;
-      diff = (d > 0.0049 ? '+' : '') + d.toFixed(f); cls = Math.abs(d) < 0.005 ? 'dim' : d > 0 ? 'green-t' : 'red-t';
-    }
-    return `<tr><td>${name}</td><td>${fmt(best, f)}</td><td class="dim">${fmt(bef, f)}</td><td class="accent">${lastTxt ?? fmt(last, f)}</td><td class="${cls}">${diff}</td></tr>`;
-  };
-  const hp = dynoRes ? dynoRes.ps * PsToHp : 0;
-  const html = `<tr><th></th><th>ดีสุด</th><th>ก่อนแก้</th><th>ล่าสุด</th><th>ต่าง</th></tr>` +
-    row('รอบสูงสุด (rpm)', cur.peakRpm, b.peakRpm, peakRpm, false, 0) +
-    row('0–60 (วิ)', save.best.b060, b.b060, last060, true, 2) +
-    row('100 ม. (วิ)', save.best.b100, b.b100, last100, true, 2) +
-    row(last402 > 0 ? `402 ม. (วิ) @${trap402.toFixed(0)}` : '402 ม. (วิ)', save.best.b402, b.b402, last402, true, 2) +
-    row('ท็อป (กม./ชม.)', save.best.top, b.top, topSession, false, 0) +
-    row('แรงม้า (HP)', cur.hp, b.hp, hp, false, 1);
-  if (html !== statCache) { statCache = html; $('#statTbl').innerHTML = html; }
-}
-
-// ----------------------------------------------------------------- วัดถนน
-let roadArmed = true, roadTiming = false, roadStart = 0, distStart = 0, got060 = false, got100 = false, got402 = false;
-function roadTests(now) {
-  const kmh = S.speed * 3.6;
-  if (kmh > topSession) topSession = kmh;
-  if (topSession > cur.top) cur.top = topSession;
-  if (topSession > save.best.top + 0.5) { save.best.top = topSession; persist(); }
-  if (kmh < 1) { roadArmed = true; roadTiming = false; distStart = S.dist; }
-  else if (roadArmed && !roadTiming) {
-    roadArmed = false;
-    if (kmh < 8) { roadTiming = true; roadStart = now; got060 = got100 = got402 = false; }
-  }
-  if (!roadTiming) return;
-  const el = now - roadStart, dist = S.dist - distStart;
-  if (!got060 && kmh >= 60) {
-    got060 = true; last060 = el;
-    if (el >= 0.8) { cur.b060 = bestOf(cur.b060, el); if (save.best.b060 < 0 || el < save.best.b060) { save.best.b060 = el; persist(); } }
-  }
-  if (!got100 && dist >= 100) {
-    got100 = true; last100 = el;
-    if (el >= 2) { cur.b100 = bestOf(cur.b100, el); if (save.best.b100 < 0 || el < save.best.b100) { save.best.b100 = el; persist(); } }
-  }
-  if (!got402 && dist >= 402.3) {
-    got402 = true; last402 = el; trap402 = kmh;
-    if (el >= 5) { cur.b402 = bestOf(cur.b402, el); if (save.best.b402 < 0 || el < save.best.b402) { save.best.b402 = el; persist(); } }
-  }
-}
-
-// ----------------------------------------------------------------- ลูปหลัก
-let needle = 0, lastT = performance.now() / 1000, frame = 0;
-function tick() {
-  requestAnimationFrame(tick);
-  const now = performance.now() / 1000;
-  const dt = Math.min(0.1, now - lastT); lastT = now;
-  const active = view === 'test' && $('#modal').hidden;
-  let thr = 0, brake = false, starter = false;
-  if (active) {
-    const zk = keys.has('z') || held.z, xk = keys.has('x') || held.x;
-    if (zk || xk) {
-      const ceil = zk ? S.limiter - 40 : S.limiter - 800;
-      const pred = S.rpm + rpmRate * 0.4;
-      gradThr = clamp(gradThr + 0.8 * clamp((ceil - pred) / 350, -1.5, 1) * dt, 0, 1);
-    } else gradThr = Math.max(0, gradThr - 3 * dt);
-    thr = gradThr;
-    if (keys.has('w') || held.full) { thr = 1; gradThr = 1; }
-    if (thrPointer) thr = thrVal;
-    brake = keys.has('space') || keys.has('b') || held.brake;
-    starter = keys.has('s') || held.start;
-  } else { gradThr = 0; }
-  send('throttleInput', +thr.toFixed(3));
-  send('brakeInput', brake ? 1 : 0);
-  send('starterHeld', starter);
-  send('clutchEnabled', save.clutchSys);
-  send('clutchInput', active && (keys.has('shift') || held.clutch || now < assistUntil) ? 1 : 0);
-  send('gearInput', gearSel);
-  send('slopePct', slope);
-
-  if (dt > 0) { rpmRate += ((S.rpm - lastRpmG) / dt - rpmRate) * 0.3; lastRpmG = S.rpm; }
-  needle += (S.rpm - needle) * Math.min(1, dt * 25);
-  if (S.rpm > peakRpm) peakRpm = S.rpm;
-  if (peakRpm > cur.peakRpm) cur.peakRpm = peakRpm;
-  roadTests(now);
-  frame++;
-
-  if (view === 'test') {
-    drawGauge();
-    if (frame % 3 === 0) updateTestDom();
-  }
-}
-
-function updateTestDom() {
-  const fill = $('#thrFill'); if (!fill) return;
-  fill.style.height = (S.thr * 100).toFixed(0) + '%';
-  $('#thrLbl').textContent = Math.round(S.thr * 100) + '%';
-  const st = $('#status');
-  const lim = S.cut || needle > S.limiter - 150;
-  st.innerHTML = `<span class="chip ${S.cut ? 'on' : ''}">ตัดรอบ</span>` +
-    (installed.D.SoftGap > 0 ? `<span class="chip ${S.softK > 0 && !S.cut ? 'on' : ''}">soft cut</span>` : '') +
-    `<span class="chip ${S.clutchLock > 0.05 ? 'ok' : ''}">คลัตช์จับ ${Math.round(S.clutchLock * 100)}%</span>` +
-    `<span class="chip">${installed.D.Auto ? 'CVT' : 'เกียร์ ' + (S.gear || 'N')}</span>` +
-    `<span class="chip">${tireCode(installed.D)}</span>` + (lim && !S.cut ? '<span class="chip on">ใกล้รอบตัด</span>' : '');
-  const bk = $('#bKill'); bk.classList.toggle('on', !S.ignition);
-  const sl = slope === 0 ? 'ถนนราบ' : slope > 0 ? `ขึ้นเนิน ${slope}%` : `ลงเนิน ${-slope}%`;
-  $('#slopeTxt').textContent = sl;
-  $$('[data-sl]').forEach(b => b.classList.toggle('on', +b.dataset.sl === slope));
-  if (S.isAuto) { const bar = $('#cvtBar'); if (bar) { bar.style.width = (S.cvtS * 100) + '%'; $('#cvtTxt').textContent = Cvt.ratio(S.cvtS).toFixed(2); } }
-  else { const gb = $('#bGear'); if (gb) gb.textContent = 'เกียร์ ' + (gearSel === 0 ? 'N' : gearSel); }
-  $('#topinfo').textContent = `${installed.Cc.toFixed(0)} cc • ${installed.PeakHp.toFixed(1)} HP`;
-  updateStats();
+function driveKey(k) {
+  if (k === 'k') send('ignition', !S.ignition);
+  else if (k === 'd') startDynoRun();
+  else if (k === 'g') goTo('garage');
+  else if (k === 'arrowup' || k === 'e') shiftGear(1);
+  else if (k === 'arrowdown' || k === 'q') shiftGear(-1);
+  else if (k === 'n') selectGear(0);
+  else if (k === 'c') toggleClutchSys();
+  else if (k === '[') changeSlope(-1);
+  else if (k === ']') changeSlope(1);
+  else if (k === 'escape') goTo('menu');
 }
 
 // ================================================================= ไดโน
@@ -409,7 +170,7 @@ function finishDyno(tqRaw) {
     for (let j = Math.max(0, i - 2); j <= Math.min(tq.length - 1, i + 2); j++) if (!Number.isNaN(tq[j])) { s += tq[j]; n++; }
     return Number.isNaN(tq[i]) || n === 0 ? NaN : s / n;
   });
-  let pk = { ps: 0, psRpm: 0, tq: 0, tqRpm: 0 }, any = false;
+  const pk = { ps: 0, psRpm: 0, tq: 0, tqRpm: 0 }; let any = false;
   sm.forEach((t, i) => {
     if (Number.isNaN(t)) return;
     any = true; const rpm = i * 100, ps = Ps(t, rpm);
@@ -419,354 +180,588 @@ function finishDyno(tqRaw) {
   if (!any) return;
   dynoRes = { curve: sm, model: installed, ps: pk.ps, psRpm: pk.psRpm, peakTq: pk.tq, tqRpm: pk.tqRpm };
   cur.hp = pk.ps * PsToHp;
-  openDynoModal();
+  showDyno = true;
 }
-function openDynoModal() {
-  const r = dynoRes, m = r.model, d = m.D;
-  $('#mTitle').textContent = `ผลวัดไดโน (${m.Cc.toFixed(0)} cc)`;
-  $('#modal').hidden = false;
-  const rpm = r.curve.map((_, i) => i * 100), hp = r.curve.map((t, i) => (Number.isNaN(t) ? NaN : Hp(t, i * 100)));
-  requestAnimationFrame(() => drawChart($('#mChart'), rpm, r.curve, hp, d.Limiter));
-  let cmp = '';
-  if (d.RealHp > 0) cmp += `<div class="yellow-t">เทียบรถจริง: แรงม้า เกม ${(r.ps * PsToHp).toFixed(1)} / จริง ${d.RealHp.toFixed(1)} HP (${((r.ps * PsToHp / d.RealHp - 1) * 100).toFixed(0)}%)</div>`;
-  if (d.RealTq > 0) cmp += `<div class="yellow-t">แรงบิด เกม ${r.peakTq.toFixed(1)} / จริง ${d.RealTq.toFixed(1)} N·m (${((r.peakTq / d.RealTq - 1) * 100).toFixed(0)}%)</div>`;
-  $('#mBody').innerHTML = `<div class="accent" style="font-size:1.15rem">กำลังสูงสุด ${(r.ps * PsToHp).toFixed(1)} HP @ ${fmtN(r.psRpm)} rpm</div>
-    <div class="blue-t" style="font-size:1.15rem">แรงบิดสูงสุด ${r.peakTq.toFixed(1)} N·m @ ${fmtN(r.tqRpm)} rpm</div>
-    <div class="dim small">ซีซี ${m.Cc.toFixed(0)}  •  HP ต่อลิตร = ${(r.ps * PsToHp / m.Cc * 1000).toFixed(0)}</div>${cmp}`;
-}
-$('#mClose').onclick = () => { $('#modal').hidden = true; };
 
-// ================================================================= กราฟ (แรงบิด + แรงม้า)
-function drawChart(cv, rpm, tq, hp, limiter) {
-  const dpr = Math.min(window.devicePixelRatio || 1, 2.5), w = cv.clientWidth, h = cv.clientHeight;
-  if (!w) return;
-  cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
-  const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
-  const L = 38, R = 38, T = 12, B = 22, pw = w - L - R, ph = h - T - B;
-  let xMax = Math.ceil((limiter + 500) / 1000) * 1000, xMin = 2000;
-  const maxTq = Math.max(1, ...tq.filter(v => !Number.isNaN(v))), maxHp = Math.max(1, ...hp.filter(v => !Number.isNaN(v)));
-  const yT = Math.ceil(maxTq * 1.15 / 5) * 5, yH = Math.ceil(maxHp * 1.15 / 5) * 5;
-  const X = r => L + (r - xMin) / (xMax - xMin) * pw;
-  g.font = '11px system-ui'; g.textBaseline = 'middle';
-  g.strokeStyle = '#20262e'; g.lineWidth = 1; g.fillStyle = '#8b95a3';
-  for (let i = 0; i <= 4; i++) {
-    const y = T + ph * i / 4; g.beginPath(); g.moveTo(L, y); g.lineTo(L + pw, y); g.stroke();
-    g.textAlign = 'right'; g.fillStyle = '#4aa3ff'; g.fillText((yT * (1 - i / 4)).toFixed(0), L - 4, y);
-    g.textAlign = 'left'; g.fillStyle = '#ffa21a'; g.fillText((yH * (1 - i / 4)).toFixed(0), L + pw + 4, y);
+// ================================================================= วัดถนน
+let roadArmed = true, roadTiming = false, roadStart = 0, distStart = 0, got060 = false, got100 = false, got402 = false;
+function roadTests(t) {
+  const kmh = S.speed * 3.6;
+  if (kmh > topSession) topSession = kmh;
+  if (topSession > cur.top) cur.top = topSession;
+  if (topSession > save.best.top + 0.5) { save.best.top = topSession; persist(); }
+  if (kmh < 1) { roadArmed = true; roadTiming = false; distStart = S.dist; }
+  else if (roadArmed && !roadTiming) { roadArmed = false; if (kmh < 8) { roadTiming = true; roadStart = t; got060 = got100 = got402 = false; } }
+  if (!roadTiming) return;
+  const el = t - roadStart, dist = S.dist - distStart;
+  if (!got060 && kmh >= 60) { got060 = true; last060 = el; if (el >= 0.8) { cur.b060 = bestOf(cur.b060, el); if (save.best.b060 < 0 || el < save.best.b060) { save.best.b060 = el; persist(); } } }
+  if (!got100 && dist >= 100) { got100 = true; last100 = el; if (el >= 2) { cur.b100 = bestOf(cur.b100, el); if (save.best.b100 < 0 || el < save.best.b100) { save.best.b100 = el; persist(); } } }
+  if (!got402 && dist >= 402.3) { got402 = true; last402 = el; trap402 = kmh; if (el >= 5) { cur.b402 = bestOf(cur.b402, el); if (save.best.b402 < 0 || el < save.best.b402) { save.best.b402 = el; persist(); } } }
+}
+
+// ================================================================= โครงหน้าจอ: แถบซ้าย + หัวหน้า
+const navs = [['ภาพรวม', 'OVERVIEW', 'menu'], ['อู่ออกแบบ', 'WORKSHOP', 'garage'], ['ห้องทดสอบ', 'TEST BENCH', 'drive'], ['ตั้งค่า', 'SETTINGS', 'settings']];
+function drawTopBar(title, hint) {
+  const rw = 220;
+  ui.rect(0, 0, rw, VH, C.Panel); ui.line(rw, 0, rw, VH, C.Border, 1);
+  ui.txt('REV LAB', F.title, C.Accent, 14, 20); ui.txt('ห้องทดลองเครื่องยนต์', F.xs, C.Dim, 28, 82);
+  ui.line(20, 118, rw - 20, 118, C.Border, 1);
+  navs.forEach(([name, sub, p], i) => {
+    const r = R(0, 136 + i * 78, rw, 72), act = page === p, hov = inRect(r, ui.mouse);
+    if (act) ui.rect(r.x, r.y, r.w, r.h, C.PanelHi); else if (hov) ui.rect(r.x, r.y, r.w, r.h, 'rgb(26,30,37)');
+    if (act) ui.rect(r.x, r.y, 5, r.h, C.Accent);
+    ui.txt(name, F.md, act ? C.Text : C.Dim, 30, r.y + 10); ui.txt(sub, F.cap, act ? C.Accent : 'rgb(90,98,110)', 31, r.y + 44);
+    ui.hit(r, () => goTo(p));
+  });
+  const m = installed, cy = VH - 320;
+  ui.line(20, cy, rw - 20, cy, C.Border, 1);
+  ui.txt('เครื่องที่ติดตั้ง', F.cap, C.Dim, 28, cy + 14);
+  ui.txt(f1(m.PeakHp), F.numL, C.Accent, 24, cy + 38);
+  ui.txt('HP', F.md, C.Dim, 28, cy + 118); ui.txt(`@ ${fmtN(m.PeakPsRpm)} rpm`, F.sm, C.Dim, 80, cy + 122);
+  ui.txt(`${f0(m.Cc)} cc  •  ${f1(m.PeakTq)} N·m`, F.sm, C.Text, 28, cy + 156);
+  ui.txt(m.D.Auto === 1 ? 'ออโต้ CVT' : 'เกียร์ธรรมดา 4 สปีด', F.sm, C.Dim, 28, cy + 188);
+  ui.btn(R(20, VH - 76, rw - 40, 52), 'ออกจากเกม', false, C.Red, () => location.reload(), F.sm);
+  ui.txt(title, F.lg, C.Text, 252, 18); ui.txt(hint, F.xs, C.Dim, 254, 64);
+  ui.line(rw, 98, VW, 98, C.Border, 1);
+}
+
+// ================================================================= ภาพรวม
+function drawMenu() {
+  drawTopBar('ภาพรวม', 'Enter ไปทดสอบ  •  G อู่ออกแบบ  •  F11 เต็มจอ  •  + / − ระดับเสียง');
+  const m = installed, d = design;
+  const sheet = R(252, 124, 1000, 800);
+  ui.panelBox(sheet, 'ใบสเปกเครื่อง (ที่ติดตั้งอยู่)');
+  let y = 176;
+  const sec = name => { y += 8; ui.txt(name, F.cap, C.Accent, sheet.x + 28, y); ui.line(sheet.x + 28 + 250, y + 11, sheet.x + sheet.w - 28, y + 11, C.Border, 1); y += 28; };
+  const row = (k, v) => { ui.txt(k, F.sm, C.Dim, sheet.x + 36, y); ui.txtR(v, F.numS, C.Text, sheet.x + sheet.w - 36, y); y += 31; };
+  const fuel = Fuels[clamp(d.Fuel, 0, 6)];
+  sec('BLOCK'); row('ความจุ', `${f1(m.Cc)} cc`); row('ลูก × ชัก', `${f1(d.Bore)} × ${f1(d.Stroke)} มม.   (ก้าน ${f0(d.Rod)} มม.)`);
+  row('ล้อ / ยาง', `${tireCode(d)}  ขอบ ${f2(d.RimW)}`); row('ข้อเหวี่ยง / จานไฟ', `${f1(d.CrankKg)} / ${f2(d.FlywheelKg)} กก.`);
+  sec('HEAD / CAM'); row('วาล์ว / เรือน', `${d.Valves} วาล์ว / ${f0(d.Throttle)} มม.`);
+  row('แคม LSA / องศา IN,EX / ยก IN,EX', `${f0(d.Lsa)}° / ${f0(d.Duration)}°,${f0(d.DurationEx)}° / ${f1(d.Lift)},${f1(d.LiftEx)} มม.`);
+  sec('COMPRESSION / FUEL'); row('อัตราส่วนกำลังอัด', `${f1(d.Cr)} : 1`); row('แรงดันอัด (วัดจริง)', `${f0(m.Psi)} psi`);
+  row('น้ำมัน', `${fuel.name}  (RON ${f0(fuel.ron)})`); row('รอบตัด', `${fmtN(d.Limiter)} rpm`);
+  sec('OUTPUT'); row('กำลังสูงสุด', `${f1(m.PeakHp)} HP @ ${fmtN(m.PeakPsRpm)} rpm`); row('แรงบิดสูงสุด', `${f1(m.PeakTq)} N·m @ ${fmtN(m.PeakTqRpm)} rpm`);
+  sec('DRIVETRAIN');
+  if (d.Auto === 1) { row('ระบบ', 'ออโต้ CVT'); row('ชาม / เม็ด / สปริง', `${f1(d.RampDeg)}° / ${d.Rollers} × ${+d.RollerG.toFixed(1)} g / ${f0(d.SpringK)} N/มม.`); row('เฟืองท้าย', `${d.GearF}/${d.GearR}  (ทดรวม ${f2(Cvt.final(d))})`); }
+  else { row('ระบบ', 'เกียร์ธรรมดา 4 สปีด'); row('สเตอร์ หน้า/หลัง', `${f0(d.SprocketF)}/${f0(d.SprocketR)}  (ทดสุดท้าย ${Veh.final(d).toFixed(3)})`); }
+
+  const rec = R(1280, 124, 600, 400);
+  ui.panelBox(rec, 'สถิติบนถนน');
+  let ry = 184;
+  const T = v => (v < 0 ? '-' : f2(v) + ' วิ');
+  const rrow = (k, v) => { ui.txt(k, F.sm, C.Dim, rec.x + 28, ry + 4); ui.txtR(v, F.num, C.Accent, rec.x + rec.w - 28, ry); ry += 54; };
+  rrow('0–60 กม./ชม.', T(save.best.b060)); rrow('100 เมตร', T(save.best.b100)); rrow('402 เมตร', T(save.best.b402));
+  rrow('ท็อปสปีด', save.best.top <= 0 ? '-' : `${f0(save.best.top)} กม./ชม.`);
+  ui.btn(R(1280, 556, 600, 88), 'ไปห้องทดสอบ', false, C.Green, () => goTo('drive'), F.lg);
+  ui.btn(R(1280, 660, 600, 88), 'อู่ออกแบบเครื่อง', false, C.Accent, () => goTo('garage'), F.lg);
+  ui.btn(R(1280, 764, 600, 70), 'ตั้งค่า', false, C.Blue, () => goTo('settings'), F.md);
+}
+
+// ================================================================= ตั้งค่า
+function drawSettings() {
+  drawTopBar('ตั้งค่า', 'Esc กลับ  •  F11 เต็มจอ/หน้าต่าง');
+  const box = R(252, 124, 1100, 640);
+  ui.panelBox(box, 'ระบบ');
+  const x = box.x + 40, w = box.w - 80; let y = box.y + 80;
+  ui.txt('ระดับเสียง', F.md, C.Text, x, y); ui.txtR(`${f0(save.volume * 100)}%`, F.num, C.Accent, x + w, y);
+  ui.slider(R(x, y + 48, w, 36), save.volume, C.Accent, v => setVolume(v));
+  y += 150; ui.txt('การแสดงผล', F.md, C.Text, x, y);
+  ui.btn(R(x + w - 520, y - 10, 520, 60), document.fullscreenElement ? 'เต็มจอ (กดเพื่อเป็นหน้าต่าง)' : 'หน้าต่าง (กดเพื่อเต็มจอ)', false, C.Blue, toggleFullscreen, F.sm);
+  y += 90; ui.txt('แสดงเฟรมเรต (FPS)', F.md, C.Text, x, y);
+  ui.btn(R(x + w - 260, y - 10, 260, 60), showFps ? 'เปิด' : 'ปิด', showFps, C.Green, () => { showFps = !showFps; }, F.sm);
+  y += 90; ui.txt('ล้างสถิติบนถนน', F.md, C.Text, x, y);
+  ui.btn(R(x + w - 260, y - 10, 260, 60), 'ล้างสถิติ', false, C.Red, () => {
+    save.best = { b060: -1, b100: -1, b402: -1, top: 0 }; last060 = last100 = last402 = -1; topSession = 0; cur = newRun(); before = null; persist(); toast('ล้างสถิติแล้ว');
+  }, F.sm);
+  y += 90; ui.txt('ช่วยกำครัตช์อัตโนมัติ (มือถือ)', F.md, C.Text, x, y);
+  ui.btn(R(x + w - 260, y - 10, 260, 60), save.assist ? 'เปิด' : 'ปิด', save.assist, C.Green, () => { save.assist = !save.assist; persist(); }, F.sm);
+}
+
+// ================================================================= ห้องทดสอบ
+const gaugeMaxOf = lim => Math.max(10000, Math.ceil((lim + 1000) / 1000) * 1000);
+let needle = 0;
+function drawDrive() {
+  drawTopBar('ห้องทดสอบ', 'W เร่งสุด  •  X ค่อย ๆ เร่ง (ไม่ตัดรอบ)  •  Z ค่อย ๆ เร่ง (แตะรอบตัดเบา ๆ)  •  Space เบรก  •  S สตาร์ท  •  E/Q เกียร์  •  C ครัตช์  •  D ไดโน  •  [ ] ความชัน  •  G อู่');
+  const m = installed, d = m.D, auto = d.Auto === 1;
+  drawGauge(640, 552, 335);
+  drawThrottle(1056, 170, 64, 660);
+
+  const px = 1180, pw = 700;
+  ui.panelBox(R(px, 100, pw, 200), auto ? 'รถออโต้ (CVT)' : 'รถเกียร์ธรรมดา');
+  if (auto) {
+    const w = d.Rollers === 6 && d.RollerG !== d.RollerG2 ? `${+d.RollerG.toFixed(1)}/${+d.RollerG2.toFixed(1)} g` : `${+d.RollerG.toFixed(1)} g`;
+    ui.txt(`ชาม ${f1(d.RampDeg)}°  •  ${d.Rollers} เม็ด ${w}  •  สปริง ${f0(d.SpringK)} N/มม.`, F.md, C.Text, px + 20, 142);
+    ui.txt(`${f0(m.Cc)} cc  •  ${f1(m.PeakHp)} HP @ ${fmtN(m.PeakPsRpm)}`, F.sm, C.Dim, px + 20, 184);
+    ui.txt(`อัตราทดสายพาน ${f2(Cvt.ratio(S.cvtS))}  •  เฟืองท้าย ${d.GearF}/${d.GearR} x ลดขั้นแรก ${f2(d.FirstRed)} (ทดรวม ${f2(Cvt.final(d))})`, F.sm, C.Dim, px + 20, 222);
+    ui.bar(R(px + 20, 262, pw - 40, 16), S.cvtS, C.Accent);
+  } else {
+    ui.txt(`เกียร์ 4 สปีด  •  สเตอร์ ${f0(d.SprocketF)}/${f0(d.SprocketR)}`, F.md, C.Text, px + 20, 142);
+    ui.txt(`${f0(m.Cc)} cc  •  ${f1(m.PeakHp)} HP @ ${fmtN(m.PeakPsRpm)}`, F.sm, C.Dim, px + 20, 184);
+    ui.txt(`ทดสุดท้าย ${Veh.final(d).toFixed(3)}   รถ+คน ${f0(Veh.mass(d))} กก.`, F.sm, C.Dim, px + 20, 222);
   }
-  g.fillStyle = '#8b95a3'; g.textAlign = 'center';
-  for (let r = Math.ceil(xMin / 1000) * 1000; r <= xMax; r += 1000) { g.fillText(String(r / 1000), X(r), h - 8); g.strokeStyle = '#161b21'; g.beginPath(); g.moveTo(X(r), T); g.lineTo(X(r), T + ph); g.stroke(); }
-  g.strokeStyle = '#ef4b4b'; g.setLineDash([4, 4]); g.beginPath(); g.moveTo(X(limiter), T); g.lineTo(X(limiter), T + ph); g.stroke(); g.setLineDash([]);
-  const line = (arr, col, ymax) => {
-    g.strokeStyle = col; g.lineWidth = 2.2; g.beginPath(); let open = false;
-    arr.forEach((v, i) => { const r = rpm[i]; if (Number.isNaN(v) || r < xMin || r > xMax) { open = false; return; } const x = X(r), y = T + ph * (1 - clamp(v, 0, ymax) / ymax); if (!open) { g.moveTo(x, y); open = true; } else g.lineTo(x, y); });
-    g.stroke();
+  const bw = 163, bg = 16, by = 316, bh = 70;
+  ui.btn(R(px, by, bw, bh), 'S สตาร์ท', mouseStarter || down('s'), C.Green, null, F.md, () => { send('ignition', true); mouseStarter = true; }, () => { mouseStarter = false; });
+  ui.btn(R(px + (bw + bg), by, bw, bh), 'K ดับเครื่อง', !S.ignition, C.Red, () => send('ignition', !S.ignition), F.md);
+  ui.btn(R(px + 2 * (bw + bg), by, bw, bh), 'D ไดโน', S.dynoPhase !== 0, C.Green, startDynoRun, F.md);
+  ui.btn(R(px + 3 * (bw + bg), by, bw, bh), 'G อู่', false, C.Accent, () => goTo('garage'), F.md);
+
+  ui.panelBox(R(px, 400, pw, 138), auto ? 'คลัตช์แรงเหวี่ยง (ไม่ต้องเปลี่ยนเกียร์ จับเองที่ ~3,200 รอบ)'
+    : save.clutchSys ? 'เกียร์  (E ขึ้น  Q ลง  N ว่าง)  •  ค้าง Shift = กำครัตช์' : 'เกียร์  (E ขึ้น  Q ลง  N ว่าง)  •  ครัตช์มือปิด เปลี่ยนเกียร์ได้ทันที');
+  if (auto) {
+    const kb = R(px + 20, 452, pw - 40, 40);
+    ui.bar(kb, S.clutchLock, C.Green); ui.txtC(`คลัตช์จับ ${f0(S.clutchLock * 100)}%`, F.sm, C.Text, kb.x + kb.w / 2, kb.y + kb.h / 2);
+  } else {
+    ['N', '1', '2', '3', '4'].forEach((n, i) => ui.btn(R(px + 20 + i * 136, 440, 120, 54), n, gearSel === i, C.Accent, () => selectGear(i), F.lg));
+    if (save.clutchSys) {
+      const lv = R(px + 20, 500, pw - 160, 14);
+      ui.bar(lv, S.lever, S.lever > 0.6 ? C.Blue : C.Accent);
+      ui.hit(R(px + 20, 496, pw - 160, 22), () => { mouseClutch = true; }, null, () => { mouseClutch = false; });
+      ui.txt(S.lever > 0.6 ? 'กำครัตช์อยู่ (เปลี่ยนเกียร์ได้)' : 'ครัตช์ปล่อย  [Shift หรือกดค้างแถบนี้]', F.xs, C.Dim, px + 24, 516);
+    } else ui.txt('ครัตช์มือปิด: ไม่ต้องกำครัตช์ เปลี่ยนเกียร์ได้เลย (คลัตช์แรงเหวี่ยงจับเอง)', F.xs, C.Dim, px + 24, 508);
+    ui.btn(R(px + pw - 130, 496, 112, 34), save.clutchSys ? 'C ครัตช์: เปิด' : 'C ครัตช์: ปิด', save.clutchSys, C.Blue, toggleClutchSys, F.xs);
+  }
+
+  ui.panelBox(R(px, 540, pw, 164), 'ถนน / ความชัน   ( [ ] ปรับ )');
+  const slopeText = slope === 0 ? 'ถนนราบ' : (slope > 0 ? 'ขึ้นเนิน +' : 'ลงเนิน ') + slope + '%';
+  ui.smallBtn(R(px + 20, 592, 70, 44), '−', () => changeSlope(-1));
+  ui.txtC(slopeText, F.md, slope === 0 ? C.Text : C.Accent, px + pw / 2, 614);
+  ui.smallBtn(R(px + pw - 90, 592, 70, 44), '+', () => changeSlope(1));
+  [['ราบ', 0], ['เนิน 6%', 6], ['ชัน 12%', 12], ['ลง −4%', -4]].forEach(([n, v], i) => ui.btn(R(px + 20 + i * 166, 646, 154, 44), n, slope === v, C.Blue, () => { slope = v; }, F.sm));
+
+  ui.txt('ระดับเสียง', F.sm, C.Dim, px, 726);
+  ui.slider(R(px + 160, 718, pw - 160, 40), save.volume, C.Accent, v => setVolume(v));
+
+  ui.panelBox(R(px, 776, pw, 204), 'สถิติ');
+  const bf = before;
+  ui.txtR('ดีสุด', F.xs, C.Dim, px + 300, 788); ui.txtR('ก่อนแก้', F.xs, C.Dim, px + 430, 788); ui.txtR('ล่าสุด', F.xs, C.Dim, px + 560, 788);
+  ui.txtR(bf ? 'ต่างจากก่อนแก้' : 'ต่างจากดีสุด', F.xs, C.Dim, px + pw - 20, 788);
+  const N = (v, dec) => (v <= 0 ? '-' : v.toFixed(dec));
+  let sy = 816;
+  const srow = (a, best, bef, last, lowerBetter, dec, lastTxt = '') => {
+    ui.txt(a, F.sm, C.Dim, px + 20, sy); ui.txtR(N(best, dec), F.sm, C.Text, px + 300, sy); ui.txtR(N(bef, dec), F.sm, C.Dim, px + 430, sy);
+    ui.txtR(lastTxt || N(last, dec), F.sm, C.Accent, px + 560, sy);
+    const ref = bf ? bef : best;
+    if (ref > 0 && last > 0) {
+      const diff = lowerBetter ? ref - last : last - ref;
+      ui.txtR((diff > 0.0049 ? '+' : '') + diff.toFixed(dec), F.sm, Math.abs(diff) < 0.005 ? C.Dim : diff > 0 ? C.Green : C.Red, px + pw - 20, sy);
+    } else ui.txtR('-', F.sm, C.Dim, px + pw - 20, sy);
+    sy += 27;
   };
-  line(tq, '#4aa3ff', yT); line(hp, '#ffa21a', yH);
-  g.textAlign = 'left'; g.fillStyle = '#4aa3ff'; g.fillText('แรงบิด N·m', L + 6, T + 8); g.fillStyle = '#ffa21a'; g.fillText('แรงม้า HP', L + 90, T + 8);
+  const hpNow = dynoRes ? dynoRes.ps * PsToHp : 0;
+  srow('รอบสูงสุด (rpm)', cur.peakRpm, bf?.peakRpm ?? 0, peakRpm, false, 0);
+  srow('0–60 (วิ)', save.best.b060, bf?.b060 ?? 0, last060, true, 2);
+  srow('100 ม. (วิ)', save.best.b100, bf?.b100 ?? 0, last100, true, 2);
+  srow(last402 > 0 ? `402 ม. (วิ) @${f0(trap402)}` : '402 ม. (วิ)', save.best.b402, bf?.b402 ?? 0, last402, true, 2);
+  srow('ท็อป (กม./ชม.)', save.best.top, bf?.top ?? 0, topSession, false, 0);
+  srow('แรงม้า (HP)', cur.hp, bf?.hp ?? 0, hpNow, false, 1);
+  ui.scope(R(px, 992, pw, 64), S.scope, S.scopeW);
+}
+
+function drawThrottle(x, y, w, h) {
+  ui.txtC('คันเร่ง', F.sm, C.Dim, x + w / 2, y - 28);
+  const r = R(x, y, w, h);
+  ui.fillRR(r, 3, 'rgb(14,17,21)');
+  const thr = S.thr, fh = h * clamp(thr, 0, 1);
+  if (fh > 2) {
+    const g = ui.g, gr = g.createLinearGradient(0, y, 0, y + h); gr.addColorStop(0, C.Red); gr.addColorStop(1, C.Accent);
+    g.fillStyle = gr; g.fillRect(x, y + h - fh, w, fh);
+  }
+  ui.drawRR(r, 3, C.Border, 1);
+  ui.txtC(Math.floor(thr * 100) + '%', F.md, C.Text, x + w / 2, y + h + 32);
+  const braking = down(' ') || down('b') || mouseBrake;
+  const br = R(x - 6, y + h + 62, w + 12, 46);
+  ui.fillRR(br, 3, braking ? C.Red : C.Panel); ui.drawRR(br, 3, braking ? C.Red : C.Border, 1);
+  ui.txtC('เบรก', F.sm, braking ? C.White : C.Dim, br.x + br.w / 2, br.y + br.h / 2);
+  ui.hit(br, () => { mouseBrake = true; }, null, () => { mouseBrake = false; });
+  const apply = p => { mouseThrottle = true; mouseThrottleValue = clamp(1 - (p.y - y) / h, 0, 1); };
+  ui.hit(R(x - 30, y - 10, w + 60, h + 20), apply, apply, () => { mouseThrottle = false; });
+}
+
+function drawGauge(cx, cy, r) {
+  const g = ui.g, k = r / 215, lim = installed.D.Limiter, red = lim - 600, gm = gaugeMaxOf(lim);
+  const ang = rpm => (135 + 270 * clamp(rpm, 0, gm) / gm) * Math.PI / 180;
+  g.beginPath(); g.arc(cx, cy, r + 26, 0, 7); g.fillStyle = 'rgb(14,17,21)'; g.fill(); g.strokeStyle = C.Border; g.lineWidth = 3; g.stroke();
+  g.beginPath(); g.arc(cx, cy, r - 34 * k, 0, 7); g.strokeStyle = 'rgb(30,35,42)'; g.lineWidth = 1.5; g.stroke();
+  g.lineCap = 'butt';
+  g.beginPath(); g.arc(cx, cy, r, ang(0), ang(red)); g.strokeStyle = 'rgb(70,76,88)'; g.lineWidth = 10 * k; g.stroke();
+  g.beginPath(); g.arc(cx, cy, r, ang(red), ang(gm)); g.strokeStyle = C.Red; g.lineWidth = 10 * k; g.stroke();
+  for (let rpm = 0; rpm <= gm; rpm += 500) {
+    const a = ang(rpm), major = rpm % 1000 === 0, c = Math.cos(a), s = Math.sin(a);
+    ui.line(cx + c * (r - 8 * k), cy + s * (r - 8 * k), cx + c * (r - (major ? 30 : 20) * k), cy + s * (r - (major ? 30 : 20) * k), major ? C.Text : C.Dim, (major ? 3 : 1.5) * k);
+    if (major) ui.txtC(String(rpm / 1000), F.gaugeNum, rpm >= red ? C.Red : C.Text, cx + c * (r - 54 * k), cy + s * (r - 54 * k));
+  }
+  ui.txtC('x1000 rpm', F.sm, C.Dim, cx, cy - 80 * k);
+  ui.txtC(String(Math.round(needle / 10) * 10), F.rpm, C.Text, cx, cy + 105 * k);
+  const limOn = S.cut || needle > lim - 150, lamp = R(cx - 70 * k, cy + 148 * k, 140 * k, 26 * k);
+  ui.fillRR(lamp, 8, limOn ? C.Red : 'rgb(50,54,62)');
+  ui.txtC('ตัดรอบ', F.sm, limOn ? C.White : C.Dim, lamp.x + lamp.w / 2, lamp.y + lamp.h / 2);
+  const gear = S.isAuto ? 'ออโต้ ' + f2(Cvt.ratio(S.cvtS)) : 'เกียร์ ' + (S.gear === 0 ? 'N' : S.gear);
+  ui.txtC(f0(S.speed * 3.6), F.speed, C.Accent, cx, cy + 205 * k);
+  ui.txtC(`กม./ชม.     ${gear}`, F.sm, C.Text, cx, cy + 238 * k);
+  if (S.dynoPhase !== 0) ui.txtC('กำลังวัดไดโน...', F.btn, C.Green, cx, cy - 112 * k);
+  else if (!S.running) ui.txtC(S.ignition ? 'กด S ค้างเพื่อสตาร์ท' : 'ดับเครื่องอยู่ - กด S ค้างเพื่อสตาร์ท', F.md, C.Accent, cx, cy - 112 * k);
+  const na = ang(needle);
+  g.lineCap = 'round'; g.strokeStyle = C.Accent; g.lineWidth = 9 * k; g.beginPath();
+  g.moveTo(cx + Math.cos(na + Math.PI) * 26 * k, cy + Math.sin(na + Math.PI) * 26 * k); g.lineTo(cx + Math.cos(na) * (r - 26 * k), cy + Math.sin(na) * (r - 26 * k)); g.stroke();
+  g.lineCap = 'butt';
+  g.beginPath(); g.arc(cx, cy, 16 * k, 0, 7); g.fillStyle = 'rgb(60,66,78)'; g.fill();
+}
+
+function drawDynoResult() {
+  const res = dynoRes;
+  ui.hit(R(0, 0, VW, VH), () => { showDyno = false; });
+  ui.fillRR(R(0, 0, VW, VH), 0, 'rgba(0,0,0,0.75)');
+  const box = R(260, 120, 1400, 840);
+  ui.fillRR(box, 4, 'rgba(17,20,25,0.99)'); ui.drawRR(box, 4, C.Accent, 2);
+  ui.txt(`ผลวัดไดโน  (${f0(res.model.Cc)} cc)`, F.title, C.Accent, box.x + 40, box.y + 24);
+  const rpm = res.curve.map((_, i) => i * 100), hp = res.curve.map((t, i) => (Number.isNaN(t) ? NaN : Hp(t, i * 100)));
+  ui.chart(R(box.x + 40, box.y + 110, box.w - 80, 460), rpm, res.curve, hp, res.model.D.Limiter);
+  const y = box.y + 600, m = res.model, rd = m.D;
+  ui.txt(`กำลังสูงสุด  ${f1(res.ps * PsToHp)} HP @ ${fmtN(res.psRpm)} rpm`, F.lg, C.Accent, box.x + 40, y);
+  ui.txt(`แรงบิดสูงสุด  ${f1(res.peakTq)} N·m @ ${fmtN(res.tqRpm)} rpm`, F.lg, C.Blue, box.x + 40, y + 52);
+  ui.txt(`ซีซี ${f0(m.Cc)}   •   HP ต่อลิตร = ${f0(res.ps * PsToHp / m.Cc * 1000)}`, F.md, C.Text, box.x + 40, y + 112);
+  if (rd.RealHp > 0 || rd.RealTq > 0) {
+    let cmp = 'เทียบรถจริง:  ';
+    if (rd.RealHp > 0) cmp += `แรงม้า เกม ${f1(res.ps * PsToHp)} / จริง ${f1(rd.RealHp)} HP (${((res.ps * PsToHp / rd.RealHp - 1) * 100).toFixed(0)}%)   `;
+    if (rd.RealTq > 0) cmp += `แรงบิด เกม ${f1(res.peakTq)} / จริง ${f1(rd.RealTq)} N·m (${((res.peakTq / rd.RealTq - 1) * 100).toFixed(0)}%)`;
+    ui.txt(cmp, F.md, C.Yellow, box.x + 40, y + 160);
+  }
+  ui.txtR('คลิก / Enter เพื่อปิด', F.sm, C.Dim, box.x + box.w - 30, box.y + box.h - 46);
 }
 
 // ================================================================= อู่
-let gTab = 0, gDirty = false;
+const GL = 252, GW = 896;
+let gTab = 0, gSel = 0, gPartRow = 0, advisorOn = false;
 const advC = Adv.newConstraints();
-let advGoal = 0, advKey = '', advTips = [], advList = [], advBusy = false;
+let advGoal = 0, advKey = '', advTips = [], advList = [];
 
+const vis = () => { const keys_ = GarageTabs[gTab][1]; return Params.filter(p => keys_.includes(p.key) && (!p.visible || p.visible(draft))); };
 function draftChanged() { preview = new EngineModel(draft); }
-
+function setTab(t) { advisorOn = false; gTab = (t + GarageTabs.length) % GarageTabs.length; gSel = 0; }
+function nudgeRow(i, dir, coarse) { const v = vis(); if (i < 0 || i >= v.length) return; nudge(v[i], draft, dir, coarse); draftChanged(); }
+function partStep(row, dir) {
+  gPartRow = row;
+  if (row === 0) {
+    const sets = Presets, curI = sets.findIndex(s => JSON.stringify(s[1]) === JSON.stringify(draft)), n = sets.length;
+    const ni = curI < 0 ? (dir > 0 ? 0 : n - 1) : (curI + dir + n) % n;
+    draft = { ...sets[ni][1] }; draftChanged(); toast('เช็ตเครื่อง: ' + sets[ni][0]); return;
+  }
+  const cat = PartCats[row - 1], c = partCurrent(cat, draft), n = cat.items.length;
+  cat.items[c < 0 ? (dir > 0 ? 0 : n - 1) : clamp(c + dir, 0, n - 1)].apply(draft); draftChanged();
+}
+function autoTuneRollers() {
+  if (draft.Auto !== 1) return toast('จูนเม็ดอัตโนมัติใช้กับรถออโต้เท่านั้น');
+  const { g, hold } = Cvt.suggestRoller(preview);
+  draft.RollerG = g; draft.RollerG2 = g; draftChanged();
+  toast(`จูนเม็ดเป็น ${g} กรัม ทุกเม็ด  CVT ถือรอบ ~${fmtN(hold)} rpm (พีคกำลัง ${fmtN(preview.PeakPsRpm)})${g <= 4 ? ' (ถึงขอบเขตเบาสุดแล้ว ลองเพิ่มองศาชาม/ลดจำนวนเม็ด)' : g >= 20 ? ' (ถึงขอบเขตหนักสุดแล้ว)' : ''}`);
+}
+function calibrateToReal() {
+  const k = calibrate(draft);
+  if (k == null) return toast('ใส่แรงม้าหรือแรงบิดของรถจริง (แท็บ รถจริง) ก่อน');
+  draft.CalK = k; draftChanged(); toast(`ปรับเทียบแล้ว: ตัวคูณ ${f2(k)}  โมเดล ${f1(preview.PeakHp)} HP / ${f1(preview.PeakTq)} N·m`);
+}
+function loadPreset(i) { draft = { ...Presets[i][1] }; draftChanged(); toast('โหลดแบบ: ' + Presets[i][0]); }
 function assemble() {
   const changed = JSON.stringify(draft) !== JSON.stringify(design);
   if (changed) {
     if (runAny(cur)) before = cur;
     cur = newRun(); last060 = last100 = last402 = -1; peakRpm = 0; topSession = 0; dynoRes = null;
   }
-  design = { ...draft };
-  save.design = design; persist();
+  design = { ...draft }; save.design = design; persist();
   installed = new EngineModel(design);
   node?.port.postMessage({ type: 'assemble', design });
   gearSel = 0; roadArmed = false; roadTiming = false;
-  buildTest(); setView('test');
-  toast(design.Auto === 1 ? 'ประกอบแล้ว กดสตาร์ทค้าง แล้วบิดคันเร่งออกตัวได้เลย (ออโต้)' : 'ประกอบแล้ว กดสตาร์ทค้าง แล้วเข้าเกียร์ด้วยปุ่มเกียร์ +');
+  goTo('drive');
+  toast(design.Auto === 1 ? 'ประกอบแล้ว กด S ค้างเพื่อสตาร์ท แล้วบิดคันเร่งออกตัวได้เลย (ออโต้)' : 'ประกอบแล้ว กด S ค้างเพื่อสตาร์ท แล้วเข้าเกียร์ด้วย E');
+}
+function garageKey(k, shift) {
+  if (advisorOn && ['arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) return;
+  const n = vis().length, parts = gTab === 0, prow = PartCats.length + 1;
+  switch (k) {
+    case 'arrowup': if (parts) gPartRow = (gPartRow + prow - 1) % prow; else if (n > 0) gSel = (gSel + n - 1) % n; break;
+    case 'arrowdown': if (parts) gPartRow = (gPartRow + 1) % prow; else if (n > 0) gSel = (gSel + 1) % n; break;
+    case 'arrowleft': if (parts) partStep(gPartRow, -1); else nudgeRow(gSel, -1, shift); break;
+    case 'arrowright': if (parts) partStep(gPartRow, 1); else nudgeRow(gSel, 1, shift); break;
+    case 'tab': setTab(gTab + (shift ? -1 : 1)); break;
+    case '1': case '2': case '3': case '4': case '5': case '6': loadPreset(+k - 1); break;
+    case 't': advisorOn = !advisorOn; advKey = ''; break;
+    case 'c': calibrateToReal(); break;
+    case 'a': autoTuneRollers(); break;
+    case 'enter': assemble(); break;
+    case 'g': goTo('drive'); break;
+    case 'escape': goTo('menu'); break;
+  }
 }
 
-function healthLines(m, d) {
-  const L = [];
-  const add = (t, s) => L.push(`<div class="line"><i class="dot ${s === 2 ? 'y' : s === 1 ? 'g' : ''}"></i><span class="${s === 2 ? 'yellow-t' : ''}">${t}</span></div>`);
-  add(`เดินเบา ~${fmtN(m.IdleRpm)} rpm  •  โอเวอร์แลป ${m.Overlap.toFixed(0)}°${m.Overlap > 40 ? '  (สะดุด)' : ''}`, m.Overlap > 40 ? 2 : 1);
-  const flowLimit = m.RpmFlow < m.PeakPsRpm;
-  add(`ไอดีเริ่มอั้นที่ ${fmtN(m.RpmFlow)} rpm${flowLimit ? '  (เรือน/วาล์วเล็กไป)' : ''}`, flowLimit ? 2 : 1);
-  const fb = d.Limiter >= m.FloatRpm;
-  add(`วาล์วลอยที่ ${fmtN(m.FloatRpm)} rpm${fb ? '  รอบตัดสูงไป' : ''}`, fb ? 2 : 1);
-  const vp = m.PistonSpeed(d.Limiter);
-  add(`ลูกสูบเฉลี่ย ${vp.toFixed(1)} ม./วิ ที่รอบตัด${vp > 24 ? '  (ชักยาวเกิน กำลังตก)' : ''}`, vp > 24 ? 2 : vp > 22 ? 0 : 1);
+function drawGarage() {
+  drawTopBar('อู่ออกแบบเครื่อง', '↑ ↓ เลือก  •  ← → ปรับ (Shift = เร็ว)  •  Tab เปลี่ยนหมวด  •  1-6 แบบเดิม  •  A จูนเม็ด  •  T ที่ปรึกษาจูน  •  C ปรับเทียบรถจริง  •  Enter ประกอบแล้วไปทดสอบ');
+  const tw = (GW - 136) / GarageTabs.length;
+  GarageTabs.forEach(([name], i) => {
+    const r = R(GL + i * tw, 112, tw - 4, 52), act = i === gTab && !advisorOn, hov = inRect(r, ui.mouse);
+    ui.rect(r.x, r.y, r.w, r.h, act ? C.PanelHi : hov ? 'rgb(26,30,37)' : C.Panel);
+    if (act) ui.rect(r.x, r.y + r.h - 4, r.w, 4, C.Accent);
+    ui.txtC(name, F.sm, act ? C.Text : C.Dim, r.x + r.w / 2, r.y + 24);
+    ui.hit(r, () => setTab(i));
+  });
+  ui.btn(R(GL + GW - 132, 112, 132, 52), 'T ที่ปรึกษา', advisorOn, C.Blue, () => { advisorOn = !advisorOn; advKey = ''; }, F.sm);
+  if (advisorOn) drawAdvisor();
+  else if (gTab === 0) drawParts();
+  else { drawSpecRows(); if (GarageTabs[gTab][1].includes('realhp')) drawCalibrateButtons(); }
+  drawGarageStats();
+}
+
+function hintBox(text) {
+  const box = R(GL, 900, GW, 120);
+  ui.fillRR(box, 4, C.Panel); ui.drawRR(box, 4, C.Border, 1); ui.rect(box.x + 14, box.y + 14, 4, 20, C.Yellow);
+  ui.txt('คำอธิบาย', F.cap, C.Dim, box.x + 28, box.y + 14);
+  ui.wrap(text, F.sm, C.Yellow, box.x + 20, box.y + 42, box.w - 40, box.h - 46);
+}
+
+function drawSpecRows() {
+  const y0 = 184, vs = vis(), rowH = Math.min(88, 700 / Math.max(1, vs.length));
+  vs.forEach((def, i) => {
+    const v = def.get(draft), y = y0 + i * rowH, rowRect = R(GL, y, GW, rowH - 6), selected = i === gSel;
+    if (selected) { ui.rect(rowRect.x, rowRect.y, rowRect.w, rowRect.h, C.PanelHi); ui.rect(rowRect.x, rowRect.y, 4, rowRect.h, C.Accent); }
+    else if (inRect(rowRect, ui.mouse)) ui.rect(rowRect.x, rowRect.y, rowRect.w, rowRect.h, 'rgb(24,28,35)');
+    ui.hit(rowRect, () => { gSel = i; }, null, null, dir => { gSel = i; nudgeRow(i, dir, keys.has('shift')); });
+    ui.txt(def.name, F.md, selected ? C.Text : C.Dim, GL + 20, y + 6);
+    ui.txtR(paramDisplay(def, draft), F.num, selected ? C.Accent : C.Text, GL + GW - 20, y + 4);
+    const sy = y + rowH - 6 - 40;
+    ui.smallBtn(R(GL + 16, sy + 2, 40, 30), '−', () => { gSel = i; nudgeRow(i, -1, keys.has('shift')); });
+    const frac = (v - def.min) / (def.max - def.min);
+    ui.slider(R(GL + 70, sy, GW - 140, 34), frac, selected ? C.Accent : 'rgb(150,100,25)', f => {
+      gSel = i; let nv = def.min + f * (def.max - def.min); nv = Math.round(nv / def.step) * def.step;
+      def.set(draft, clamp(+nv.toFixed(6), def.min, def.max)); draftChanged();
+    });
+    ui.smallBtn(R(GL + GW - 56, sy + 2, 40, 30), '+', () => { gSel = i; nudgeRow(i, 1, keys.has('shift')); });
+  });
+  if (vs.length > 0) hintBox(vs[gSel].name + ': ' + vs[gSel].hint);
+  if (gTab === 3) drawPsiScale(184 + vs.length * rowH + 10);
+}
+
+function drawPsiScale(y) {
+  const m = preview, psi = m.Psi, box = R(GL, y, GW, 150);
+  ui.fillRR(box, 4, C.Panel); ui.drawRR(box, 4, C.Border, 1); ui.rect(box.x + 14, box.y + 14, 4, 20, C.Accent);
+  ui.txt('เกจแรงดันอัด (วัดตอนสตาร์ท)', F.sm, C.Dim, box.x + 28, box.y + 10);
+  ui.txtR(`${f0(psi)} psi  =  ${f0(psi * 6.895)} kPa  =  ${(psi / 14.5038).toFixed(1)} bar`, F.numS, C.Text, box.x + box.w - 20, box.y + 12);
+  const lo = 100, hi = 480, bx = box.x + 24, bw = box.w - 48, by = box.y + 64;
+  [[100, 150, C.Red, 'ต่ำ/สึก'], [150, 220, C.Green, 'เดิมโรงงาน'], [220, 300, C.Yellow, 'แต่งแรง'], [300, 480, C.Red, 'สูงจัด']].forEach(([a, b, c, n]) => {
+    const x1 = bx + (a - lo) / (hi - lo) * bw, x2 = bx + (b - lo) / (hi - lo) * bw;
+    ui.g.globalAlpha = 0.47; ui.rect(x1, by, x2 - x1 - 2, 18, c); ui.g.globalAlpha = 1;
+    ui.txtC(n, F.xs, C.Dim, (x1 + x2) / 2, by + 36);
+  });
+  const mx = bx + clamp((psi - lo) / (hi - lo), 0, 1) * bw, g = ui.g;
+  ui.rect(mx - 2, by - 12, 4, 42, C.Text);
+  g.fillStyle = C.Text; g.beginPath(); g.moveTo(mx - 8, by - 20); g.lineTo(mx + 8, by - 20); g.lineTo(mx, by - 8); g.closePath(); g.fill();
+  ui.txt(`CR ${f1(draft.Cr)}:1 สถิต  →  ${f1(m.CrDyn)}:1 จริงในกระบอก (แคม IN ${f0(draft.Duration)}° / EX ${f0(draft.DurationEx)}°)`, F.xs, C.Dim, box.x + 24, box.y + box.h - 30);
+}
+
+function drawCalibrateButtons() {
+  const y = 184 + 5 * Math.min(88, 700 / 5) + 20;
+  ui.btn(R(GL, y, 520, 60), 'C  ปรับเทียบโมเดลให้ตรงรถจริง', Math.abs(draft.CalK - 1) > 0.005, C.Green, calibrateToReal, F.sm);
+  ui.btn(R(GL + 536, y, GW - 536, 60), 'ล้างค่ารถจริง/ปรับเทียบ', false, C.Red, () => { draft.RealHp = draft.RealHpRpm = draft.RealTq = draft.RealTqRpm = 0; draft.CalK = 1; draftChanged(); toast('ล้างค่ารถจริงแล้ว'); }, F.sm);
+}
+
+function drawParts() {
+  const y0 = 184, rowH = Math.min(76, 704 / (PartCats.length + 1)), rows = PartCats.length + 1;
+  for (let r = 0; r < rows; r++) {
+    const row = r, y = y0 + r * rowH, rowRect = R(GL, y, GW, rowH - 6), selected = r === gPartRow;
+    if (selected) { ui.rect(rowRect.x, rowRect.y, rowRect.w, rowRect.h, C.PanelHi); ui.rect(rowRect.x, rowRect.y, 4, rowRect.h, C.Accent); }
+    else if (inRect(rowRect, ui.mouse)) ui.rect(rowRect.x, rowRect.y, rowRect.w, rowRect.h, 'rgb(24,28,35)');
+    ui.hit(rowRect, () => { gPartRow = row; }, null, null, dir => partStep(row, dir));
+    let name, shown;
+    if (r === 0) {
+      name = 'เช็ตเครื่องสำเร็จรูป';
+      const ci = Presets.findIndex(s => JSON.stringify(s[1]) === JSON.stringify(draft));
+      shown = ci < 0 ? 'ปรับเอง  (ใช้ลูกศรซ้าย-ขวาเลือกเช็ต)' : Presets[ci][0];
+    } else {
+      const cat = PartCats[r - 1]; name = cat.name; const c = partCurrent(cat, draft);
+      shown = c < 0 ? 'ปรับเอง  (ไม่ตรงชุดสำเร็จรูป)' : cat.items[c].name;
+    }
+    ui.txt(name, F.sm, selected ? C.Text : C.Dim, GL + 20, y + rowH / 2 - 18);
+    ui.smallBtn(R(GL + 300, y + 4, 52, rowH - 14), '◀', () => partStep(row, -1));
+    ui.fillRR(R(GL + 360, y + 4, 480, rowH - 14), 4, 'rgb(14,17,21)');
+    ui.txtC(shown, F.sm, selected ? C.Accent : C.Text, GL + 600, y + 4 + (rowH - 14) / 2);
+    ui.smallBtn(R(GL + 848, y + 4, 40, rowH - 14), '▶', () => partStep(row, 1));
+  }
+  hintBox(gPartRow === 0 ? 'เลือกเช็ตเครื่องทั้งชุด (* = ตัวอย่างสมมติ ไม่ใช่สเปกรถจริง) แล้วสลับอะไหล่ทีละชิ้นต่อได้' : PartCats[gPartRow - 1].name + ': ' + PartCats[gPartRow - 1].hint);
+}
+
+function drawGarageStats() {
+  const m = preview, d = draft, X = 1180, W = 700;
+  ui.panelBox(R(X, 112, W, 200), 'สมรรถนะ (คาดการณ์)');
+  ui.txt(f1(m.PeakHp), F.numL, C.Accent, X + 24, 150); ui.txt(`HP @ ${fmtN(m.PeakPsRpm)} rpm`, F.sm, C.Dim, X + 28, 232);
+  ui.txt(f1(m.PeakTq), F.numL, C.Blue, X + 360, 150); ui.txt(`N·m @ ${fmtN(m.PeakTqRpm)} rpm`, F.sm, C.Dim, X + 364, 232);
+  ui.txt(`${f1(m.Cc)} cc   •   ก้าน/ชัก ${f2(m.RodRatio)}   •   รถ+คน ${f0(Veh.mass(d))} กก.   •   ${f0(m.PeakHp / m.Cc * 1000)} HP/ลิตร`, F.xs, C.Dim, X + 28, 272);
+  if (d.RealHp > 0 || d.RealTq > 0) {
+    let s = 'รถจริง:  ';
+    if (d.RealHp > 0) s += `${f1(d.RealHp)} HP${d.RealHpRpm > 0 ? ' @ ' + fmtN(d.RealHpRpm) : ''} (โมเดลต่าง ${((m.PeakHp / d.RealHp - 1) * 100).toFixed(0)}%)   `;
+    if (d.RealTq > 0) s += `${f1(d.RealTq)} N·m${d.RealTqRpm > 0 ? ' @ ' + fmtN(d.RealTqRpm) : ''} (ต่าง ${((m.PeakTq / d.RealTq - 1) * 100).toFixed(0)}%)`;
+    ui.txt(s, F.xs, Math.abs(d.CalK - 1) > 0.005 ? C.Green : C.Yellow, X + 28, 292);
+  }
+  const rpms = [], tq = [], hp = [];
+  for (let r = 2000; r <= d.Limiter; r += 100) { const t = m.BrakeTorqueWot(r); rpms.push(r); tq.push(Math.max(0, t)); hp.push(Math.max(0, Hp(t, r))); }
+  ui.chart(R(X, 326, W, 280), rpms, tq, hp, d.Limiter);
+
+  ui.panelBox(R(X, 620, W, 350), 'ตรวจสภาพเครื่อง');
+  let y = 662;
+  const line = (s, st) => {
+    ui.g.beginPath(); ui.g.arc(X + 28, y + 15, 6, 0, 7); ui.g.fillStyle = st === 2 ? C.Yellow : st === 1 ? C.Green : 'rgb(90,98,110)'; ui.g.fill();
+    ui.txt(s, F.sm, st === 2 ? C.Yellow : C.Text, X + 46, y); y += 33;
+  };
+  line(`เดินเบา ~${fmtN(m.IdleRpm)} rpm  •  โอเวอร์แลป ${f0(m.Overlap)}°${m.Overlap > 40 ? '  (สะดุด)' : ''}`, m.Overlap > 40 ? 2 : 1);
+  const flowLimit = m.RpmFlow < m.PeakPsRpm; line(`ไอดีเริ่มอั้นที่ ${fmtN(m.RpmFlow)} rpm${flowLimit ? '  (เรือน/วาล์วเล็กไป)' : ''}`, flowLimit ? 2 : 1);
+  const floatBad = d.Limiter >= m.FloatRpm; line(`วาล์วลอยที่ ${fmtN(m.FloatRpm)} rpm${floatBad ? '  รอบตัดสูงไป' : ''}`, floatBad ? 2 : 1);
+  const vpL = m.PistonSpeed(d.Limiter); line(`ลูกสูบเฉลี่ย ${f1(vpL)} ม./วิ ที่รอบตัด${vpL > 24 ? '  (ชักยาวเกิน กำลังตก)' : ''}`, vpL > 24 ? 2 : vpL > 22 ? 0 : 1);
   const kn = m.Knock(3500, m.Load(1, 3500)), margin = m.CrLimit - m.CrDyn, fuel = Fuels[clamp(d.Fuel, 0, 6)].name;
-  add(kn > 0.02 ? `น็อก! CR ${d.Cr.toFixed(1)} (${m.Psi.toFixed(0)} psi) เกินพิกัด ${fuel} (${m.CrLimit.toFixed(1)})` : `CR ${d.Cr.toFixed(1)}  •  ${m.Psi.toFixed(0)} psi  •  พิกัด ${fuel} ${m.CrLimit.toFixed(1)} (เหลือ ${margin.toFixed(1)})`, kn > 0.02 || margin < 0.5 ? 2 : 1);
-  if (d.Cr < 8.8) add('กำลังอัดต่ำ: เดินเบาจุดไม่ติดเป็นพัก ๆ', 2);
-  if (m.Hunt > 0.25) add(`แคมองศามาก: เดินเบาหอบ (รอบเหวี่ยงขึ้น-ลง ~${(m.Hunt * 100).toFixed(0)}%)`, 2);
+  line(kn > 0.02 ? `น็อก! CR ${f1(d.Cr)} (${f0(m.Psi)} psi) เกินพิกัด ${fuel} (${f1(m.CrLimit)})` : `CR ${f1(d.Cr)}  •  ${f0(m.Psi)} psi  •  พิกัด ${fuel} ${f1(m.CrLimit)} (เหลือ ${f1(margin)})`, kn > 0.02 || margin < 0.5 ? 2 : 1);
+  if (d.Cr < 8.8) line('กำลังอัดต่ำ: เดินเบาจุดไม่ติดเป็นพัก ๆ', 2);
+  if (m.Hunt > 0.25) line(`แคมองศามาก: เดินเบาหอบ (รอบเหวี่ยงขึ้น-ลง ~${f0(m.Hunt * 100)}%)`, 2);
   const idle = m.Lope < 0.12 ? 'เดินเบานิ่ง' : m.Lope < 0.5 ? 'เดินเบาสะดุดเบา ๆ' : 'เดินเบาลูปจัด';
   const tone = m.SoundBright < -0.35 ? 'นุ่ม' : m.SoundBright > 0.55 ? 'แผดคม' : 'กลาง';
   const size = m.PitchStretch < 0.92 ? '  •  เสียงเล็กแหลม' : m.PitchStretch > 1.08 ? '  •  เสียงใหญ่ทุ้ม' : '';
-  add(`เสียง: ${idle}  •  โทน${tone}${size}`, 0);
+  line(`เสียง: ${idle}  •  โทน${tone}${size}`, 0);
   if (d.Auto === 1) {
     const hold = Cvt.holdRpm(m), ok = hold >= m.PeakPsRpm * 0.93 && hold <= m.PeakPsRpm * 1.08;
     const v = hold < m.PeakPsRpm * 0.93 ? 'ถือรอบต่ำกว่าพีค' : hold > m.PeakPsRpm * 1.08 ? 'ถือรอบเกินพีค' : 'ใกล้รอบพีค (ดี)';
-    add(`CVT ถือ ~${fmtN(hold)} rpm: ${v}  •  ท็อป ${Veh.topSpeedAuto(m).kmh.toFixed(0)} กม./ชม.`, ok ? 1 : 2);
+    line(`CVT ถือ ~${fmtN(hold)} rpm: ${v}  •  ท็อป ${f0(Veh.topSpeedAuto(m).kmh)} กม./ชม.`, ok ? 1 : 2);
   } else {
     const sp = [1, 2, 3, 4].map(g => d.Limiter * 2 * Math.PI / 60 * Veh.wheelRadius(d) / Veh.total(d, g) * 3.6);
-    add(`ความเร็วที่รอบตัด: เกียร์ 1 ${sp[0].toFixed(0)}  •  2 ${sp[1].toFixed(0)}  •  3 ${sp[2].toFixed(0)}  •  4 ${sp[3].toFixed(0)} กม./ชม.`, 0);
-    const top = Veh.topSpeed(m, 4);
-    const v = top.rpm >= d.Limiter - 150 ? '  รอบตัดมาก่อน ปลายสั้น' : top.rpm < m.PeakPsRpm * 0.88 ? '  ปลายยาว ลากไม่ถึงพีค' : '';
-    add(`ท็อปเกียร์ 4: ${top.kmh.toFixed(0)} กม./ชม. @ ${fmtN(top.rpm)} rpm${v}`, v ? 2 : 1);
+    line(`ความเร็วที่รอบตัด: เกียร์ 1 ${f0(sp[0])}  •  2 ${f0(sp[1])}  •  3 ${f0(sp[2])}  •  4 ${f0(sp[3])} กม./ชม.`, 0);
+    const top = Veh.topSpeed(m, 4), v = top.rpm >= d.Limiter - 150 ? '  รอบตัดมาก่อน ปลายสั้น' : top.rpm < m.PeakPsRpm * 0.88 ? '  ปลายยาว ลากไม่ถึงพีค' : '';
+    line(`ท็อปเกียร์ 4: ${f0(top.kmh)} กม./ชม. @ ${fmtN(top.rpm)} rpm${v}`, v ? 2 : 1);
   }
-  return L.join('');
-}
-
-function psiScale(m, d) {
-  const lo = 100, hi = 480, zones = [[100, 150, '#ef4b4b', 'ต่ำ/สึก'], [150, 220, '#3ccf7a', 'เดิมโรงงาน'], [220, 300, '#f5d04c', 'แต่งแรง'], [300, 480, '#ef4b4b', 'สูงจัด']];
-  const pct = v => ((clamp(v, lo, hi) - lo) / (hi - lo) * 100).toFixed(2);
-  const psi = m.Psi;
-  return `<div class="panel"><h3>เกจแรงดันอัด (วัดตอนสตาร์ท)</h3>
-    <div class="big-num"><b>${psi.toFixed(0)} psi</b><span>= ${(psi * 6.895).toFixed(0)} kPa = ${(psi / 14.5038).toFixed(1)} bar</span></div>
-    <div class="psi"><div class="zones">${zones.map(z => `<i style="background:${z[2]};width:${((z[1] - z[0]) / (hi - lo) * 100).toFixed(2)}%"></i>`).join('')}</div>
-      <div class="zl">${zones.map(z => `<span style="width:${((z[1] - z[0]) / (hi - lo) * 100).toFixed(2)}%">${z[3]}</span>`).join('')}</div>
-      <div class="mark" style="left:${pct(psi)}%"></div></div>
-    <div class="small dim">CR ${d.Cr.toFixed(1)}:1 สถิต → ${m.CrDyn.toFixed(1)}:1 จริงในกระบอก (แคม IN ${d.Duration.toFixed(0)}° / EX ${d.DurationEx.toFixed(0)}°)</div></div>`;
-}
-
-function perfPanel() {
-  const m = preview, d = draft;
-  let real = '';
-  if (d.RealHp > 0 || d.RealTq > 0) {
-    const calOn = Math.abs(d.CalK - 1) > 0.005;
-    real = `<div class="small ${calOn ? 'green-t' : 'yellow-t'}">รถจริง: ` +
-      (d.RealHp > 0 ? `${d.RealHp.toFixed(1)} HP${d.RealHpRpm > 0 ? ' @ ' + fmtN(d.RealHpRpm) : ''} (โมเดลต่าง ${((m.PeakHp / d.RealHp - 1) * 100).toFixed(0)}%)   ` : '') +
-      (d.RealTq > 0 ? `${d.RealTq.toFixed(1)} N·m${d.RealTqRpm > 0 ? ' @ ' + fmtN(d.RealTqRpm) : ''} (ต่าง ${((m.PeakTq / d.RealTq - 1) * 100).toFixed(0)}%)` : '') + '</div>';
-  }
-  const same = JSON.stringify(draft) === JSON.stringify(design);
-  return (gTab === 3 ? psiScale(m, d) : '') + `<div class="panel"><h3>สมรรถนะ (คาดการณ์)</h3>
-    <div class="big-num"><div><b class="accent">${m.PeakHp.toFixed(1)}</b> <span>HP @ ${fmtN(m.PeakPsRpm)} rpm</span></div><div><b class="blue-t">${m.PeakTq.toFixed(1)}</b> <span>N·m @ ${fmtN(m.PeakTqRpm)} rpm</span></div></div>
-    <div class="small dim">${m.Cc.toFixed(1)} cc • ก้าน/ชัก ${m.RodRatio.toFixed(2)} • รถ+คน ${Veh.mass(d).toFixed(0)} กก. • ${(m.PeakHp / m.Cc * 1000).toFixed(0)} HP/ลิตร • ยาง ${tireCode(d)}</div>${real}
-    <canvas class="chart" id="gChart" style="margin-top:8px"></canvas></div>
-    <div class="panel"><h3>ตรวจสภาพเครื่อง</h3><div id="health">${healthLines(m, d)}</div></div>
-    <div class="row" style="gap:8px;flex-wrap:wrap">${d.Auto === 1 ? '<button id="bTune" class="blue grow">จูนเม็ดอัตโนมัติ</button>' : ''}<button id="bAsm" class="green ${same ? '' : 'on'} grow" style="min-height:52px">${same ? 'ไปทดสอบ (แบบนี้ติดตั้งอยู่)' : 'ประกอบแล้วไปทดสอบ'}</button></div>`;
-}
-function drawGarageChart() {
-  const cv = $('#gChart'); if (!cv) return;
-  const m = preview, d = draft, rpm = [], tq = [], hp = [];
-  for (let r = 2000; r <= d.Limiter; r += 100) { const t = m.BrakeTorqueWot(r); rpm.push(r); tq.push(Math.max(0, t)); hp.push(Math.max(0, Hp(t, r))); }
-  drawChart(cv, rpm, tq, hp, d.Limiter);
-}
-
-function rowHtml(p) {
-  const v = p.get(draft);
-  return `<div class="prow" data-k="${p.key}"><div class="name"><span>${p.name}</span><span class="val">${paramDisplay(p, draft)}</span></div>
-    <div class="ctl"><button data-n="-1">−</button><input type="range" min="${p.min}" max="${p.max}" step="${p.step}" value="${v}"><button data-n="1">+</button></div>
-    <div class="hint">${p.hint}</div></div>`;
-}
-function partsHtml() {
-  const setOpts = Presets.map((s, i) => `<option value="${i}">${s[0]}</option>`).join('');
-  let h = `<div class="panel"><h3>เช็ตเครื่องสำเร็จรูป (* = ตัวอย่างสมมติ ไม่ใช่สเปกรถจริง)</h3><select id="setSel"><option value="">เลือกเช็ต…</option>${setOpts}</select></div><div class="panel"><h3>อะไหล่ (แยกเป็นชิ้น)</h3>`;
-  PartCats.forEach((cat, ci) => {
-    const cu = partCurrent(cat, draft);
-    h += `<div class="prow" data-c="${ci}"><div class="name"><span>${cat.name}</span></div><div class="ctl"><button data-s="-1">◀</button>
-      <select>${cu < 0 ? '<option value="-1" selected>ปรับเอง (ไม่ตรงชุดสำเร็จรูป)</option>' : ''}${cat.items.map((it, i) => `<option value="${i}" ${i === cu ? 'selected' : ''}>${it.name}</option>`).join('')}</select><button data-s="1">▶</button></div>
-      <div class="hint">${cat.hint}</div></div>`;
-  });
-  return h + '</div>';
-}
-
-function renderGarage() {
-  const el = $('#v-garage'), keepScroll = el.scrollTop;
-  const [, keys_] = GarageTabs[gTab];
-  const chips = GarageTabs.map((t, i) => `<button data-t="${i}" class="${i === gTab ? 'on' : ''}">${t[0]}</button>`).join('');
-  let left;
-  if (gTab === 0) left = partsHtml();
-  else {
-    const rows = Params.filter(p => keys_.includes(p.key) && (!p.visible || p.visible(draft))).map(rowHtml).join('');
-    const calib = keys_.includes('realhp') ? `<div class="row" style="margin-top:8px;gap:8px"><button id="bCal" class="green grow">ปรับเทียบโมเดลให้ตรงรถจริง</button><button id="bCalClr" class="red">ล้างค่า</button></div>` : '';
-    left = `<div class="panel"><h3>${GarageTabs[gTab][0]}</h3>${rows}${calib}</div>`;
-  }
-  el.innerHTML = `<div class="chips" id="gChips">${chips}</div><div class="twocol"><div>${left}</div><div id="gRight">${perfPanel()}</div></div>`;
-  el.scrollTop = keepScroll;
-  drawGarageChart();
-  bindGarage();
-}
-function refreshGarageRight() {
-  $('#gRight').innerHTML = perfPanel(); drawGarageChart(); bindGarageButtons();
-}
-function bindGarageButtons() {
-  $('#bAsm')?.addEventListener('click', assemble);
-  $('#bTune')?.addEventListener('click', () => {
-    const { g, hold } = Cvt.suggestRoller(preview);
-    draft.RollerG = g; draft.RollerG2 = g; draftChanged(); renderGarage();
-    toast(`จูนเม็ดเป็น ${g} กรัม ทุกเม็ด  CVT ถือรอบ ~${fmtN(hold)} rpm (พีคกำลัง ${fmtN(preview.PeakPsRpm)})`);
-  });
-}
-function bindGarage() {
-  const el = $('#v-garage');
-  $$('#gChips button', el).forEach(b => { b.onclick = () => { gTab = +b.dataset.t; renderGarage(); el.scrollTop = 0; }; });
-  bindGarageButtons();
-  $('#setSel')?.addEventListener('change', e => { if (e.target.value === '') return; draft = { ...Presets[+e.target.value][1] }; draftChanged(); renderGarage(); toast('เช็ตเครื่อง: ' + Presets[+e.target.value][0]); });
-  $$('.prow[data-k]', el).forEach(row => {
-    const p = paramByKey[row.dataset.k], rng = $('input', row);
-    rng.addEventListener('input', () => {
-      let v = Math.round(+rng.value / p.step) * p.step; v = clamp(+v.toFixed(6), p.min, p.max);
-      p.set(draft, v); draftChanged();
-      $('.val', row).textContent = paramDisplay(p, draft);
-      if (!gDirty) { gDirty = true; requestAnimationFrame(() => { gDirty = false; refreshGarageRight(); }); }
-    });
-    rng.addEventListener('change', () => renderGarage());
-    $$('button[data-n]', row).forEach(b => { b.onclick = () => { nudge(p, draft, +b.dataset.n, false); draftChanged(); renderGarage(); }; });
-  });
-  $$('.prow[data-c]', el).forEach(row => {
-    const cat = PartCats[+row.dataset.c], sel = $('select', row);
-    const apply = i => { if (i < 0 || i >= cat.items.length) return; cat.items[i].apply(draft); draftChanged(); renderGarage(); };
-    sel.onchange = () => apply(+sel.value);
-    $$('button[data-s]', row).forEach(b => {
-      b.onclick = () => { const c = partCurrent(cat, draft), n = cat.items.length, d = +b.dataset.s; apply(c < 0 ? (d > 0 ? 0 : n - 1) : clamp(c + d, 0, n - 1)); };
-    });
-  });
-  $('#bCal')?.addEventListener('click', () => {
-    const k = calibrate(draft);
-    if (k == null) return toast('ใส่แรงม้าหรือแรงบิดของรถจริงก่อน');
-    draft.CalK = k; draftChanged(); renderGarage();
-    toast(`ปรับเทียบแล้ว: ตัวคูณ ${k.toFixed(2)}  โมเดล ${preview.PeakHp.toFixed(1)} HP / ${preview.PeakTq.toFixed(1)} N·m`);
-  });
-  $('#bCalClr')?.addEventListener('click', () => { draft.RealHp = draft.RealHpRpm = draft.RealTq = draft.RealTqRpm = 0; draft.CalK = 1; draftChanged(); renderGarage(); toast('ล้างค่ารถจริงแล้ว'); });
+  const same = JSON.stringify(design) === JSON.stringify(d);
+  if (d.Auto === 1) {
+    ui.btn(R(X, 984, 230, 70), 'A  จูนเม็ด', false, C.Blue, autoTuneRollers, F.md);
+    ui.btn(R(X + 246, 984, W - 246, 70), same ? 'Enter  ไปทดสอบ (ติดตั้งอยู่)' : 'Enter  ประกอบแล้วไปทดสอบ', !same, C.Green, assemble, F.md);
+  } else ui.btn(R(X, 984, W, 70), same ? 'Enter  ไปทดสอบ (แบบนี้ติดตั้งอยู่)' : 'Enter  ประกอบแล้วไปทดสอบ', !same, C.Green, assemble, F.md);
 }
 
 // ================================================================= ที่ปรึกษาจูน
-function renderAdvisor() {
-  const el = $('#v-adv');
+function refreshAdvisor() {
   const key = JSON.stringify([draft, advGoal, advC, design, last402, topSession, peakRpm, dynoRes?.ps, before?.b402]);
-  const chip = (i, g) => `<button data-lk="${i}" class="sm yellow ${(advC.lockMask & (1 << i)) ? 'on' : ''}">${(advC.lockMask & (1 << i)) ? '[ล็อก] ' : ''}${g[0]}</button>`;
-  el.innerHTML = `
-  <div class="twocol"><div>
-    <div class="panel"><h3>เป้าหมาย</h3><div class="btns">${Adv.GoalNames.map((n, i) => `<button data-goal="${i}" class="${i === advGoal ? 'on' : ''}">${n}</button>`).join('')}</div></div>
-    <div class="panel"><h3>โจทย์ของเรา</h3>
-      <div class="field"><span class="small dim">รอบที่อยากใช้</span><button class="sm" id="capM">−</button><b id="capV" class="${advC.rpmCap > 0 ? 'accent' : 'dim'}">${advC.rpmCap > 0 ? fmtN(advC.rpmCap) + ' rpm' : 'ไม่จำกัด'}</b><button class="sm" id="capP">+</button>
-        <button class="sm blue" id="capUse">${advC.rpmCap > 0 ? 'ยกเลิกรอบ' : 'ใช้รอบเครื่องนี้'}</button></div>
-      <div class="field"><button class="sm green ${advC.street ? 'on' : ''}" id="street">โจทย์ใช้ถนน: ${advC.street ? 'เปิด (เดินเบาต้องนิ่ง)' : 'ปิด'}</button></div>
-      <div class="small dim" style="margin-top:6px">ล็อก (ใช้อะไหล่ตามที่เราตั้งในอู่ ที่ปรึกษาไม่แตะ):</div>
-      <div class="btns" style="margin-top:4px">${Adv.Groups.map((g, i) => chip(i, g)).join('')}</div></div>
-    <div class="panel"><h3>วิเคราะห์จากผลทดสอบ (เครื่องที่ติดตั้งอยู่)</h3><div id="advTips" class="small dim">กำลังคำนวณ…</div></div>
-  </div><div>
-    <div class="panel"><h3>ควรปรับอะไร  (ตามโจทย์ จัดอันดับตามเป้าหมาย) — คำนวณบนแบบในอู่</h3><div id="advList" class="small dim">กำลังคำนวณ…</div></div>
-  </div></div>`;
-  $$('[data-goal]', el).forEach(b => { b.onclick = () => { advGoal = +b.dataset.goal; renderAdvisor(); }; });
-  $$('[data-lk]', el).forEach(b => { b.onclick = () => { advC.lockMask ^= 1 << +b.dataset.lk; renderAdvisor(); }; });
-  const stepCap = d => { const c = advC.rpmCap > 0 ? advC.rpmCap : Math.round(draft.Limiter / 100) * 100; advC.rpmCap = clamp(c + d, 6000, 15000); renderAdvisor(); };
-  $('#capM').onclick = () => stepCap(-100); $('#capP').onclick = () => stepCap(100);
-  $('#capUse').onclick = () => { advC.rpmCap = advC.rpmCap > 0 ? 0 : Math.round(draft.Limiter / 100) * 100; renderAdvisor(); };
-  $('#street').onclick = () => { advC.street = !advC.street; renderAdvisor(); };
-  advBusy = true;
-  setTimeout(() => {
-    if (view !== 'adv') { advBusy = false; return; }
-    advList = Adv.suggest(draft, advGoal, 5, advC);
-    let capped = draft;
-    if (advC.rpmCap > 0 && advList.length && advList[0].gain >= 999) capped = advList[0].design;
-    const t = { peakRpm, top: topSession, last060, last100, last402, trap402, dyno: dynoRes ? { ps: dynoRes.ps, psRpm: dynoRes.psRpm, tq: dynoRes.peakTq, tqRpm: dynoRes.tqRpm } : null, before, cur };
-    advTips = [...Adv.capTips(capped, advC), ...Adv.observe(installed, t)];
-    advKey = key; advBusy = false;
-    paintAdvisor();
-  }, 30);
+  if (key === advKey) return;
+  advKey = key;
+  advList = Adv.suggest(draft, advGoal, 5, advC);
+  let capped = draft;
+  if (advC.rpmCap > 0 && advList.length && advList[0].gain >= 999) capped = advList[0].design;
+  const t = { peakRpm, top: topSession, last060, last100, last402, trap402,
+    dyno: dynoRes ? { ps: dynoRes.ps, psRpm: dynoRes.psRpm, tq: dynoRes.peakTq, tqRpm: dynoRes.tqRpm } : null, before, cur };
+  advTips = [...Adv.capTips(capped, advC), ...Adv.observe(installed, t)];
 }
-function paintAdvisor() {
-  const tipsEl = $('#advTips'), listEl = $('#advList');
-  if (!tipsEl) return;
-  tipsEl.className = '';
-  tipsEl.innerHTML = advTips.map(([lv, txt]) => `<div class="line"><i class="dot ${lv === 2 ? 'y' : lv === 1 ? 'g' : ''}"></i><span class="${lv === 2 ? 'yellow-t' : lv === 1 ? 'green-t' : ''}">${txt}</span></div>`).join('');
-  listEl.className = '';
-  if (!advList.length) { listEl.innerHTML = '<div class="dim small">ไม่พบการปรับค่าเดี่ยว ๆ ที่ดีขึ้นอย่างมีนัยสำคัญโดยไม่ทำให้น็อก/วาล์วลอย — ลองเปลี่ยนหลายค่าพร้อมกัน เช่น ท่อ+แคม+รอบตัด</div>'; return; }
-  listEl.innerHTML = advList.map((s, i) => {
-    const a = s.after, b = s.before;
-    return `<div class="sug"><div class="t"><b>${s.label}</b><span>402 ม. ${b.t402.toFixed(2)}→${a.t402.toFixed(2)} วิ • 0–60 ${b.t060.toFixed(2)}→${a.t060.toFixed(2)} • ท็อป ${b.top.toFixed(0)}→${a.top.toFixed(0)} กม./ชม.</span>${s.note ? `<em>${s.note}</em>` : ''}</div><button class="green" data-use="${i}">ใช้ค่านี้</button></div>`;
-  }).join('');
-  $$('[data-use]', listEl).forEach(b => {
-    b.onclick = () => { const s = advList[+b.dataset.use]; draft = { ...s.design }; draftChanged(); toast('ปรับตามคำแนะนำ: ' + s.label); renderAdvisor(); };
+function stepCap(delta) { const c = advC.rpmCap > 0 ? advC.rpmCap : Math.round(draft.Limiter / 100) * 100; advC.rpmCap = clamp(c + delta, 6000, 15000); advKey = ''; }
+function drawAdvisor() {
+  refreshAdvisor();
+  const bw = (GW - 20) / 3;
+  Adv.GoalNames.forEach((n, i) => ui.btn(R(GL + i * (bw + 10), 176, bw, 46), 'เป้าหมาย: ' + n, advGoal === i, C.Accent, () => { advGoal = i; advKey = ''; }, F.sm));
+  ui.txt('รอบที่อยากใช้', F.xs, C.Dim, GL + 4, 242);
+  ui.smallBtn(R(GL + 150, 232, 44, 34), '−', () => stepCap(-100));
+  ui.fillRR(R(GL + 200, 232, 180, 34), 4, 'rgb(14,17,21)');
+  ui.txtC(advC.rpmCap <= 0 ? 'ไม่จำกัด' : `${fmtN(advC.rpmCap)} rpm`, F.sm, advC.rpmCap > 0 ? C.Accent : C.Dim, GL + 290, 250);
+  ui.smallBtn(R(GL + 386, 232, 44, 34), '+', () => stepCap(100));
+  ui.btn(R(GL + 450, 232, 150, 34), advC.rpmCap > 0 ? 'ยกเลิกรอบ' : 'ใช้รอบเครื่องนี้', false, C.Blue, () => { advC.rpmCap = advC.rpmCap > 0 ? 0 : Math.round(draft.Limiter / 100) * 100; advKey = ''; }, F.xs);
+  ui.btn(R(GL + 616, 232, GW - 616, 34), advC.street ? 'โจทย์ใช้ถนน: เปิด (เดินเบาต้องนิ่ง)' : 'โจทย์ใช้ถนน: ปิด', advC.street, C.Green, () => { advC.street = !advC.street; advKey = ''; }, F.xs);
+  ui.txt('ล็อก (ใช้อะไหล่ตามที่เราตั้ง ที่ปรึกษาไม่แตะ):', F.xs, C.Dim, GL + 4, 278);
+  const perRow = 5, cw = (GW - (perRow - 1) * 6) / perRow;
+  Adv.Groups.forEach(([name], i) => {
+    const on = (advC.lockMask & (1 << i)) !== 0;
+    ui.btn(R(GL + (i % perRow) * (cw + 6), 304 + Math.floor(i / perRow) * 40, cw, 34), (on ? '[ล็อก] ' : '') + name, on, C.Yellow, () => { advC.lockMask ^= 1 << i; advKey = ''; }, F.xs);
   });
+  const box = R(GL, 392, GW, 240);
+  ui.panelBox(box, 'วิเคราะห์จากผลทดสอบ (เครื่องที่ติดตั้งอยู่)');
+  let y = box.y + 50;
+  for (const [lv, text] of advTips) {
+    const w = box.w - 64, col = lv === 2 ? C.Yellow : lv === 1 ? C.Green : C.Text;
+    const lines = Math.ceil(ui.measure(text, F.xs) / w), h = lines * 19 * 1.3;
+    if (y + h > box.y + box.h - 8) { ui.txt('…', F.xs, C.Dim, box.x + 24, y - 4); break; }
+    ui.g.beginPath(); ui.g.arc(box.x + 25, y + 11, 5, 0, 7); ui.g.fillStyle = lv === 2 ? C.Yellow : lv === 1 ? C.Green : 'rgb(90,98,110)'; ui.g.fill();
+    y = ui.wrap(text, F.xs, col, box.x + 42, y, w) + 6;
+  }
+  const sb = R(GL, 642, GW, 372);
+  ui.panelBox(sb, 'ควรปรับอะไร  (ตามโจทย์ จัดอันดับตามเป้าหมาย)');
+  if (!advList.length) { ui.wrap('ไม่พบการปรับค่าเดี่ยว ๆ ที่ดีขึ้นอย่างมีนัยสำคัญโดยไม่ทำให้น็อก/วาล์วลอย — ลองเปลี่ยนหลายค่าพร้อมกัน เช่น ท่อ+แคม+รอบตัด', F.sm, C.Dim, sb.x + 24, sb.y + 64, sb.w - 48, 120); return; }
+  let ry = sb.y + 50; const rh = 62;
+  for (const s of advList) {
+    const row = R(sb.x + 10, ry, sb.w - 20, rh - 6);
+    if (inRect(row, ui.mouse)) ui.rect(row.x, row.y, row.w, row.h, 'rgb(24,28,35)');
+    ui.txt(s.label, F.sm, C.Text, row.x + 10, row.y + 2);
+    const a = s.after, b = s.before;
+    ui.txt(`402 ม. ${f2(b.t402)}→${f2(a.t402)} วิ  •  0–60 ${f2(b.t060)}→${f2(a.t060)}  •  ท็อป ${f0(b.top)}→${f0(a.top)} กม./ชม.`, F.xs, C.Green, row.x + 10, row.y + 30);
+    ui.btn(R(row.x + row.w - 120, row.y + 4, 112, row.h - 8), 'ใช้ค่านี้', false, C.Green, () => { draft = { ...s.design }; draftChanged(); advKey = ''; toast('ปรับตามคำแนะนำ: ' + s.label); }, F.xs);
+    ry += rh;
+  }
+  const n = advList.find(s => s.note);
+  if (n) ui.wrap('ข้อควรระวัง: ' + n.note, F.xs, C.Yellow, sb.x + 20, sb.y + sb.h - 34, sb.w - 40, 28);
 }
 
-// ================================================================= ภาพรวม (ใบสเปก + สถิติ)
-function renderHome() {
-  const m = installed, d = design;
-  const R = (k, v) => `<div class="row2"><span>${k}</span><span>${v}</span></div>`;
-  const fuel = Fuels[clamp(d.Fuel, 0, 6)];
-  const t = (v, u) => (v > 0 ? (u === 's' ? v.toFixed(2) + ' วิ' : v.toFixed(0) + ' กม./ชม.') : '-');
-  $('#v-home').innerHTML = `<div class="twocol"><div class="panel plist"><h3>ใบสเปกเครื่อง (ที่ติดตั้งอยู่)</h3>
-    <div class="sec">BLOCK</div>${R('ความจุ', m.Cc.toFixed(1) + ' cc')}${R('ลูก × ชัก', `${d.Bore.toFixed(1)} × ${d.Stroke.toFixed(1)} มม.  (ก้าน ${d.Rod.toFixed(0)} มม.)`)}${R('ล้อ / ยาง', `${tireCode(d)}  ขอบ ${d.RimW.toFixed(2)}`)}${R('ข้อเหวี่ยง / จานไฟ', `${d.CrankKg.toFixed(1)} / ${d.FlywheelKg.toFixed(2)} กก.`)}
-    <div class="sec">HEAD / CAM</div>${R('วาล์ว / เรือน', `${d.Valves} วาล์ว / ${d.Throttle.toFixed(0)} มม.`)}${R('แคม LSA / องศา IN,EX / ยก IN,EX', `${d.Lsa.toFixed(0)}° / ${d.Duration.toFixed(0)}°,${d.DurationEx.toFixed(0)}° / ${d.Lift.toFixed(1)},${d.LiftEx.toFixed(1)} มม.`)}
-    <div class="sec">COMPRESSION / FUEL</div>${R('อัตราส่วนกำลังอัด', d.Cr.toFixed(1) + ' : 1')}${R('แรงดันอัด (วัดจริง)', m.Psi.toFixed(0) + ' psi')}${R('น้ำมัน', `${fuel.name}  (RON ${fuel.ron})`)}${R('รอบตัด', fmtN(d.Limiter) + ' rpm')}
-    <div class="sec">OUTPUT</div>${R('กำลังสูงสุด', `${m.PeakHp.toFixed(1)} HP @ ${fmtN(m.PeakPsRpm)} rpm`)}${R('แรงบิดสูงสุด', `${m.PeakTq.toFixed(1)} N·m @ ${fmtN(m.PeakTqRpm)} rpm`)}
-    <div class="sec">DRIVETRAIN</div>${d.Auto === 1 ? R('ระบบ', 'ออโต้ CVT') + R('ชาม / เม็ด / สปริง', `${d.RampDeg.toFixed(1)}° / ${d.Rollers} × ${+d.RollerG.toFixed(1)} g / ${d.SpringK.toFixed(0)} N/มม.`) + R('เฟืองท้าย', `${d.GearF}/${d.GearR}  (ทดรวม ${Cvt.final(d).toFixed(2)})`)
-      : R('ระบบ', 'เกียร์ธรรมดา 4 สปีด') + R('สเตอร์ หน้า/หลัง', `${d.SprocketF.toFixed(0)}/${d.SprocketR.toFixed(0)}  (ทดสุดท้าย ${Veh.final(d).toFixed(3)})`)}
-  </div><div>
-    <div class="panel plist"><h3>สถิติบนถนน</h3>${R('0–60 กม./ชม.', t(save.best.b060, 's'))}${R('100 เมตร', t(save.best.b100, 's'))}${R('402 เมตร', t(save.best.b402, 's'))}${R('ท็อปสปีด', t(save.best.top, 'k'))}</div>
-    <div class="btns" style="grid-template-columns:1fr"><button class="green big" data-go="test">ไปห้องทดสอบ  [Enter]</button><button class="big" data-go="garage" style="border-color:var(--accent)">อู่ออกแบบเครื่อง  [G]</button><button class="blue" data-go="set">ตั้งค่า</button></div>
-  </div></div>`;
-  $$('[data-go]', $('#v-home')).forEach(b => { b.onclick = () => setView(b.dataset.go); });
+// ================================================================= ลูปหลัก
+const cv = document.getElementById('screen');
+const ui = new Ui(cv);
+let lastT = now(), frame = 0, fps = 144;
+
+function tick() {
+  requestAnimationFrame(tick);
+  const t = now(), dt = Math.min(0.1, t - lastT); lastT = t;
+  if (dt > 0) fps += (1 / dt - fps) * 0.05;
+
+  let thr = 0, brake = 0, starter = false;
+  if (page === 'drive' && !showDyno) {
+    const zk = down('z'), xk = down('x');
+    if (zk || xk) {
+      const ceil = zk ? S.limiter - 40 : S.limiter - 800, pred = S.rpm + rpmRate * 0.4;
+      gradThr = clamp(gradThr + 0.8 * clamp((ceil - pred) / 350, -1.5, 1) * dt, 0, 1);
+    } else gradThr = Math.max(0, gradThr - 3 * dt);
+    thr = gradThr;
+    if (down('w')) { thr = 1; gradThr = 1; }
+    if (mouseThrottle) thr = mouseThrottleValue;
+    if (down(' ') || down('b') || mouseBrake) brake = 1;
+    starter = down('s') || mouseStarter;
+    if (starter && down('s')) send('ignition', true);
+  } else gradThr = 0;
+  send('throttleInput', +thr.toFixed(3)); send('brakeInput', brake); send('starterHeld', starter);
+  send('clutchEnabled', save.clutchSys);
+  const shiftHeld = down('shift');
+  send('clutchInput', page === 'drive' && !showDyno && (shiftHeld || mouseClutch || t < assistUntil) ? 1 : 0);
+  send('gearInput', gearSel); send('slopePct', slope);
+  if (dt > 0) { rpmRate += ((S.rpm - lastRpmG) / dt - rpmRate) * 0.3; lastRpmG = S.rpm; }
+  needle += (S.rpm - needle) * Math.min(1, dt * 25);
+  if (S.rpm > peakRpm) peakRpm = S.rpm;
+  if (peakRpm > cur.peakRpm) cur.peakRpm = peakRpm;
+  roadTests(t);
+  frame++;
+
+  ui.begin();
+  if (page === 'menu') drawMenu(); else if (page === 'settings') drawSettings(); else if (page === 'garage') drawGarage(); else drawDrive();
+  if (audioError) ui.txt('ไม่มีเสียง: ' + audioError, F.sm, C.Red, 40, VH - 64);
+  if (showDyno && dynoRes) drawDynoResult();
+  if (t < toastUntil) {
+    const tx = page === 'drive' ? 640 : 1070, r = R(tx - 460, VH - 58, 920, 48);
+    ui.fillRR(r, 4, 'rgba(26,30,38,0.96)'); ui.drawRR(r, 4, C.Accent, 1);
+    ui.txtC(toastText, F.md, C.Accent, tx, r.y + r.h / 2);
+  }
+  if (showFps) ui.txtR(`${f0(fps)} fps`, F.xs, C.Dim, VW - 20, 2);
 }
 
-// ================================================================= ตั้งค่า
-function renderSettings() {
-  const el = $('#v-set');
-  el.innerHTML = `<div class="twocol"><div>
-    <div class="panel"><h3>ระดับเสียง</h3><input type="range" id="volRange" min="0" max="1" step="0.01" value="${save.volume}" style="width:100%"></div>
-    <div class="panel"><h3>ควบคุม</h3>
-      <div class="field"><button id="clsys" class="blue ${save.clutchSys ? 'on' : ''}">ระบบครัตช์มือ: ${save.clutchSys ? 'เปิด' : 'ปิด (ไม่ต้องกำครัตช์)'}</button></div>
-      <div class="field"><button id="assist" class="${save.assist ? 'on' : ''}">ช่วยกำครัตช์อัตโนมัติตอนเปลี่ยนเกียร์: ${save.assist ? 'เปิด' : 'ปิด'}</button></div>
-      <div class="small dim" style="line-height:1.6">มือถือ: ลากแถบคันเร่งขึ้นลง (ปล่อยแล้วคืนศูนย์) • ปุ่ม "ค้าง" ต้องกดค้างไว้<br>
-      คีย์บอร์ด: W เร่งสุด • X ค่อย ๆ เร่ง • Z ค่อย ๆ เร่งแตะรอบตัด • Space เบรก • S สตาร์ท • K ดับเครื่อง • E/Q เกียร์ • N เกียร์ว่าง • Shift ครัตช์ • D ไดโน • [ ] ความชัน • +/- เสียง</div></div>
-  </div><div>
-    <div class="panel"><h3>ข้อมูล</h3>
-      <div class="field"><button id="clrRec" class="red">ล้างสถิติบนถนน</button><button id="clrAll" class="red">รีเซ็ตทุกอย่าง (เครื่อง+สถิติ)</button></div>
-      <div class="small dim" style="line-height:1.6">ข้อมูลเก็บในเบราว์เซอร์เครื่องนี้ (localStorage) ไม่ส่งออกไปที่ไหน<br>โมเดลเป็นการประมาณเพื่อการเรียนรู้ ไม่ใช่ตัวเลขรับรองของเครื่องจริง</div></div>
-  </div></div>`;
-  $('#volRange').oninput = e => setVolume(+e.target.value);
-  $('#clsys').onclick = toggleClutchSys;
-  $('#assist').onclick = () => { save.assist = !save.assist; persist(); renderSettings(); };
-  $('#clrRec').onclick = () => { save.best = { b060: -1, b100: -1, b402: -1, top: 0 }; cur = newRun(); before = null; last060 = last100 = last402 = -1; topSession = 0; persist(); statCache = ''; toast('ล้างสถิติแล้ว'); };
-  $('#clrAll').onclick = () => { if (!confirm('รีเซ็ตเครื่องและสถิติทั้งหมด?')) return; try { localStorage.removeItem(KEY); } catch { /* ok */ } location.reload(); };
-}
-
-function updateSide() {
-  const m = installed, d = design;
-  const el = $('#sideInfo'); if (!el) return;
-  el.innerHTML = `<div class="dim small">เครื่องที่ติดตั้ง</div><div class="hp">${m.PeakHp.toFixed(1)}</div><div class="dim">HP  @ ${fmtN(m.PeakPsRpm)} rpm</div><div class="small" style="margin-top:6px">${m.Cc.toFixed(0)} cc  •  ${m.PeakTq.toFixed(1)} N·m</div><div class="dim small">${d.Auto === 1 ? 'ออโต้ CVT' : 'เกียร์ธรรมดา'}</div>`;
-}
-
-// ================================================================= หน้า
-function setView(v) {
-  view = v; releaseAll();
-  $$('.view').forEach(s => { s.hidden = s.id !== 'v-' + v; });
-  $$('#nav button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
-  updateSide();
-  if (v === 'garage') renderGarage();
-  else if (v === 'adv') renderAdvisor();
-  else if (v === 'set') renderSettings();
-  else if (v === 'home') renderHome();
-  else { statCache = ''; if (v === 'test') buildTest(); }
-}
-$$('#nav button').forEach(b => { b.onclick = () => setView(b.dataset.v); });
-
-// ================================================================= เริ่ม
-$('#startBtn').onclick = async () => {
-  const msg = $('#splashMsg'), btn = $('#startBtn');
+document.getElementById('startBtn').onclick = async () => {
+  const msg = document.getElementById('splashMsg'), btn = document.getElementById('startBtn');
   btn.disabled = true; msg.textContent = 'กำลังโหลดเสียงเครื่องยนต์…';
   try {
     await startAudio();
     for (let i = 0; i < 100 && !ready; i++) await new Promise(r => setTimeout(r, 50));
-    $('#splash').hidden = true;
+    document.getElementById('splash').hidden = true;
   } catch (err) {
     console.error(err);
-    msg.innerHTML = 'เปิดเสียงไม่สำเร็จ: ' + (err.message || err) + '<br>ลองใช้ Chrome / Safari เวอร์ชันล่าสุด หรือเล่นต่อแบบไม่มีเสียง';
+    audioError = String(err.message || err);
+    msg.innerHTML = 'เปิดเสียงไม่สำเร็จ: ' + audioError + '<br>ลองใช้ Chrome / Safari เวอร์ชันล่าสุด หรือเล่นต่อแบบไม่มีเสียง';
     btn.disabled = false; btn.textContent = 'เล่นต่อโดยไม่มีเสียง';
-    btn.onclick = () => { $('#splash').hidden = true; };
+    btn.onclick = () => { document.getElementById('splash').hidden = true; };
   }
 };
-const hashView = location.hash.replace('#', '').split(',');
-if (hashView.includes('nosound')) $('#splash').hidden = true;
-const hv = hashView.find(x => ['garage', 'adv', 'set', 'test'].includes(x));
-
-buildTest();
+const hashV = location.hash.replace('#', '').split(',');
+if (hashV.includes('nosound')) document.getElementById('splash').hidden = true;
+const startPage = hashV.find(x => ['menu', 'garage', 'drive', 'settings'].includes(x));
+if (startPage) page = startPage;
+if (hashV.includes('advisor')) { page = 'garage'; advisorOn = true; }
 tick();
-setView(hv || 'home');
