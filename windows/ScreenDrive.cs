@@ -23,31 +23,36 @@ public sealed partial class MainForm
         DrawGauge(g, 640, 552, 335);
         DrawThrottle(g, 1056, 170, 64, 660);
 
-        // ---------- แผงขวา ----------
+        // ระดับเสียง + คลื่นเสียง (ใต้เกจ)
+        Txt(g, "ระดับเสียง", _fSm, Palette.Dim, 270, 954);
+        Slider(g, new RectangleF(430, 946, 560, 40), _eng.Volume, Palette.Accent, v => _eng.Volume = v);
+        DrawScope(g, new RectangleF(270, 1000, 720, 64));
+
+        // ---------- แผงขวา (เว้นช่องไฟระหว่างแผง 16 พิกเซล) ----------
         const float px = 1180, pw = 700;
 
         // ชุดส่งกำลัง
-        PanelBox(g, new RectangleF(px, 100, pw, 200), auto ? "รถออโต้ (CVT)" : "รถเกียร์ธรรมดา");
+        PanelBox(g, new RectangleF(px, 100, pw, 176), auto ? "รถออโต้ (CVT)" : "รถเกียร์ธรรมดา");
         if (auto)
         {
             string w = d.Rollers == 6 && d.RollerG != d.RollerG2 ? $"{d.RollerG:0.#}/{d.RollerG2:0.#} g" : $"{d.RollerG:0.#} g";
-            Txt(g, $"ชาม {d.RampDeg:0.0}°  •  {d.Rollers} เม็ด {w}  •  สปริง {d.SpringK:0} N/มม.", _fMd, Palette.Text, px + 20, 142);
-            Txt(g, $"{m.Cc:0} cc  •  {m.PeakHp:0.0} HP @ {m.PeakPsRpm:N0}", _fSm, Palette.Dim, px + 20, 184);
-            Txt(g, $"อัตราทดสายพาน {_eng.CvtRatio:0.00}  •  เฟืองท้าย {d.GearF}/{d.GearR} x ลดขั้นแรก {d.FirstRed:0.00} (ทดรวม {Cvt.Final(d):0.00})", _fSm, Palette.Dim, px + 20, 222);
-            Bar(g, new RectangleF(px + 20, 262, pw - 40, 16), _eng.CvtPosition, Palette.Accent);
+            Txt(g, $"ชาม {d.RampDeg:0.0}°  •  {d.Rollers} เม็ด {w}  •  สปริง {d.SpringK:0} N/มม.", _fMd, Palette.Text, px + 20, 140);
+            Txt(g, $"{m.Cc:0} cc  •  {m.PeakHp:0.0} HP @ {m.PeakPsRpm:N0}", _fSm, Palette.Dim, px + 20, 176);
+            Txt(g, $"สายพาน {_eng.CvtRatio:0.00}  •  เฟืองท้าย {d.GearF}/{d.GearR} x {d.FirstRed:0.00} (ทดรวม {Cvt.Final(d):0.00})", _fSm, Palette.Dim, px + 20, 208);
+            Bar(g, new RectangleF(px + 20, 240, pw - 40, 12), _eng.CvtPosition, Palette.Accent);
+            if (_autoDrive) Txt(g, AutopilotText(), _fXs, Palette.Green, px + 20, 254);
         }
         else
         {
-            Txt(g, $"เกียร์ 4 สปีด  •  สเตอร์ {d.SprocketF:0}/{d.SprocketR:0}", _fMd, Palette.Text, px + 20, 142);
-            Txt(g, $"{m.Cc:0} cc  •  {m.PeakHp:0.0} HP @ {m.PeakPsRpm:N0}", _fSm, Palette.Dim, px + 20, 184);
-            Txt(g, $"ทดสุดท้าย {Vehicle.Final(d):0.000}   รถ+คน {Vehicle.Mass(d):0} กก.", _fSm, Palette.Dim, px + 20, 222);
+            Txt(g, $"เกียร์ 4 สปีด  •  สเตอร์ {d.SprocketF:0}/{d.SprocketR:0}", _fMd, Palette.Text, px + 20, 140);
+            Txt(g, $"{m.Cc:0} cc  •  {m.PeakHp:0.0} HP @ {m.PeakPsRpm:N0}", _fSm, Palette.Dim, px + 20, 176);
+            Txt(g, $"ทดสุดท้าย {Vehicle.Final(d):0.000}   รถ+คน {Vehicle.Mass(d):0} กก.", _fSm, Palette.Dim, px + 20, 208);
+            if (_autoDrive) Txt(g, AutopilotText(), _fXs, Palette.Green, px + 20, 244);
         }
-
         Btn(g, new RectangleF(px + pw - 236, 108, 216, 34), _autoDrive ? "P ขับเอง: เปิด" : "P ขับเอง: ปิด", _autoDrive, Palette.Green, ToggleAutopilot, _fXs);
-        if (_autoDrive) Txt(g, AutopilotText(), _fXs, Palette.Green, px + 20, 278);
 
         // ปุ่มควบคุม
-        const float bw = 163, bg = 16, by = 316, bh = 70;
+        const float bw = 163, bg = 16, by = 292, bh = 64;
         Btn(g, new RectangleF(px, by, bw, bh), "S สตาร์ท", _eng.StarterHeld, Palette.Green, null, _fMd,
             down: () => { _eng.Ignition = true; _mouseStarter = true; }, up: () => _mouseStarter = false);
         Btn(g, new RectangleF(px + (bw + bg), by, bw, bh), "K ดับเครื่อง", !_eng.Ignition, Palette.Red, () => _eng.Ignition = !_eng.Ignition, _fMd);
@@ -55,10 +60,10 @@ public sealed partial class MainForm
         Btn(g, new RectangleF(px + 3 * (bw + bg), by, bw, bh), "G อู่", false, Palette.Accent, () => GoTo(Page.Garage), _fMd);
 
         // เกียร์ / คลัตช์
-        PanelBox(g, new RectangleF(px, 400, pw, 138), auto ? "คลัตช์แรงเหวี่ยง (ไม่ต้องเปลี่ยนเกียร์ จับเองที่ ~3,200 รอบ)" : _eng.ClutchEnabled ? "เกียร์  (E ขึ้น  Q ลง  N ว่าง)  •  ค้าง Shift = กำครัตช์" : "เกียร์  (E ขึ้น  Q ลง  N ว่าง)  •  ครัตช์มือปิด เปลี่ยนเกียร์ได้ทันที");
+        PanelBox(g, new RectangleF(px, 372, pw, 148), auto ? "คลัตช์แรงเหวี่ยง (ไม่ต้องเปลี่ยนเกียร์ จับเองที่ ~3,200 รอบ)" : _eng.ClutchEnabled ? "เกียร์  (E ขึ้น  Q ลง  N ว่าง)  •  ค้าง Shift = กำครัตช์" : "เกียร์  (E ขึ้น  Q ลง  N ว่าง)  •  ครัตช์มือปิด เปลี่ยนเกียร์ได้ทันที");
         if (auto)
         {
-            var kb = new RectangleF(px + 20, 452, pw - 40, 40);
+            var kb = new RectangleF(px + 20, 424, pw - 40, 44);
             Bar(g, kb, _eng.ClutchLock, Palette.Green);
             TxtC(g, $"คลัตช์จับ {_eng.ClutchLock * 100f:0}%", _fSm, Palette.Text, kb.X + kb.Width / 2, kb.Y + kb.Height / 2);
         }
@@ -68,48 +73,64 @@ public sealed partial class MainForm
             for (int i = 0; i < 5; i++)
             {
                 int gi = i;
-                Btn(g, new RectangleF(px + 20 + i * 136, 440, 120, 54), names[i], _gearSel == i, Palette.Accent, () => SelectGear(gi), _fLg);
+                Btn(g, new RectangleF(px + 20 + i * 136, 412, 120, 52), names[i], _gearSel == i, Palette.Accent, () => SelectGear(gi), _fLg);
             }
             if (_eng.ClutchEnabled)
             {
-                var lv = new RectangleF(px + 20, 500, pw - 160, 14);
+                var lv = new RectangleF(px + 20, 482, pw - 160, 14);
                 Bar(g, lv, _eng.ClutchLever, _eng.ClutchLever > 0.6f ? Palette.Blue : Palette.Accent);
-                var lvHit = new RectangleF(px + 20, 496, pw - 160, 22);
+                var lvHit = new RectangleF(px + 20, 476, pw - 160, 26);
                 AddHit(lvHit, _ => _mouseClutch = true, up: () => _mouseClutch = false);
-                Txt(g, _eng.ClutchLever > 0.6f ? "กำครัตช์อยู่ (เปลี่ยนเกียร์ได้)" : "ครัตช์ปล่อย  [Shift หรือกดค้างแถบนี้]", _fXs, Palette.Dim, px + 24, 516);
+                Txt(g, _eng.ClutchLever > 0.6f ? "กำครัตช์อยู่ (เปลี่ยนเกียร์ได้)" : "ครัตช์ปล่อย  [Shift หรือกดค้างแถบนี้]", _fXs, Palette.Dim, px + 22, 496);
             }
-            else Txt(g, "ครัตช์มือปิด: ไม่ต้องกำครัตช์ เปลี่ยนเกียร์ได้เลย (คลัตช์แรงเหวี่ยงจับเอง)", _fXs, Palette.Dim, px + 24, 508);
-            Btn(g, new RectangleF(px + pw - 130, 496, 112, 34), _eng.ClutchEnabled ? "C ครัตช์: เปิด" : "C ครัตช์: ปิด", _eng.ClutchEnabled, Palette.Blue, ToggleClutchSystem, _fXs);
+            else Txt(g, "ครัตช์มือปิด: ไม่ต้องกำครัตช์ เปลี่ยนเกียร์ได้เลย (คลัตช์แรงเหวี่ยงจับเอง)", _fXs, Palette.Dim, px + 22, 486);
+            Btn(g, new RectangleF(px + pw - 130, 476, 112, 34), _eng.ClutchEnabled ? "C ครัตช์: เปิด" : "C ครัตช์: ปิด", _eng.ClutchEnabled, Palette.Blue, ToggleClutchSystem, _fXs);
         }
 
-        // ถนน / ความชัน
-        PanelBox(g, new RectangleF(px, 540, pw, 164), "ถนน / ความชัน   ( [ ] ปรับ )");
+        // ถนน / ความชัน (แถวเดียว)
         string slopeText = _slope == 0 ? "ถนนราบ" : (_slope > 0 ? "ขึ้นเนิน +" : "ลงเนิน ") + _slope + "%";
-        SmallBtn(g, new RectangleF(px + 20, 592, 70, 44), "−", () => ChangeSlope(-1));
-        TxtC(g, slopeText, _fMd, _slope == 0 ? Palette.Text : Palette.Accent, px + pw / 2, 614);
-        SmallBtn(g, new RectangleF(px + pw - 90, 592, 70, 44), "+", () => ChangeSlope(+1));
+        PanelBox(g, new RectangleF(px, 536, pw, 96), "ถนน / ความชัน   ( [ ] ปรับ )   " + slopeText);
+        SmallBtn(g, new RectangleF(px + 20, 576, 52, 44), "−", () => ChangeSlope(-1));
         (string, int)[] tracks = { ("ราบ", 0), ("เนิน 6%", 6), ("ชัน 12%", 12), ("ลง −4%", -4) };
         for (int i = 0; i < tracks.Length; i++)
         {
             int val = tracks[i].Item2;
-            Btn(g, new RectangleF(px + 20 + i * 166, 646, 154, 44), tracks[i].Item1, _slope == val, Palette.Blue, () => _slope = val, _fSm);
+            Btn(g, new RectangleF(px + 82 + i * 132, 576, 124, 44), tracks[i].Item1, _slope == val, Palette.Blue, () => _slope = val, _fSm);
         }
+        SmallBtn(g, new RectangleF(px + pw - 72, 576, 52, 44), "+", () => ChangeSlope(+1));
 
-        // ระดับเสียง
-        Txt(g, "ระดับเสียง", _fSm, Palette.Dim, px, 726);
-        Slider(g, new RectangleF(px + 160, 718, pw - 160, 40), _eng.Volume, Palette.Accent, v => _eng.Volume = v);
+        // สถานะคลัตช์ / ยาง
+        PanelBox(g, new RectangleF(px, 648, pw, 170), "สถานะคลัตช์ / ยาง");
+        float ry = 690;
+        void SRow(string label, float frac, Color col, string value)
+        {
+            Txt(g, label, _fSm, Palette.Dim, px + 20, ry);
+            Bar(g, new RectangleF(px + 190, ry + 6, 250, 16), frac, col);
+            Txt(g, value, _fSm, col, px + 456, ry);
+            ry += 34;
+        }
+        float lk = _eng.ClutchLock;
+        SRow("คลัตช์จับ", lk, Palette.Green, $"{lk * 100f:0}%  " + (lk > 0.95f ? "จับสนิท" : lk > 0.05f ? "กำลังจับ" : "ปล่อย/ยังไม่จับ"));
+        float slipRpm = MathF.Abs(_eng.ClutchSlipRpm);
+        Color slipCol = lk < 0.05f ? Palette.Dim : slipRpm < 150f ? Palette.Green : slipRpm < 900f ? Palette.Yellow : Palette.Red;
+        SRow("คลัตช์ลื่น", MathF.Min(slipRpm / 3000f, 1f), slipCol,
+            lk < 0.05f ? "ไม่ส่งกำลัง" : $"{slipRpm:N0} rpm  " + (slipRpm < 150f ? "ไม่ลื่น" : slipRpm < 900f ? "ลื่นเล็กน้อย" : "ลื่น (ออกตัว)"));
+        float tu = _eng.TractionUse;
+        Color tCol = _eng.WheelSpin ? Palette.Red : tu > 0.85f ? Palette.Yellow : Palette.Green;
+        SRow("แรงเกาะยาง", MathF.Min(tu, 1f), tCol, $"{tu * 100f:0}%  " + (_eng.WheelSpin ? "ล้อฟรี! ยางลื่น" : tu > 0.85f ? "ใกล้ลื่น" : "ยางเกาะดี"));
+        Txt(g, $"แรงขับ {_eng.DriveForce:N0} N / เกาะได้สูงสุด {_eng.GripMax:N0} N  •  ยาง {d.TireCode} ขอบ {d.RimW:0.00}", _fXs, Palette.Dim, px + 20, ry - 2);
 
         // สถิติ
-        PanelBox(g, new RectangleF(px, 776, pw, 204), "สถิติ");
+        PanelBox(g, new RectangleF(px, 834, pw, 216), "สถิติ");
         // ดีสุด = สถิติสูงสุดที่เก็บไว้ในเซฟ | ก่อนแก้ = ดีสุดของชุดก่อนหน้า | ล่าสุด = ที่กำลังเทส
         // ผลต่าง = ล่าสุดเทียบก่อนแก้ (ถ้ายังไม่เคยแก้ เทียบกับดีสุด) + = ดีกว่า
         var bf = _before;
-        TxtR(g, "ดีสุด", _fXs, Palette.Dim, px + 300, 788);
-        TxtR(g, "ก่อนแก้", _fXs, Palette.Dim, px + 430, 788);
-        TxtR(g, "ล่าสุด", _fXs, Palette.Dim, px + 560, 788);
-        TxtR(g, bf != null ? "ต่างจากก่อนแก้" : "ต่างจากดีสุด", _fXs, Palette.Dim, px + pw - 20, 788);
+        TxtR(g, "ดีสุด", _fXs, Palette.Dim, px + 300, 846);
+        TxtR(g, "ก่อนแก้", _fXs, Palette.Dim, px + 430, 846);
+        TxtR(g, "ล่าสุด", _fXs, Palette.Dim, px + 560, 846);
+        TxtR(g, bf != null ? "ต่างจากก่อนแก้" : "ต่างจากดีสุด", _fXs, Palette.Dim, px + pw - 20, 846);
         string N(float v, string f) => v <= 0f ? "-" : v.ToString(f);
-        float sy = 816;
+        float sy = 878;
         void Row(string a, float best, float before, float last, bool lowerBetter, string f, string lastTxt = "")
         {
             Txt(g, a, _fSm, Palette.Dim, px + 20, sy);
@@ -125,7 +146,7 @@ public sealed partial class MainForm
                 TxtR(g, txt, _fSm, c, px + pw - 20, sy);
             }
             else TxtR(g, "-", _fSm, Palette.Dim, px + pw - 20, sy);
-            sy += 27;
+            sy += 28;
         }
         float hpNow = _dyno != null ? _dyno.PeakPs * EngineModel.PsToHp : 0f;
         Row("รอบสูงสุด (rpm)", _cur.PeakRpm, bf?.PeakRpm ?? 0f, _peakRpm, false, "0");
@@ -134,8 +155,6 @@ public sealed partial class MainForm
         Row(_last402 > 0f ? $"402 ม. (วิ) @{_trap402:0}" : "402 ม. (วิ)", _save.Best402, bf?.B402 ?? 0f, _last402, true, "0.00");
         Row("ท็อป (กม./ชม.)", _save.BestTop, bf?.Top ?? 0f, _topSession, false, "0");
         Row("แรงม้า (HP)", _cur.Hp, bf?.Hp ?? 0f, hpNow, false, "0.0");
-
-        DrawScope(g, new RectangleF(px, 992, pw, 64));
     }
 
     // ---------- คันเร่ง ----------

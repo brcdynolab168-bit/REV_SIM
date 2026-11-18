@@ -225,7 +225,7 @@ public sealed partial class MainForm
             bool hov = r.Contains(_mouseV);
             g.FillRectangle(Br(act ? Palette.PanelHi : (hov ? Color.FromArgb(26, 30, 37) : Palette.Panel)), r);
             if (act) g.FillRectangle(Br(Palette.Accent), r.X, r.Bottom - 4, r.Width, 4);
-            TxtC(g, GarageTabs[i].Name, _fSm, act ? Palette.Text : Palette.Dim, r.X + r.Width / 2, r.Y + 24);
+            TxtC(g, GarageTabs[i].Name, _fXs, act ? Palette.Text : Palette.Dim, r.X + r.Width / 2, r.Y + 26);
             AddHit(r, down: _ => { _advisor = false; SetTab(idx); });
         }
         Btn(g, new RectangleF(GL + GW - 132, 112, 132, 52), "T ที่ปรึกษา", _advisor, Palette.Blue, ToggleAdvisor, _fSm);
@@ -356,10 +356,10 @@ public sealed partial class MainForm
                 int c = cat.Current(_draft);
                 shown = c < 0 ? "ปรับเอง  (ไม่ตรงชุดสำเร็จรูป)" : cat.Items[c].Name;
             }
-            Txt(g, name, _fSm, selected ? Palette.Text : Palette.Dim, GL + 20, y + rowH / 2 - 18);
+            Txt(g, name, _fXs, selected ? Palette.Text : Palette.Dim, GL + 20, y + rowH / 2 - 12);
             SmallBtn(g, new RectangleF(GL + 300, y + 4, 52, rowH - 14), "◀", () => PartStep(row, -1));
             FillRR(g, new RectangleF(GL + 360, y + 4, 480, rowH - 14), 4, Color.FromArgb(14, 17, 21));
-            TxtC(g, shown, _fSm, selected ? Palette.Accent : Palette.Text, GL + 600, y + 4 + (rowH - 14) / 2);
+            TxtC(g, shown, _fXs, selected ? Palette.Accent : Palette.Text, GL + 600, y + 4 + (rowH - 14) / 2);
             SmallBtn(g, new RectangleF(GL + 848, y + 4, 40, rowH - 14), "▶", () => PartStep(row, +1));
         }
         string hint = _partRow == 0
@@ -403,17 +403,17 @@ public sealed partial class MainForm
             float t = m.BrakeTorqueWot(r);
             rpms.Add(r); tq.Add(MathF.Max(0f, t)); hp.Add(MathF.Max(0f, EngineModel.Hp(t, r)));
         }
-        DrawChart(g, new RectangleF(X, 326, W, 280), rpms.ToArray(), tq.ToArray(), hp.ToArray(), d.Limiter);
+        DrawChart(g, new RectangleF(X, 326, W, 250), rpms.ToArray(), tq.ToArray(), hp.ToArray(), d.Limiter);
 
         // ตรวจสภาพ
-        PanelBox(g, new RectangleF(X, 620, W, 350), "ตรวจสภาพเครื่อง");
-        float y = 662;
+        PanelBox(g, new RectangleF(X, 592, W, 378), "ตรวจสภาพเครื่อง");
+        float y = 640;
         void Line(string s, int state)
         {
             Color dot = state == 2 ? Palette.Yellow : state == 1 ? Palette.Green : Color.FromArgb(90, 98, 110);
             g.FillEllipse(Br(dot), X + 22, y + 9, 12, 12);
             Txt(g, s, _fSm, state == 2 ? Palette.Yellow : Palette.Text, X + 46, y);
-            y += 33;
+            y += 32;
         }
 
         Line($"เดินเบา ~{m.IdleRpm:N0} rpm  •  โอเวอร์แลป {m.Overlap:0}°" + (m.Overlap > 40f ? "  (สะดุด)" : ""), m.Overlap > 40f ? 2 : 1);

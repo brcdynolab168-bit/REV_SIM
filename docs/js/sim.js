@@ -56,7 +56,7 @@ export class EngineSim {
     this._rng = 0x1234ABCD; this._wantOn = false; this._cycCut = false;
     this._ola = new Float32Array(OlaMask + 1); this._olaR = 0; this._olaLead = 3200; this._dcX = 0; this._dcY = 0;
     this._cursor = 0; this._runLeft = 0; this._recent = new Int32Array(40).fill(-100); this._recentPos = 0; this._cand = new Int32Array(1024);
-    this.scope = new Float32Array(2048); this.scopeW = 0; this._gearApplied = 0; this._shiftT = 0; this._tcSmooth = 0;
+    this.scope = new Float32Array(2048); this.scopeW = 0; this.slipRpm = 0; this.tracUse = 0; this.spin = false; this.driveForce = 0; this.gripMax = 0; this._gearApplied = 0; this._shiftT = 0; this._tcSmooth = 0;
   }
 
   assemble(design) { this.pending = new EngineModel(design); this._roadReset = true; }
@@ -145,7 +145,7 @@ export class EngineSim {
     const mass = Veh.mass(d), mEff = Veh.effMass(d), r = Veh.wheelRadius(d);
     const ratio = auto ? Cvt.ratio(this.cvtS) * Cvt.final(d) : Veh.total(d, g);
     const omegaE = rpm / 9.5493;
-    let tc = 0, lock01 = 0;
+    let tc = 0, lock01 = 0, slipRpm = 0, tracUse = 0, spin = false;
     if (ratio > 0 && this._shiftT <= 0) {
       const start = auto ? 3200 : Math.max(2600, m.IdleRpm + 900), full = auto ? 7500 : 7000;
       lock01 = clamp((rpm * rpm - start * start) / (full * full - start * start), 0, 1);
@@ -154,9 +154,10 @@ export class EngineSim {
       const omegaIn = v / r * ratio, slip = omegaE - omegaIn;
       tc = clamp(slip / SlipScale, -1, 1) * ClutchTorque * lock01;
       const tcMax = Veh.tractionMax(d) * r / (ratio * Veh.DriveEff);
+      slipRpm = slip * 9.5493; tracUse = tcMax > 0 ? Math.abs(tc) / tcMax : 0; spin = Math.abs(tc) > tcMax;
       tc = clamp(tc, -tcMax, tcMax);
     }
-    this.clutchLock = lock01;
+    this.clutchLock = lock01; this.slipRpm = slipRpm; this.tracUse = tracUse; this.spin = spin; this.gripMax = Veh.tractionMax(d);
     if (auto) {
       this._tcSmooth += (Math.max(tc, 0) - this._tcSmooth) * 0.003;
       const ff = Cvt.ff(d, omegaE, this.cvtS), fr = Cvt.fr(d, this._tcSmooth, this.cvtS);
@@ -168,6 +169,7 @@ export class EngineSim {
     rpm = newOmega * 9.5493;
 
     const fDrive = ratio > 0 ? tc * ratio * Veh.DriveEff / r : 0;
+    this.driveForce = Math.max(0, fDrive);
     const fRes = Veh.resist(d, v, this.slopePct);
     const fBrake = clamp(this.brakeInput, 0, 1) * Veh.BrakeDecel * mass;
     if (v < 0.02) {

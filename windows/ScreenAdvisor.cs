@@ -102,7 +102,7 @@ public sealed partial class MainForm
             return;
         }
         float ry = sb.Y + 50;
-        const float rh = 62;
+        const float rh = 58;
         foreach (var s in _advList)
         {
             var sug = s;
@@ -125,7 +125,7 @@ public sealed partial class MainForm
         {
             // หมายเหตุของข้อที่มีผลข้างเคียง แสดงท้ายแผง
             var n = _advList.First(s => s.Note.Length > 0);
-            g.DrawString("ข้อควรระวัง: " + n.Note, _fXs, Br(Palette.Yellow), new RectangleF(sb.X + 20, sb.Bottom - 34, sb.Width - 40, 28));
+            g.DrawString("ข้อควรระวัง: " + n.Note, _fXs, Br(Palette.Yellow), new RectangleF(sb.X + 20, sb.Bottom - 30, sb.Width - 40, 26));
         }
     }
 }

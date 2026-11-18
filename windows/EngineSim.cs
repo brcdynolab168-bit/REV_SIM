@@ -22,6 +22,14 @@ public sealed class EngineSim
     private float _lever;                       // ตำแหน่งคันครัตช์จริง (ขยับตามมือ ปล่อยช้ากว่ากำ)
     private float _cfLock;                      // แรงจับของคลัตช์แรงเหวี่ยงก่อนคิดคันครัตช์
     public float ClutchLever => _lever;
+    // สถานะคลัตช์/ยาง (UI อ่าน)
+    private volatile float _slipRpm, _tracUse, _driveForce, _gripMax;
+    private volatile bool _spin;
+    public float ClutchSlipRpm => _slipRpm;     // รอบเครื่อง - รอบด้านล้อ (rpm) ยิ่งมากคลัตช์ยิ่งลื่น
+    public float TractionUse => _tracUse;       // แรงที่คลัตช์พยายามส่งเทียบแรงเกาะยางหลัง (1.0 = เต็มที่ เกินแล้วล้อฟรี)
+    public bool WheelSpin => _spin;             // ยางลื่น/ล้อฟรี
+    public float DriveForce => _driveForce;     // แรงขับที่ล้อหลัง (N)
+    public float GripMax => _gripMax;           // แรงเกาะยางหลังสูงสุด (N)
     public float CentrifugalLock => _cfLock;
     public volatile float SlopePct;             // ความชันถนน % (+ = ขึ้นเนิน)
     public volatile float BrakeInput;           // 0..1
@@ -319,6 +327,7 @@ public sealed class EngineSim
 
         float tc = 0f;                          // แรงบิดที่ส่งผ่านคลัตช์ (บวก = เครื่องลากรถ)
         float lock01 = 0f;
+        float slipRpm = 0f, tracUse = 0f; bool spin = false;
         if (ratio > 0f && _shiftT <= 0f)
         {
             // คลัตช์แรงเหวี่ยง: แรงจับขึ้นตามรอบกำลังสอง (แรงเหวี่ยง ∝ ω²) เริ่มจับที่ start เต็มที่ราว full
@@ -335,9 +344,13 @@ public sealed class EngineSim
             // แรงเกาะยางหลัง: เกินแล้วล้อฟรี เครื่องรอบพุ่ง
             float fmax = Vehicle.TractionMax(d);
             float tcMax = fmax * r / (ratio * Vehicle.DriveEff);
+            slipRpm = slip * 9.5493f;
+            tracUse = tcMax > 0f ? MathF.Abs(tc) / tcMax : 0f;
+            spin = MathF.Abs(tc) > tcMax * 1.0f;
             tc = Clamp(tc, -tcMax, tcMax);
         }
         _clutchLock = lock01;
+        _slipRpm = slipRpm; _tracUse = tracUse; _spin = spin; _gripMax = Vehicle.TractionMax(d);
 
         // ----- ชุดขับหน้า CVT: แรงเหวี่ยงของเม็ด (ผ่านชามเม็ด) สู้แรงหนีบชุดขับหลัง -----
         if (auto)
@@ -358,6 +371,7 @@ public sealed class EngineSim
 
         // ----- รถ -----
         float fDrive = ratio > 0f ? tc * ratio * Vehicle.DriveEff / r : 0f;
+        _driveForce = MathF.Max(0f, fDrive);
         float fRes = Vehicle.Resist(d, v, SlopePct);
         float fBrake = Clamp(BrakeInput, 0f, 1f) * Vehicle.BrakeDecel * mass;
         if (v < 0.02f)
