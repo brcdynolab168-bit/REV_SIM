@@ -584,12 +584,19 @@ const mixC = (a, b, t) => { t = clamp(t, 0, 1); return `rgb(${Math.round(a[0] + 
 const ecuRange = () => ({ c0: Math.min(ecuC0, ecuC1), c1: Math.max(ecuC0, ecuC1), r0: Math.min(ecuR0, ecuR1), r1: Math.max(ecuR0, ecuR1) });
 // ตารางเป็นแบบ copy-on-write เสมอ (ไม่ให้ไปแก้ตารางของเครื่องที่ติดตั้งแล้ว)
 // โหมด: 0 น้ำมัน ms, 1 องศาฉีด (EOI), 2 องศาจุด, 3 ไทม์คอยล์, 4 AFR (แก้ที่ตารางน้ำมัน), 5 MAP (อ่านอย่างเดียว)
-const ECU_PROP = ['EcuMs', 'EcuEoi', 'EcuIgn', 'EcuDwell'];
-const ECU_SPEC = [[0.1, 0.5, 0.3, 40, 0.01], [5, 20, 0, 560, 1], [0.5, 2, -5, 50, 0.1], [0.1, 0.5, 0.5, 9, 0.01]];     // [ละเอียด, หยาบ, ต่ำสุด, สูงสุด, ปัดเศษ]
-const ecuFactory = mode => [preview.FactoryMsTable(), preview.FactoryEoiTable(), preview.FactoryIgnTable(), preview.FactoryDwellTable()][mode];
+const ECU_PROP = ['EcuMs', 'EcuEoi', 'EcuIgn', 'EcuDwell', 'EcuMs', 'EcuMap'];
+const ECU_SPEC = [[0.1, 0.5, 0, 40, 0.01], [5, 20, 0, 560, 1], [0.5, 2, -5, 50, 0.1], [0.1, 0.5, 0.5, 9, 0.01], [0.1, 0.5, 0, 40, 0.01], [1, 5, 0, 115, 1]];     // [ละเอียด, หยาบ, ต่ำสุด, สูงสุด, ปัดเศษ]
+const ecuFactory = mode => [preview.FactoryMsTable(), preview.FactoryEoiTable(), preview.FactoryIgnTable(), preview.FactoryDwellTable(), preview.FactoryMsTable(), preview.FactoryMapTable()][mode];
 const ecuTableW = mode => { const p = ECU_PROP[mode]; return (draft[p] = (draft[p] || ecuFactory(mode)).slice()); };
 const editMode = () => (ecuMode === 4 ? 0 : ecuMode);
-function ecuReadOnly() { if (ecuMode !== 5) return false; toast('ตาราง MAP อ่านอย่างเดียว (เป็นผลของรอบ x คันเร่ง) แก้ที่ตารางอื่น'); return true; }
+const ecuReadOnly = () => false;
+/** ตัดน้ำมันช่องที่เลือก (เวลาฉีด 0 ms = ไม่มีการเผาไหม้) ใช้ทำอาการเดินหอบ/ทดลองตัดช่วงรอบ */
+function ecuCutFuel() {
+  const { c0, c1, r0, r1 } = ecuRange(), t = ecuTableW(0);
+  for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) t[r * EcuN + c] = 0;
+  draftChanged();
+  toast('ตัดน้ำมันช่องที่เลือกแล้ว (0 ms)  ตัดช่วงเดินเบาแล้วลองเปิดเครื่องจูนสด: จะเดินหอบ');
+}
 function ecuAdjust(dir, coarse) {
   if (ecuReadOnly()) return;
   const { c0, c1, r0, r1 } = ecuRange(), m = preview;
@@ -597,7 +604,7 @@ function ecuAdjust(dir, coarse) {
     const t = ecuTableW(0);
     for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {      // โหมด AFR: ตั้ง AFR เป้าหมายของช่อง แล้วแปลงเป็นเวลาฉีด (ms)
       const rpmC = m.EcuRpmAt(c), loadR = ecuLoadAt(r), cur = m.EcuAt(rpmC, loadR, {}).Afr;
-      t[r * EcuN + c] = clamp(Math.round(m.MsForAfr(rpmC, loadR, cur + (coarse ? 0.5 : 0.1) * dir) * 100) / 100, 0.3, 40);
+      t[r * EcuN + c] = clamp(Math.round(m.MsForAfr(rpmC, loadR, cur + (coarse ? 0.5 : 0.1) * dir) * 100) / 100, 0, 40);
     }
   } else {
     const [fine, crs, lo, hi, rnd] = ECU_SPEC[ecuMode], t = ecuTableW(ecuMode), st = (coarse ? crs : fine) * dir;
@@ -624,6 +631,13 @@ function ecuSmooth() {
 }
 function ecuEqualize() { ecuEdit((t, c0, c1, r0, r1) => { const v = t[ecuR0 * EcuN + ecuC0]; for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) t[r * EcuN + c] = v; }); }
 function ecuFactorySel() { if (ecuReadOnly()) return; const fac = ecuFactory(editMode()); ecuEdit((t, c0, c1, r0, r1) => { for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) t[r * EcuN + c] = fac[r * EcuN + c]; }); }
+/** ทำอาการเดินหอบ: ตัดน้ำมันทุกโหลดในช่วงรอบเหนือรอบเดินเบาขึ้นไป (~0.95-1.55 เท่า) */
+function ecuHunt() {
+  const m = preview, t = ecuTableW(0), lo = m.IdleRpm * 0.95, hi = m.IdleRpm * 1.55;
+  for (let c = 0; c < EcuN; c++) { const rpm = m.EcuRpmAt(c); if (rpm < lo || rpm > hi) continue; for (let r = 0; r < EcuN; r++) t[r * EcuN + c] = 0; }
+  draftChanged();
+  toast(`ตัดน้ำมันช่วงรอบ ${fmtN(lo)}-${fmtN(hi)} ทุกโหลดแล้ว เปิดเครื่องจูนสดแล้วดูรอบเดินเบาเหวี่ยง (เดินหอบ)`);
+}
 function ecuFactoryAll() { if (ecuReadOnly()) return; draft[ECU_PROP[editMode()]] = null; draftChanged(); toast('คืนตารางเป็นค่าโรงงานแล้ว'); }
 function ecuNearMbt() {
   if (ecuReadOnly()) return;
@@ -656,8 +670,8 @@ const EcuHelp = [
   ['AFR และ λ (แลมบ์ดา)', ['AFR = มวลอากาศ ÷ มวลน้ำมันที่เข้าห้องเผาไหม้  เบนซินเผาหมดพอดี (สโตอิก) = 14.7 : 1', 'λ = AFR ÷ สโตอิก   λ 1.00 = พอดี   ต่ำกว่า 1 = หนา   สูงกว่า 1 = บาง', 'แรงสูงสุดที่ AFR ~12.5–13.2 (λ 0.85–0.90)  ประหยัดตอนวิ่งเบา ~14.7', 'บางเกิน (>15.5) = ร้อน น็อก แรงตก   หนาเกิน (<11) = แรงตก เปลืองน้ำมัน เขม่า', 'E85 สโตอิก 9.76 / เมทานอล 6.45 ต้องฉีดมากกว่าเบนซินหลายเท่า']],
   ['MBT และ ไฟแก่ / ไฟอ่อน', ['MBT = Minimum advance for Best Torque คือองศาจุดระเบิดก่อนศูนย์ตายบน (°BTDC) ที่ได้แรงบิดสูงสุดพอดี', 'ไฟแก่ = จุดเร็ว (องศามาก)   ไฟอ่อน = จุดช้า (องศาน้อย)', 'แก่กว่า MBT = แรงดันพีคมาเร็วเกินจนต้านลูกสูบขาขึ้น แรงไม่เพิ่มแต่น็อกง่าย', 'อ่อนกว่า MBT = แรงตก ไอเสียร้อน', 'MBT สูงขึ้นเมื่อรอบสูง โหลดเบา ส่วนผสมบาง ลูกโต / ต่ำลงเมื่อ CR สูง ก้านยาว น้ำมันเผาไว (E85/เมทานอล)', 'ตั้งต่ำกว่า MBT 1–3° เป็นขอบปลอดภัย']],
   ['EGT (อุณหภูมิก๊าซไอเสีย)', ['EGT = Exhaust Gas Temperature อุณหภูมิก๊าซไอเสียที่คอท่อ บอกว่าเผาไหม้ร้อนแค่ไหน', 'เบนซินเครื่องเล็กตอนวิ่งหนักปกติ ~700–900°C   เกิน ~1,000°C เสี่ยงวาล์วไอเสียไหม้ ลูกสูบหลอม', 'ที่ทำให้สูง: ส่วนผสมบาง, ไฟอ่อน (ไฟยังเผาอยู่ตอนไอเสียเปิด), โหลดและรอบสูง', 'ส่วนผสมหนากว่าเล็กน้อยช่วยลด EGT (น้ำมันระเหยดูดความร้อน) แต่หนาเกินแรงตก', 'ค่าในเกมเป็นการประมาณ ใช้ดูแนวโน้ม']],
-  ['หัวฉีด (Duty)', ['Duty = สัดส่วนเวลาที่หัวฉีดเปิดต่อ 1 รอบเครื่อง', 'ยิ่งรอบสูง โหลดหนัก หรือใช้น้ำมันที่ต้องฉีดเยอะ (E85 เมทานอล) ค่ายิ่งสูง', 'เกิน ~85% ใกล้สุดกำลังหัวฉีด   100% = เต็ม น้ำมันไม่พอ ส่วนผสมบางลงเอง (ร้อน แรงตก)', 'แก้ด้วยหัวฉีดที่ใหญ่ขึ้น (แท็บ อัด·น้ำมัน แถว หัวฉีด)']],
-  ['MAP (แรงดันท่อไอดี)', ['MAP = Manifold Absolute Pressure แรงดันสัมบูรณ์ในท่อไอดี หน่วย kPa  บรรยากาศ ~101 kPa  ยิ่งต่ำยิ่งสุญญากาศลึก', 'ลิ้นเร่งแคบ + รอบสูง = ดูดแรง MAP ต่ำ (~30–40 kPa) อากาศเข้าน้อย โหลดเบา   ลิ้นเปิดเต็ม MAP ใกล้บรรยากาศ', 'ECU ใช้ MAP บอกว่าเครื่องกินอากาศเท่าไร แล้วเลือกเวลาฉีด/องศาจุดตามโหลดนั้น', 'ตารางนี้อ่านอย่างเดียว: แกนนอนเป็นตำแหน่งคันเร่ง แกนตั้งเป็นรอบ ใช้ดูว่าที่คันเร่งและรอบนั้น ๆ เครื่องมีโหลดเท่าไร']],
+  ['หัวฉีด (Duty)', ['Duty = สัดส่วนเวลาที่หัวฉีดเปิดต่อ 1 รอบเครื่อง', 'ยิ่งรอบสูง โหลดหนัก หรือใช้น้ำมันที่ต้องฉีดเยอะ (E85 เมทานอล) ค่ายิ่งสูง', 'เกิน ~85% ใกล้สุดกำลังหัวฉีด   100% = เต็ม น้ำมันไม่พอ ส่วนผสมบางลงเอง (ร้อน แรงตก)', 'แก้ด้วยหัวฉีดที่ใหญ่ขึ้น (แท็บ อัด·น้ำมัน แถว หัวฉีด)', 'ใส่เวลาฉีด 0 ms = ตัดน้ำมันช่องนั้น ไม่มีการเผาไหม้ ตัดช่วงเดินเบาแล้วเครื่องจะเดินหอบเอง (รอบขึ้น-ลงตามระบบคุมรอบเดินเบา) ปุ่ม "ตัดน้ำมัน (0)" ทำให้ทันที']],
+  ['MAP (แรงดันท่อไอดี)', ['MAP = Manifold Absolute Pressure แรงดันสัมบูรณ์ในท่อไอดี หน่วย kPa  บรรยากาศ ~101 kPa  ยิ่งต่ำยิ่งสุญญากาศลึก', 'ลิ้นเร่งแคบ + รอบสูง = ดูดแรง MAP ต่ำ (~30–40 kPa) อากาศเข้าน้อย โหลดเบา   ลิ้นเปิดเต็ม MAP ใกล้บรรยากาศ', 'ECU ใช้ MAP บอกว่าเครื่องกินอากาศเท่าไร แล้วเลือกเวลาฉีด/องศาจุดตามโหลดนั้น', 'แก้ตารางนี้ได้ = คุมลิ้นเร่งไฟฟ้า: ตั้ง MAP เป้าหมายต่อคันเร่ง (TPS) x รอบ เครื่องจะได้อากาศตามนั้น (ไม่เกินที่ลิ้นเปิดสุดผ่านได้) ใส่ 0 = ไม่มีอากาศเข้า', 'ใช้จำกัดกำลังที่คันเร่งต่ำ หรือทำอาการเดินหอบจากช่วงเดินเบา (เช่นตั้ง MAP ช่อง TPS 0-5% ต่ำเกิน ระบบคุมรอบเดินเบาจะเปิดลิ้นตามจนรอบเหวี่ยง)']],
   ['องศาจบฉีด (EOI)', ['EOI = End Of Injection องศาที่หัวฉีดหยุดฉีด วัดเป็น °ก่อนศูนย์ตายบนของจังหวะดูด (ยิ่งมากยิ่งฉีดเสร็จเร็ว)', 'ฉีดให้เสร็จก่อนวาล์วไอดีเปิด น้ำมันมีเวลาระเหยบนวาล์วปิดที่ร้อน ผสมกับอากาศดี', 'ฉีดตอนวาล์วเปิดแล้ว (EOI น้อยกว่าองศาวาล์วเปิด) ละอองน้ำมันระเหยไม่ทัน กำลังตกเล็กน้อย โดยเฉพาะรอบต่ำ', 'รอบสูงเวลาฉีดยาว ต้องเลื่อน EOI ให้ช้าลงเพื่อฉีดทันในรอบเดียว ถ้าเลยจะฉีดข้ามไปรอบก่อน กำลังตก', 'ฉีดเร็วเกินไป (EOI มาก) น้ำมันเกาะผนังท่อไอดี ตอบสนองคันเร่งช้า']],
   ['ไทม์คอยล์ (Dwell)', ['Dwell = เวลาที่ ECU ปล่อยกระแสชาร์จคอยล์จุดระเบิดก่อนตัดให้เกิดประกายไฟ ยิ่งนานยิ่งเก็บพลังงานมากขึ้นจนอิ่มตัว', 'สั้นเกินไป = ประกายอ่อน จุดไม่ติด โดยเฉพาะโหลดหนัก กำลังอัดสูง ส่วนผสมบาง (ต้องใช้ประกายแรงกว่า)', 'นานเกินไป = คอยล์ร้อน เปลืองกระแส ประสิทธิภาพตก เสี่ยงคอยล์ไหม้ (เครื่องสูบเดียวมีเวลาเหลือเฟือ ปกติ ~2–6 ms)', 'ค่าโรงงานคำนวณให้พลังงานประกายเกินที่ต้องการราว 8%']],
   ['น็อก (Knock)', ['การเผาไหม้ระเบิดเองก่อนเปลวไฟมาถึง (เสียงกริ๊งโลหะ) แรงดันกระแทกลูกสูบ', 'เกิดเมื่อกำลังอัดสูง ออกเทนต่ำ ไฟแก่เกิน ส่วนผสมบาง หรือโหลดหนักรอบต่ำ', 'แก้: ลดองศา เติมน้ำมันเพิ่มเล็กน้อย ใช้ออกเทนสูงขึ้น หรือลด CR', 'ในเกมน็อกทำให้แรงบิดตกและเสียงหยาบ']],
@@ -686,7 +700,7 @@ function drawEcu() {
 
   const { c0: sc0, c1: sc1, r0: sr0, r1: sr1 } = ecuRange();
   let fMin = 1e9, fMax = -1e9;      // ช่วงค่าของตาราง ใช้ไล่สี
-  const cellVal = ecuMode === 0 ? (c, r) => m.CellMs(c, r) : ecuMode === 1 ? (c, r) => m.CellEoi(c, r) : ecuMode === 3 ? (c, r) => m.CellDwell(c, r) : ecuMode === 5 ? (c, r) => m.MapAtTps(m.EcuRpmAt(c), EngineModel.TpsAxis(r)) : null;
+  const cellVal = ecuMode === 0 ? (c, r) => m.CellMs(c, r) : ecuMode === 1 ? (c, r) => m.CellEoi(c, r) : ecuMode === 3 ? (c, r) => m.CellDwell(c, r) : ecuMode === 5 ? (c, r) => m.CellMap(c, r) : null;
   if (cellVal) for (let r = 0; r < EcuN; r++) for (let c = 0; c < EcuN; c++) { const v = cellVal(c, r); fMin = Math.min(fMin, v); fMax = Math.max(fMax, v); }
   ui.txt(ecuMode === 5 ? 'TPS %' : 'โหลด→', F.cap, C.Dim, LX + 4, hdrY + 2);
   for (let r = 0; r < EcuN; r++) ui.txtC(ecuMode === 5 ? (EngineModel.TpsAxis(r) * 100).toFixed(0) : `${(r + 1) * 5}%`, F.cap, r >= sr0 && r <= sr1 ? C.Accent : C.Dim, gx + (r + 0.5) * cw, hdrY + 10);
@@ -701,8 +715,8 @@ function drawEcu() {
       else if (ecuMode === 1) { const v = m.CellEoi(c, r); col = heat((v - fMin) / Math.max(1, fMax - fMin)); txt = v.toFixed(0); }
       else if (ecuMode === 2) { const v = m.CellAdv(c, r); dMbt = v - e.Mbt; col = heat(v / 45); txt = v.toFixed(1); }
       else if (ecuMode === 3) { const v = m.CellDwell(c, r); col = heat((v - fMin) / Math.max(0.05, fMax - fMin)); txt = v.toFixed(2); }
-      else if (ecuMode === 5) { const v = m.MapAtTps(m.EcuRpmAt(c), EngineModel.TpsAxis(r)); col = heat((v - fMin) / Math.max(1, fMax - fMin)); txt = v.toFixed(0); }
-      else { col = heat((e.Lambda - 0.7) / 0.6); txt = e.Afr.toFixed(1); }
+      else if (ecuMode === 5) { const v = m.CellMap(c, r); col = heat((v - fMin) / Math.max(1, fMax - fMin)); txt = v.toFixed(0); }
+      else { col = heat((e.Lambda - 0.7) / 0.6); txt = e.Afr >= 90 ? '∞' : e.Afr.toFixed(1); }
       const cx_ = gx + r * cw + 1.5, cy_ = y + 1.5, cw_ = cw - 3, ch_ = cellH - 3;      // เว้นร่องระหว่างช่อง ให้ตาโล่ง
       ui.rect(cx_, cy_, cw_, ch_, col[0]);
       ui.txtC(txt, F.cap, col[1] > 135 ? 'rgb(18,20,24)' : '#fff', cx_ + cw_ / 2, cy_ + ch_ / 2);
@@ -738,22 +752,24 @@ function drawEcu() {
     : ecuMode === 1 ? 'ฟ้า = จบฉีดช้า  •  แดง = จบฉีดเร็ว  •  มุมดำ = ฉีดตอนวาล์วเปิด'
       : ecuMode === 2 ? 'มุมขวาบน: แดง = แก่เกิน MBT  •  ขาว = ใกล้  •  ดำ = ไฟอ่อน'
         : ecuMode === 3 ? 'มุมแดง = ประกายอ่อน (ชาร์จไม่พอ)  •  มุมดำ = คอยล์ร้อน'
-          : ecuMode === 5 ? 'แกน TPS เริ่มที่ 0%  •  ฟ้า = สุญญากาศลึก  •  แดง = ใกล้บรรยากาศ'
+          : ecuMode === 5 ? 'แก้ได้ = MAP เป้าหมายต่อ TPS x รอบ (ลิ้นเร่งไฟฟ้า)  •  0 = ไม่มีอากาศ'
             : 'ฟ้า = หนา  •  เขียว = แรงสุด  •  เหลือง = บาง  •  แดง = บางเกิน', F.cap, C.Dim, gx + EcuN * cw, ly);
 
   let bx = LX; const by = 902;
   const B = (t, w, fn, col = C.Accent) => { ui.btn(R(bx, by, w, 44), t, false, col, fn, F.xs); bx += w + 10; };
-  B('−−', 58, () => ecuAdjust(-1, true)); B('−', 58, () => ecuAdjust(-1, false)); B('+', 58, () => ecuAdjust(1, false)); B('++', 58, () => ecuAdjust(1, true));
-  B('เกลี่ย', 84, ecuSmooth, C.Blue); B('เท่ากัน', 90, ecuEqualize, C.Blue);
-  B('โรงงาน (ที่เลือก)', 158, ecuFactorySel, C.Green); B('โรงงาน (ทั้งตาราง)', 164, ecuFactoryAll, C.Red);
+  B('−−', 50, () => ecuAdjust(-1, true)); B('−', 50, () => ecuAdjust(-1, false)); B('+', 50, () => ecuAdjust(1, false)); B('++', 50, () => ecuAdjust(1, true));
+  B('เกลี่ย', 66, ecuSmooth, C.Blue); B('เท่ากัน', 76, ecuEqualize, C.Blue);
+  B('โรงงาน(เลือก)', 128, ecuFactorySel, C.Green); B('โรงงาน(ทั้งหมด)', 152, ecuFactoryAll, C.Red);
   if (ecuMode === 2) B('ใกล้ MBT', 104, ecuNearMbt, C.Yellow);
+  if (ecuMode === 0 || ecuMode === 4) B('ตัดน้ำมัน 0', 122, ecuCutFuel, C.Red);
+  if (ecuMode === 0 || ecuMode === 4) B('เดินหอบ', 96, ecuHunt, C.Yellow);
 
   // ซ้ายล่าง: ช่องที่เลือก
   const prpm = m.EcuRpmAt(ecuC1), pload = ecuLoadAt(ecuR1), s = m.EcuAt(prpm, pload, {}), dl2 = s.Adv - s.Mbt;
   ui.fillRR(R(LX, 962, 976, 78), 4, C.Panel); ui.drawRR(R(LX, 962, 976, 78), 4, C.Border, 1); ui.rect(LX + 14, 974, 4, 18, C.Accent);
   ui.txt(`ช่องที่เลือก  ${fmtN(prpm)} rpm  •  โหลด ${f0(pload * 100)}%`, F.cap, C.Dim, LX + 28, 972);
   const warn = s.Egt > 1050 ? 'ไอเสียร้อนจัด! เสี่ยงลูกสูบพัง' : m.KnockWot(prpm) > 0.02 && pload > 0.7 ? 'น็อกที่ช่องนี้' : dl2 < -10 ? 'ไฟอ่อนมาก แรงตก' : s.Lambda > 1.35 || s.Lambda < 0.6 ? 'ส่วนผสมนอกช่วงจุดติด' : '';
-  ui.txt(`AFR ${f1(s.Afr)} (λ ${f2(s.Lambda)})   ฉีด ${s.PulseMs.toFixed(2)} ms (${f0(s.Duty * 100)}%)   จบฉีด ${f0(s.Eoi)}°   MAP ${f0(m.MapKpa(pload))} kPa`, F.xs, s.Lambda > 1.12 ? C.Red : s.Lambda < 0.7 ? C.Blue : s.Lambda > 0.97 ? C.Yellow : C.Green, LX + 340, 970);
+  ui.txt(`AFR ${s.Afr >= 90 ? '∞ ตัดน้ำมัน' : f1(s.Afr)} (λ ${f2(s.Lambda)})   ฉีด ${s.PulseMs.toFixed(2)} ms (${f0(s.Duty * 100)}%)   จบฉีด ${f0(s.Eoi)}°   MAP ${f0(m.MapKpa(pload))} kPa`, F.xs, s.Lambda > 1.12 ? C.Red : s.Lambda < 0.7 ? C.Blue : s.Lambda > 0.97 ? C.Yellow : C.Green, LX + 340, 970);
   ui.txt(`จุด ${f1(s.Adv)}° / MBT ${f1(s.Mbt)}°   คอยล์ ${s.DwellMs.toFixed(2)} ms (ประกาย ${f0(s.Spark * 100)}%)   แรงบิด x${s.Mult.toFixed(3)}   EGT ${f0(s.Egt)}°C` + (warn ? '   ⚠ ' + warn : ''), F.xs, warn ? C.Yellow : dl2 > 1.5 || s.Spark < 0.95 ? C.Red : C.Dim, LX + 28, 1004);
 
   // ขวา: เครื่องจูนสด
@@ -795,7 +811,7 @@ function drawEcu() {
       drawCompareChart(R(RX + 16, 520, RW - 32, 504), m, draft.Limiter);
     } else {
       const afrCol = lam > 1.12 ? C.Red : lam < 0.7 ? C.Blue : lam > 0.97 ? C.Yellow : C.Green, advCol = dlt > 1.5 ? C.Red : dlt < -8 ? C.Blue : C.Green;
-      liveBar(ix, 518, iw, 'AFR (อากาศ:น้ำมัน)', `${f1(afr)}  (λ ${f2(lam)})`, (lam - 0.6) / 0.9, afrCol, (0.89 - 0.6) / 0.9);
+      liveBar(ix, 518, iw, 'AFR (อากาศ:น้ำมัน)', `${afr >= 90 ? '∞ ตัดน้ำมัน' : f1(afr)}  (λ ${f2(lam)})`, (lam - 0.6) / 0.9, afrCol, (0.89 - 0.6) / 0.9);
       liveBar(ix, 560, iw, 'จุดระเบิด (ขีดขาว = MBT)', `${f1(adv)}°  (${dlt >= 0 ? 'แก่' : 'อ่อน'} ${f1(Math.abs(dlt))}° จาก MBT)`, adv / 50, advCol, mbt / 50);
       liveBar(ix, 602, iw, 'EGT (ก๊าซไอเสีย)', `${f0(egt)} °C`, (egt - 400) / 800, egt > 1050 ? C.Red : egt > 950 ? C.Yellow : C.Green, 500 / 800);
       const cyc = 120000 / Math.max(rpmNow, 200), airCyc = m.AirPerCycleG(rpmNow, loadNow), fuelCyc = Math.max(0, Math.min(pw, cyc) - InjDeadMs) * m.InjFlowGpMs;

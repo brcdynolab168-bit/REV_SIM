@@ -426,6 +426,8 @@ public sealed class EngineSim
         if (fire && Unit() < m.Lope * 0.30f * low) fire = false;
         // กำลังอัดต่ำ: เดินเบาแล้วจุดไม่ติดเป็นพัก ๆ
         if (fire && Unit() < m.LowCrMisfire * (0.4f + low)) fire = false;
+        // ตารางจูนกล่อง: ส่วนผสมบาง/หนาเกิน ประกายอ่อน หรือตัดน้ำมัน -> จุดไม่ติดเป็นจังหวะ ๆ (เดินหอบ/สะดุด)
+        if (fire && Unit() < _ecu.Misfire) fire = false;
         // soft cut: ข้ามจังหวะระเบิดแบบสุ่ม มากขึ้นเรื่อย ๆ จนถึง hard cut
         if (fire && Unit() < _softK * 0.6f) fire = false;
         // วาล์วลอย: ไอดีรั่ว จุดไม่ติด

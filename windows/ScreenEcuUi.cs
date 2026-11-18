@@ -32,12 +32,14 @@ public sealed partial class MainForm
          "Duty = สัดส่วนเวลาที่หัวฉีดเปิดต่อ 1 รอบเครื่อง\n" +
          "ยิ่งรอบสูง โหลดหนัก หรือใช้น้ำมันที่ต้องฉีดเยอะ (E85 เมทานอล) ค่ายิ่งสูง\n" +
          "เกิน ~85% ใกล้สุดกำลังหัวฉีด   100% = เต็ม น้ำมันไม่พอ ส่วนผสมบางลงเอง (ร้อน แรงตก)\n" +
-         "แก้ด้วยหัวฉีดที่ใหญ่ขึ้น (แท็บ อัด·น้ำมัน แถว หัวฉีด)"),
+         "แก้ด้วยหัวฉีดที่ใหญ่ขึ้น (แท็บ อัด·น้ำมัน แถว หัวฉีด)\n" +
+         "ใส่เวลาฉีด 0 ms = ตัดน้ำมันช่องนั้น ไม่มีการเผาไหม้ ตัดช่วงเดินเบาแล้วเครื่องจะเดินหอบเอง (รอบขึ้น-ลงตามระบบคุมรอบเดินเบา) ปุ่ม \"ตัดน้ำมัน (0)\" ทำให้ทันที"),
         ("MAP (แรงดันท่อไอดี)",
          "MAP = Manifold Absolute Pressure แรงดันสัมบูรณ์ในท่อไอดี หน่วย kPa  บรรยากาศ ~101 kPa  ยิ่งต่ำยิ่งสุญญากาศลึก\n" +
          "ลิ้นเร่งแคบ + รอบสูง = ดูดแรง MAP ต่ำ (~30–40 kPa) อากาศเข้าน้อย โหลดเบา   ลิ้นเปิดเต็ม MAP ใกล้บรรยากาศ\n" +
          "ECU ใช้ MAP บอกว่าเครื่องกินอากาศเท่าไร แล้วเลือกเวลาฉีด/องศาจุดตามโหลดนั้น\n" +
-         "ตารางนี้อ่านอย่างเดียว: แกนนอนเป็นตำแหน่งคันเร่ง แกนตั้งเป็นรอบ ใช้ดูว่าที่คันเร่งและรอบนั้น ๆ เครื่องมีโหลดเท่าไร"),
+         "แก้ตารางนี้ได้ = คุมลิ้นเร่งไฟฟ้า: ตั้ง MAP เป้าหมายต่อคันเร่ง (TPS) x รอบ เครื่องจะได้อากาศตามนั้น (ไม่เกินที่ลิ้นเปิดสุดผ่านได้) ใส่ 0 = ไม่มีอากาศเข้า\n" +
+         "ใช้จำกัดกำลังที่คันเร่งต่ำ หรือทำอาการเดินหอบจากช่วงเดินเบา (เช่นตั้ง MAP ช่อง TPS 0-5% ต่ำเกิน ระบบคุมรอบเดินเบาจะเปิดลิ้นตามจนรอบเหวี่ยง)"),
         ("องศาจบฉีด (EOI)",
          "EOI = End Of Injection องศาที่หัวฉีดหยุดฉีด วัดเป็น °ก่อนศูนย์ตายบนของจังหวะดูด (ยิ่งมากยิ่งฉีดเสร็จเร็ว)\n" +
          "ฉีดให้เสร็จก่อนวาล์วไอดีเปิด น้ำมันมีเวลาระเหยบนวาล์วปิดที่ร้อน ผสมกับอากาศดี\n" +
@@ -103,7 +105,7 @@ public sealed partial class MainForm
         // ---------- ตาราง ----------
         EcuRange(out int sc0, out int sc1, out int sr0, out int sr1);
         float fMin = float.MaxValue, fMax = float.MinValue;      // ช่วงค่าของตาราง ใช้ไล่สี
-        Func<int, int, float>? cellVal = _ecuMode == 0 ? m.CellMs : _ecuMode == 1 ? m.CellEoi : _ecuMode == 3 ? m.CellDwell : _ecuMode == 5 ? (c, r) => m.MapAtTps(m.EcuRpmAt(c), EngineModel.TpsAxis(r)) : null;
+        Func<int, int, float>? cellVal = _ecuMode == 0 ? m.CellMs : _ecuMode == 1 ? m.CellEoi : _ecuMode == 3 ? m.CellDwell : _ecuMode == 5 ? m.CellMap : null;
         if (cellVal != null) for (int rr0 = 0; rr0 < EN; rr0++) for (int cc0 = 0; cc0 < EN; cc0++) { float vv = cellVal(cc0, rr0); fMin = MathF.Min(fMin, vv); fMax = MathF.Max(fMax, vv); }
         Txt(g, _ecuMode == 5 ? "TPS %" : "โหลด→", _fCap, Palette.Dim, LX + 4, hdrY + 2);
         for (int r = 0; r < EN; r++)
@@ -139,12 +141,12 @@ public sealed partial class MainForm
                 }
                 else if (_ecuMode == 5)
                 {
-                    float v = m.MapAtTps(m.EcuRpmAt(c), EngineModel.TpsAxis(r));
+                    float v = m.CellMap(c, r);
                     col = Heat((v - fMin) / MathF.Max(1f, fMax - fMin)); txt = v.ToString("0");
                 }
                 else
                 {
-                    col = Heat((e.Lambda - 0.7f) / 0.6f); txt = e.Afr.ToString("0.0");
+                    col = Heat((e.Lambda - 0.7f) / 0.6f); txt = e.Afr >= 90f ? "∞" : e.Afr.ToString("0.0");
                 }
                 var cell = new RectangleF(gx + r * cw + 1.5f, y + 1.5f, cw - 3f, cellH - 3f);     // เว้นร่องระหว่างช่อง ให้ตาโล่ง
                 g.FillRectangle(Br(col), cell);
@@ -200,17 +202,19 @@ public sealed partial class MainForm
             : _ecuMode == 1 ? "ฟ้า = จบฉีดช้า  •  แดง = จบฉีดเร็ว  •  มุมดำ = ฉีดตอนวาล์วเปิด"
             : _ecuMode == 2 ? "มุมขวาบน: แดง = แก่เกิน MBT  •  ขาว = ใกล้  •  ดำ = ไฟอ่อน"
             : _ecuMode == 3 ? "มุมแดง = ประกายอ่อน (ชาร์จไม่พอ)  •  มุมดำ = คอยล์ร้อน"
-            : _ecuMode == 5 ? "แกน TPS เริ่มที่ 0%  •  ฟ้า = สุญญากาศลึก  •  แดง = ใกล้บรรยากาศ"
+            : _ecuMode == 5 ? "แก้ได้ = MAP เป้าหมายต่อ TPS x รอบ (ลิ้นเร่งไฟฟ้า)  •  0 = ไม่มีอากาศ"
             : "ฟ้า = หนา  •  เขียว = แรงสุด  •  เหลือง = บาง  •  แดง = บางเกิน";
         TxtR(g, legend, _fCap, Palette.Dim, gx + EN * cw, ly);
 
         // ---------- แถบเครื่องมือ ----------
         float by = 902f, bx = LX;
         void B(string t, float w, Action a, Color? col = null) { Btn(g, new RectangleF(bx, by, w, 44), t, false, col ?? Palette.Accent, a, _fXs); bx += w + 10; }
-        B("−−", 58, () => EcuAdjust(-1, true)); B("−", 58, () => EcuAdjust(-1, false)); B("+", 58, () => EcuAdjust(1, false)); B("++", 58, () => EcuAdjust(1, true));
-        B("เกลี่ย", 84, EcuSmooth, Palette.Blue); B("เท่ากัน", 90, EcuEqualize, Palette.Blue);
-        B("โรงงาน (ที่เลือก)", 158, EcuFactorySel, Palette.Green); B("โรงงาน (ทั้งตาราง)", 164, EcuFactoryAll, Palette.Red);
+        B("−−", 50, () => EcuAdjust(-1, true)); B("−", 50, () => EcuAdjust(-1, false)); B("+", 50, () => EcuAdjust(1, false)); B("++", 50, () => EcuAdjust(1, true));
+        B("เกลี่ย", 66, EcuSmooth, Palette.Blue); B("เท่ากัน", 76, EcuEqualize, Palette.Blue);
+        B("โรงงาน(เลือก)", 128, EcuFactorySel, Palette.Green); B("โรงงาน(ทั้งหมด)", 152, EcuFactoryAll, Palette.Red);
         if (_ecuMode == 2) B("ใกล้ MBT", 104, EcuNearMbt, Palette.Yellow);
+        if (_ecuMode == 0 || _ecuMode == 4) B("ตัดน้ำมัน 0", 122, EcuCutFuel, Palette.Red);
+        if (_ecuMode == 0 || _ecuMode == 4) B("เดินหอบ", 96, EcuHunt, Palette.Yellow);
 
         // ---------- ซ้ายล่าง: ช่องที่เลือก ----------
         int cc = _ecuC1, rr = _ecuR1;
@@ -222,7 +226,7 @@ public sealed partial class MainForm
         Txt(g, $"ช่องที่เลือก  {prpm:N0} rpm  •  โหลด {pload * 100f:0}%", _fCap, Palette.Dim, LX + 28, 972);
         Color afrC2 = s.Lambda > 1.12f ? Palette.Red : s.Lambda < 0.7f ? Palette.Blue : s.Lambda > 0.97f ? Palette.Yellow : Palette.Green;
         string warn = s.Egt > 1050f ? "ไอเสียร้อนจัด! เสี่ยงลูกสูบพัง" : m.KnockWot(prpm) > 0.02f && pload > 0.7f ? "น็อกที่ช่องนี้" : dl2 < -10f ? "ไฟอ่อนมาก แรงตก" : s.Lambda > 1.35f || s.Lambda < 0.6f ? "ส่วนผสมนอกช่วงจุดติด" : "";
-        Txt(g, $"AFR {s.Afr:0.0} (λ {s.Lambda:0.00})   ฉีด {s.PulseMs:0.00} ms ({s.Duty * 100f:0}%)   จบฉีด {s.Eoi:0}°   MAP {m.MapKpa(pload):0} kPa", _fXs, afrC2, LX + 340, 970);
+        Txt(g, $"AFR {(s.Afr >= 90f ? "∞ ตัดน้ำมัน" : s.Afr.ToString("0.0"))} (λ {s.Lambda:0.00})   ฉีด {s.PulseMs:0.00} ms ({s.Duty * 100f:0}%)   จบฉีด {s.Eoi:0}°   MAP {m.MapKpa(pload):0} kPa", _fXs, afrC2, LX + 340, 970);
         Txt(g, $"จุด {s.Adv:0.0}° / MBT {s.Mbt:0.0}°   คอยล์ {s.DwellMs:0.00} ms (ประกาย {s.Spark * 100f:0}%)   แรงบิด x{s.Mult:0.000}   EGT {s.Egt:0}°C" + (warn.Length > 0 ? "   ⚠ " + warn : ""),
             _fXs, warn.Length > 0 ? Palette.Yellow : dl2 > 1.5f ? Palette.Red : s.Spark < 0.95f ? Palette.Red : Palette.Dim, LX + 28, 1004);
 
@@ -295,7 +299,7 @@ public sealed partial class MainForm
                 float lam = ec.Lambda, dlt = ec.Adv - ec.Mbt;
                 Color afrCol = lam > 1.12f ? Palette.Red : lam < 0.7f ? Palette.Blue : lam > 0.97f ? Palette.Yellow : Palette.Green;
                 Color advCol = dlt > 1.5f ? Palette.Red : dlt < -8f ? Palette.Blue : Palette.Green;
-                DrawLiveBar(g, ix, 518, iw, "AFR (อากาศ:น้ำมัน)", $"{ec.Afr:0.0}  (λ {lam:0.00})", (lam - 0.6f) / 0.9f, afrCol, (0.89f - 0.6f) / 0.9f);
+                DrawLiveBar(g, ix, 518, iw, "AFR (อากาศ:น้ำมัน)", $"{(ec.Afr >= 90f ? "∞ ตัดน้ำมัน" : ec.Afr.ToString("0.0"))}  (λ {lam:0.00})", (lam - 0.6f) / 0.9f, afrCol, (0.89f - 0.6f) / 0.9f);
                 DrawLiveBar(g, ix, 560, iw, "จุดระเบิด (ขีดขาว = MBT)", $"{ec.Adv:0.0}°  ({(dlt >= 0 ? "แก่" : "อ่อน")} {Math.Abs(dlt):0.0}° จาก MBT)", ec.Adv / 50f, advCol, ec.Mbt / 50f);
                 DrawLiveBar(g, ix, 602, iw, "EGT (ก๊าซไอเสีย)", $"{ec.Egt:0} °C", (ec.Egt - 400f) / 800f, ec.Egt > 1050f ? Palette.Red : ec.Egt > 950f ? Palette.Yellow : Palette.Green, (900f - 400f) / 800f);
 

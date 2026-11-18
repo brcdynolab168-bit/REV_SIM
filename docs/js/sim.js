@@ -47,7 +47,7 @@ export class EngineSim {
     this._roadReset = false; this._dynoRequest = false;
     // สถานะ
     this.rpm = 0; this.thr = 0; this.cut = false; this.softK = 0; this.speed = 0; this.dist = 0; this.gear = 0;
-    this.clutchLock = 0; this.cvtS = 0; this.load = 0; this.knock = 0; this.ecuMult = 1; this.ecuAfr = 14.7; this.ecuAdv = 15; this.ecuDuty = 0; this.ecuEgt = 0; this.ecuMbt = 15; this.ecuPw = 0; this.ecuEoi = 0; this.ecuDwell = 0; this.ecuSpark = 1;
+    this.clutchLock = 0; this.cvtS = 0; this.load = 0; this.knock = 0; this.ecuMult = 1; this.ecuAfr = 14.7; this.ecuAdv = 15; this.ecuDuty = 0; this.ecuEgt = 0; this.ecuMbt = 15; this.ecuPw = 0; this.ecuEoi = 0; this.ecuDwell = 0; this.ecuSpark = 1; this.ecuMisfire = 0;
     this.dynoPhase = 0; this.dynoVersion = 0; this.dynoFailed = false; this.dynoTq = new Float32Array(DynoBins).fill(NaN);
     this._dynoSum = new Float64Array(DynoBins); this._dynoCnt = new Int32Array(DynoBins); this._dynoRpm = 0;
     this._blockPos = 0; this._idleInt = 0; this._huntPh = 0; this._huntRate = 0; this._idleWobble = 0;
@@ -103,7 +103,7 @@ export class EngineSim {
     const eff = idleThr + thr * (1 - idleThr);
     this.load = m.Load(eff, rpm);
     const ecu = m.EcuAt(rpm, this.load);
-    this.ecuMult = ecu.Mult; this.ecuAfr = ecu.Afr; this.ecuAdv = ecu.Adv; this.ecuDuty = ecu.Duty; this.ecuEgt = ecu.Egt; this.ecuMbt = ecu.Mbt; this.ecuPw = ecu.PulseMs; this.ecuEoi = ecu.Eoi; this.ecuDwell = ecu.DwellMs; this.ecuSpark = ecu.Spark;
+    this.ecuMult = ecu.Mult; this.ecuAfr = ecu.Afr; this.ecuAdv = ecu.Adv; this.ecuDuty = ecu.Duty; this.ecuEgt = ecu.Egt; this.ecuMbt = ecu.Mbt; this.ecuPw = ecu.PulseMs; this.ecuEoi = ecu.Eoi; this.ecuDwell = ecu.DwellMs; this.ecuSpark = ecu.Spark; this.ecuMisfire = ecu.Misfire;
     this.knock = m.Knock(rpm, this.load, ecu.KnockShift);
 
     const D = m.D;
@@ -194,6 +194,7 @@ export class EngineSim {
     const low = clamp(1 - (rpm - m.IdleRpm) / 2500, 0, 1) * (1 - load * 0.6);
     if (fire && this._unit() < m.Lope * 0.30 * low) fire = false;
     if (fire && this._unit() < m.LowCrMisfire * (0.4 + low)) fire = false;
+    if (fire && this._unit() < (this.ecuMisfire || 0)) fire = false;      // ตารางจูนกล่อง: บาง/หนาเกิน ประกายอ่อน ตัดน้ำมัน -> จุดไม่ติดเป็นจังหวะ ๆ
     if (fire && this.softK > 0 && this._unit() < this.softK * 0.6) fire = false;
     if (fire && rpm > m.FloatRpm && this._unit() < 0.45) fire = false;
     this._cycleFiring = fire;

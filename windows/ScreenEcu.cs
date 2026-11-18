@@ -9,13 +9,7 @@ public sealed partial class MainForm
     private static readonly string[] EcuModeNames = { "น้ำมัน ms", "องศาฉีด °", "องศาจุด °", "ไทม์คอยล์ ms", "AFR", "MAP kPa" };
     private static readonly int ModeCount = 6;
 
-    /// <summary>ตาราง MAP เป็นผลลัพธ์ (รอบ x คันเร่ง) แก้ไม่ได้</summary>
-    private bool EcuReadOnly()
-    {
-        if (_ecuMode != 5) return false;
-        Toast("ตาราง MAP อ่านอย่างเดียว (เป็นผลของรอบ x คันเร่ง) แก้ที่ตารางอื่น");
-        return true;
-    }
+    private bool EcuReadOnly() => false;
 
     private bool IsEcuTab => GarageTabs[_tab].Name == "จูนกล่อง";
 
@@ -31,11 +25,12 @@ public sealed partial class MainForm
         1 => _draft.EcuEoi ??= _preview.FactoryEoiTable(),
         2 => _draft.EcuIgn ??= _preview.FactoryIgnTable(),
         3 => _draft.EcuDwell ??= _preview.FactoryDwellTable(),
+        5 => _draft.EcuMap ??= _preview.FactoryMapTable(),
         _ => _draft.EcuMs ??= _preview.FactoryMsTable(),
     };
     private float[] EcuFactory(int mode) => mode switch
     {
-        1 => _preview.FactoryEoiTable(), 2 => _preview.FactoryIgnTable(), 3 => _preview.FactoryDwellTable(), _ => _preview.FactoryMsTable(),
+        1 => _preview.FactoryEoiTable(), 2 => _preview.FactoryIgnTable(), 3 => _preview.FactoryDwellTable(), 5 => _preview.FactoryMapTable(), _ => _preview.FactoryMsTable(),
     };
     /// <summary>(ขั้นละเอียด, ขั้นหยาบ, ต่ำสุด, สูงสุด, ปัดเศษ)</summary>
     private static (float Fine, float Coarse, float Lo, float Hi, float Round) EcuSpec(int mode) => mode switch
@@ -43,7 +38,8 @@ public sealed partial class MainForm
         1 => (5f, 20f, 0f, 560f, 1f),
         2 => (0.5f, 2f, -5f, 50f, 0.1f),
         3 => (0.1f, 0.5f, 0.5f, 9f, 0.01f),
-        _ => (0.1f, 0.5f, 0.3f, 40f, 0.01f),
+        5 => (1f, 5f, 0f, 115f, 1f),
+        _ => (0.1f, 0.5f, 0f, 40f, 0.01f),
     };
 
     private static Color Mix(Color a, Color b, float t)
@@ -66,7 +62,7 @@ public sealed partial class MainForm
                 // โหมด AFR: ตั้ง AFR เป้าหมายของช่อง แล้วแปลงเป็นเวลาฉีด (ms)
                 float rpmC = m.EcuRpmAt(c), loadR = EngineModel.EcuLoadAt(r);
                 float cur = m.EcuAt(rpmC, loadR).Afr;
-                t[r * EN + c] = Math.Clamp(MathF.Round(m.MsForAfr(rpmC, loadR, cur + (coarse ? 0.5f : 0.1f) * dir) * 100f) / 100f, 0.3f, 40f);
+                t[r * EN + c] = Math.Clamp(MathF.Round(m.MsForAfr(rpmC, loadR, cur + (coarse ? 0.5f : 0.1f) * dir) * 100f) / 100f, 0f, 40f);
             }
         }
         else
@@ -124,10 +120,36 @@ public sealed partial class MainForm
         DraftChanged();
     }
 
+    /// <summary>ตัดน้ำมันช่องที่เลือก (เวลาฉีด 0 ms = ไม่มีการเผาไหม้) ใช้ทำอาการเดินหอบ/ทดลองตัดช่วงรอบ</summary>
+    private void EcuCutFuel()
+    {
+        EcuRange(out int c0, out int c1, out int r0, out int r1);
+        var t = EcuTable(0);
+        for (int r = r0; r <= r1; r++) for (int c = c0; c <= c1; c++) t[r * EN + c] = 0f;
+        DraftChanged();
+        Toast("ตัดน้ำมันช่องที่เลือกแล้ว (0 ms)  ตัดช่วงเดินเบาแล้วลองเปิดเครื่องจูนสด: จะเดินหอบ");
+    }
+
+    /// <summary>ทำอาการเดินหอบ: ตัดน้ำมันทุกโหลดในช่วงรอบเหนือรอบเดินเบาขึ้นไป (~0.95-1.55 เท่า) รอบจะตกลงใต้ช่วงที่ตัด น้ำมันกลับมา รอบขึ้นเข้าช่วงตัดอีก วนเป็นจังหวะ</summary>
+    private void EcuHunt()
+    {
+        var m = _preview;
+        var t = EcuTable(0);
+        float lo = m.IdleRpm * 0.95f, hi = m.IdleRpm * 1.55f;
+        for (int c = 0; c < EN; c++)
+        {
+            float rpm = m.EcuRpmAt(c);
+            if (rpm < lo || rpm > hi) continue;
+            for (int r = 0; r < EN; r++) t[r * EN + c] = 0f;
+        }
+        DraftChanged();
+        Toast($"ตัดน้ำมันช่วงรอบ {lo:N0}-{hi:N0} ทุกโหลดแล้ว เปิดเครื่องจูนสดแล้วดูรอบเดินเบาเหวี่ยง (เดินหอบ)");
+    }
+
     private void EcuFactoryAll()
     {
         if (EcuReadOnly()) return;
-        switch (EditMode) { case 1: _draft.EcuEoi = null; break; case 2: _draft.EcuIgn = null; break; case 3: _draft.EcuDwell = null; break; default: _draft.EcuMs = null; break; }
+        switch (EditMode) { case 1: _draft.EcuEoi = null; break; case 2: _draft.EcuIgn = null; break; case 3: _draft.EcuDwell = null; break; case 5: _draft.EcuMap = null; break; default: _draft.EcuMs = null; break; }
         DraftChanged();
         Toast("คืนตารางเป็นค่าโรงงานแล้ว");
     }
