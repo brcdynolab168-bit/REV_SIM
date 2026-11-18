@@ -162,7 +162,8 @@ export class EngineSim {
     if (auto) {
       this._tcSmooth += (Math.max(tc, 0) - this._tcSmooth) * 0.003;
       const ff = Cvt.ff(d, omegaE, this.cvtS), fr = Cvt.fr(d, this._tcSmooth, this.cvtS);
-      const ds = clamp((ff - fr) / Cvt.FScale, -1, 1);
+      let ds = clamp((ff - fr) / Cvt.FScale, -1, 1);
+      if (ds > 0) ds *= clamp(1 - Math.abs(slipRpm) / 800, 0, 1) * clamp(lock01 * 4, 0, 1);   // สายพานไม่ไล่ขึ้นตอนคลัตช์ยังลื่น/ไม่จับ (ไม่มีโหลด สายพานหลวม) กันอัตราทดแกว่งขึ้นแล้วตกตอนออกตัว
       this.cvtS = clamp(this.cvtS + ds * Cvt.Rate * dt, 0, 1);
     }
     const inertia = m.Inertia * (1 - 0.65 * lock01);

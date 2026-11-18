@@ -836,4 +836,5 @@ if (hashV.includes('nosound')) document.getElementById('splash').hidden = true;
 const startPage = hashV.find(x => ['menu', 'garage', 'drive', 'settings'].includes(x));
 if (startPage) page = startPage;
 if (hashV.includes('advisor')) { page = 'garage'; advisorOn = true; }
+window.__S = S;
 tick();

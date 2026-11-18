@@ -359,6 +359,7 @@ public sealed class EngineSim
             float ff = Cvt.Ff(d, omegaE, _cvtS);
             float fr = Cvt.Fr(d, _tcSmooth, _cvtS);
             float ds = Clamp((ff - fr) / Cvt.FScale, -1f, 1f);
+            if (ds > 0f) ds *= Clamp(1f - MathF.Abs(slipRpm) / 800f, 0f, 1f) * Clamp(lock01 * 4f, 0f, 1f);   // สายพานไม่ไล่ขึ้นตอนคลัตช์ยังลื่น/ไม่จับ (ไม่มีโหลด) กันอัตราทดแกว่งขึ้นแล้วตกตอนออกตัว
             _cvtS = Clamp(_cvtS + ds * Cvt.Rate * dt, 0f, 1f);
         }
 
