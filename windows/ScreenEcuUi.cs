@@ -235,24 +235,16 @@ public sealed partial class MainForm
         int cc = _ecuC1, rr = _ecuR1;
         float prpm = m.EcuRpmAt(cc), pload = EngineModel.EcuLoadAt(rr);
         var s = m.EcuAt(prpm, pload);
-        PanelBox(g, new RectangleF(RX, 672, RW, 134), $"ช่องที่เลือก  {prpm:N0} rpm  โหลด {pload * 100f:0}%");
+        PanelBox(g, new RectangleF(RX, 672, RW, 112), $"ช่องที่เลือก  {prpm:N0} rpm  โหลด {pload * 100f:0}%");
         Color afrC2 = s.Lambda > 1.12f ? Palette.Red : s.Lambda < 0.7f ? Palette.Blue : s.Lambda > 0.97f ? Palette.Yellow : Palette.Green;
         Txt(g, $"AFR {s.Afr:0.0} (λ {s.Lambda:0.00})  •  ฉีด {s.PulseMs:0.00} ms  •  หัวฉีด {s.Duty * 100f:0}%", _fXs, afrC2, RX + 24, 706);
         float dl2 = s.Adv - s.Mbt;
         Txt(g, $"จุด {s.Adv:0.0}°  MBT {s.Mbt:0.0}°  ({(dl2 >= 0 ? "แก่" : "อ่อน")} {Math.Abs(dl2):0.0}°)  •  แรงบิด x{s.Mult:0.000}", _fXs, dl2 > 1.5f ? Palette.Red : dl2 < -8f ? Palette.Blue : Palette.Green, RX + 24, 730);
         string warn = s.Egt > 1050f ? "ไอเสียร้อนจัด! เสี่ยงลูกสูบพัง" : m.KnockWot(prpm) > 0.02f && pload > 0.7f ? "น็อกที่ช่องนี้: ลดองศา/เติมน้ำมัน" : dl2 < -10f ? "ไฟอ่อนมาก: แรงตก ไอเสียร้อน" : s.Lambda > 1.35f || s.Lambda < 0.6f ? "ส่วนผสมนอกช่วงจุดติด" : "";
         Txt(g, $"EGT ~{s.Egt:0}°C" + (warn.Length > 0 ? "  •  " + warn : ""), _fXs, warn.Length > 0 ? Palette.Yellow : Palette.Dim, RX + 24, 754);
-        Txt(g, "ปุ่ม: ลูกศร เลือก  •  PgUp/PgDn หรือ [ ] ปรับ  •  D สลับโหมด", _fCap, Palette.Dim, RX + 24, 780);
-
+        
         // ---------- ขวา: กราฟแรงบิด/แรงม้า (เห็นผลของตารางทันที) ----------
-        var rpms = new List<float>(); var tq = new List<float>(); var hp = new List<float>();
-        for (float r = 2000f; r <= _draft.Limiter; r += 100f)
-        {
-            float t = m.BrakeTorqueWot(r);
-            rpms.Add(r); tq.Add(MathF.Max(0f, t)); hp.Add(MathF.Max(0f, EngineModel.Hp(t, r)));
-        }
-        DrawChart(g, new RectangleF(RX, 816, RW, 196), rpms.ToArray(), tq.ToArray(), hp.ToArray(), _draft.Limiter);
-        TxtR(g, $"{m.PeakHp:0.0} HP @ {m.PeakPsRpm:N0}   {m.PeakTq:0.0} N·m", _fXs, Palette.Accent, RX + RW - 18, 1016);
+        DrawCompareChart(g, new RectangleF(RX, 794, RW, 246), m, _draft.Limiter);
 
         if (_showEcuHelp) DrawEcuHelp(g);
     }

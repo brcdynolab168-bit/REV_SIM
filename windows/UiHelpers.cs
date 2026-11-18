@@ -270,48 +270,120 @@ public sealed partial class MainForm
     }
 
     // ---------- กราฟกำลัง/แรงบิด (HP / N·m) ----------
-    private void DrawChart(Graphics g, RectangleF r, float[] rpm, float[] tq, float[] hp, float maxRpm)
+    /// <summary>
+    /// กราฟแรงบิด/แรงม้า  เส้นทึบ = ค่าปัจจุบัน (หลัง)  เส้นประ = ค่าก่อนหน้า (tq0/hp0 ถ้ามี)
+    /// แรเงาส่วนต่างกำลัง (เขียว = ดีขึ้น แดง = แย่ลง) + แถบผลต่างกำลังรายรอบด้านล่าง + สรุปพีคก่อน/หลัง
+    /// </summary>
+    private void DrawChart(Graphics g, RectangleF r, float[] rpm, float[] tq, float[] hp, float maxRpm, float[]? tq0 = null, float[]? hp0 = null)
     {
         FillRR(g, r, 4, Color.FromArgb(14, 17, 21));
         DrawRR(g, r, 4, Palette.Border, 1f);
+        bool cmp = tq0 != null && hp0 != null;
         float top = 1f;
         for (int i = 0; i < rpm.Length; i++)
-            if (!float.IsNaN(tq[i])) top = MathF.Max(top, MathF.Max(tq[i], hp[i]));
-        float stepV = top > 120f ? 20f : top > 60f ? 10f : top > 25f ? 5f : 2f;
-        top = MathF.Ceiling(top * 1.1f / stepV) * stepV;
-        float xMax = MathF.Max(maxRpm, 4000f);
-        var grid = Pn(Color.FromArgb(36, 42, 51), 1f);
-        float px = r.X + 56, pw = r.Width - 76, py = r.Y + 40, ph = r.Height - 76;
-
-        for (float k = 0; k <= xMax; k += 1000f)
         {
-            float x = px + k / xMax * pw;
-            g.DrawLine(k % 2000f == 0 ? Pn(Color.FromArgb(48, 55, 66), 1f) : grid, x, py, x, py + ph);
-            if (k % 2000f == 0) TxtC(g, (k / 1000f).ToString("0"), _fXs, Palette.Dim, x, py + ph + 18);
+            if (!float.IsNaN(tq[i])) top = MathF.Max(top, MathF.Max(tq[i], hp[i]));
+            if (cmp && !float.IsNaN(tq0![i])) top = MathF.Max(top, MathF.Max(tq0[i], hp0![i]));
         }
-        TxtR(g, "x1000 rpm", _fXs, Palette.Dim, r.Right - 14, r.Y + 8);
+        float xMax = MathF.Max(maxRpm, 4000f);
+        float xMin = rpm.Length > 0 ? MathF.Floor(rpm[0] / 1000f) * 1000f : 0f;
+        var grid = Pn(Color.FromArgb(36, 42, 51), 1f);
+        float headH = cmp ? 62f : 40f, stripH = cmp ? 30f : 0f, gap = cmp ? 22f : 0f;
+        float px = r.X + 56, pw = r.Width - 76, py = r.Y + headH, ph = r.Height - headH - stripH - gap - 28;
+        float stepV = top > 120f ? 20f : top > 60f ? 10f : top > 25f ? 5f : 2f;
+        while (ph / MathF.Max(1f, top / stepV) < 26f) stepV *= 2f;
+        top = MathF.Ceiling(top * 1.12f / stepV) * stepV;
+        float XS(float v) => px + (v - xMin) / (xMax - xMin) * pw;
+
+        for (float k = MathF.Ceiling(xMin / 1000f) * 1000f; k <= xMax; k += 1000f)
+        {
+            float x = XS(k);
+            g.DrawLine(k % 2000f == 0 ? Pn(Color.FromArgb(48, 55, 66), 1f) : grid, x, py, x, py + ph + gap + stripH);
+            if (k % 2000f == 0) TxtC(g, (k / 1000f).ToString("0"), _fXs, Palette.Dim, x, py + ph + gap + stripH + 14);
+        }
+        TxtR(g, "x1000 rpm", _fCap, Palette.Dim, r.Right - 14, py + ph + gap + stripH + 6);
         for (float v = 0; v <= top; v += stepV)
         {
             float y = py + ph - v / top * ph;
             g.DrawLine(grid, px, y, px + pw, y);
             TxtR(g, v.ToString("0"), _fXs, Palette.Dim, px - 6, y - 12);
         }
+        float X(int i) => XS(rpm[i]);
+        float Y(float v) => py + ph - Math.Clamp(v, 0f, top) / top * ph;
 
-        void Curve(float[] vals, Color c)
+        if (cmp)       // แรเงาส่วนต่างของกำลัง
+        {
+            for (int i = 0; i + 1 < rpm.Length; i++)
+            {
+                if (float.IsNaN(hp[i]) || float.IsNaN(hp[i + 1]) || float.IsNaN(hp0![i]) || float.IsNaN(hp0[i + 1])) continue;
+                float dAvg = (hp[i] - hp0[i] + hp[i + 1] - hp0[i + 1]) * 0.5f;
+                g.FillPolygon(Br(Color.FromArgb(95, dAvg >= 0f ? Palette.Green : Palette.Red)),
+                    new[] { new PointF(X(i), Y(hp0[i])), new PointF(X(i + 1), Y(hp0[i + 1])), new PointF(X(i + 1), Y(hp[i + 1])), new PointF(X(i), Y(hp[i])) });
+            }
+        }
+
+        void Curve(float[] vals, Color c, bool dashed)
         {
             var pts = new List<PointF>();
+            for (int i = 0; i < rpm.Length; i++) if (!float.IsNaN(vals[i])) pts.Add(new PointF(X(i), Y(vals[i])));
+            if (pts.Count < 2) return;
+            using var pen = new Pen(dashed ? Color.FromArgb(230, Mix(c, Color.White, 0.35f)) : c, dashed ? 2.6f : 3.6f) { LineJoin = LineJoin.Round };
+            if (dashed) pen.DashPattern = new[] { 4f, 2.5f };
+            g.DrawLines(pen, pts.ToArray());
+        }
+        if (cmp) { Curve(tq0!, Palette.Blue, true); Curve(hp0!, Palette.Accent, true); }
+        Curve(tq, Palette.Blue, false);
+        Curve(hp, Palette.Accent, false);
+
+        int Peak(float[] v) { int bi = -1; for (int i = 0; i < v.Length; i++) if (!float.IsNaN(v[i]) && (bi < 0 || v[i] > v[bi])) bi = i; return bi; }
+        void Mark(float[] v, Color c, float[]? v0)
+        {
+            int i = Peak(v); if (i < 0) return;
+            if (cmp && v0 != null) { int j = Peak(v0); if (j >= 0) g.DrawEllipse(Pn(c, 2.4f), X(j) - 6, Y(v0[j]) - 6, 12, 12); }
+            g.FillEllipse(Br(c), X(i) - 6, Y(v[i]) - 6, 12, 12);
+            g.DrawEllipse(Pn(Color.White, 1.6f), X(i) - 6, Y(v[i]) - 6, 12, 12);
+        }
+        Mark(hp, Palette.Accent, hp0); Mark(tq, Palette.Blue, tq0);
+
+        // แถบผลต่างกำลังรายรอบ
+        if (cmp)
+        {
+            float sy = py + ph + gap, sh = stripH, mid = sy + sh / 2f, maxD = 0.5f;
+            for (int i = 0; i < rpm.Length; i++) if (!float.IsNaN(hp[i]) && !float.IsNaN(hp0![i])) maxD = MathF.Max(maxD, MathF.Abs(hp[i] - hp0[i]));
+            FillRR(g, new RectangleF(px, sy, pw, sh), 2, Color.FromArgb(22, 26, 32));
+            g.DrawLine(Pn(Color.FromArgb(70, 78, 90), 1f), px, mid, px + pw, mid);
+            float bw = MathF.Max(2f, pw / rpm.Length);
             for (int i = 0; i < rpm.Length; i++)
             {
-                if (float.IsNaN(vals[i])) continue;
-                pts.Add(new PointF(px + rpm[i] / xMax * pw, py + ph - Math.Clamp(vals[i], 0f, top) / top * ph));
+                if (float.IsNaN(hp[i]) || float.IsNaN(hp0![i])) continue;
+                float d = hp[i] - hp0[i], hgt = d / maxD * (sh / 2f - 1f);
+                g.FillRectangle(Br(d >= 0f ? Palette.Green : Palette.Red), X(i) - bw / 2f, hgt >= 0f ? mid - hgt : mid, bw, MathF.Abs(hgt));
             }
-            if (pts.Count >= 2) g.DrawLines(Pn(c, 2.6f), pts.ToArray());
+            Txt(g, $"ผลต่างกำลังรายรอบ (±{maxD:0.0} HP)   เขียว = เพิ่ม  แดง = ลด", _fCap, Palette.Dim, px, sy - 20);
         }
-        Curve(tq, Palette.Blue);
-        Curve(hp, Palette.Accent);
-        g.FillRectangle(Br(Palette.Blue), px, r.Y + 14, 22, 4);
-        Txt(g, "แรงบิด N·m", _fSm, Palette.Blue, px + 30, r.Y + 6);
-        g.FillRectangle(Br(Palette.Accent), px + 190, r.Y + 14, 22, 4);
-        Txt(g, "กำลัง HP", _fSm, Palette.Accent, px + 220, r.Y + 6);
+
+        // คำอธิบาย + สรุปพีค
+        void Sample(float x, float y, Color c, bool dashed)
+        {
+            using var pen = new Pen(dashed ? Mix(c, Color.White, 0.35f) : c, dashed ? 2.6f : 3.6f);
+            if (dashed) pen.DashPattern = new[] { 4f, 2.5f };
+            g.DrawLine(pen, x, y, x + 30, y);
+        }
+        if (!cmp)
+        {
+            Sample(px, r.Y + 17, Palette.Blue, false); Txt(g, "แรงบิด N·m", _fSm, Palette.Blue, px + 38, r.Y + 5);
+            Sample(px + 200, r.Y + 17, Palette.Accent, false); Txt(g, "กำลัง HP", _fSm, Palette.Accent, px + 238, r.Y + 5);
+            return;
+        }
+        Sample(px, r.Y + 17, Palette.Text, false); Txt(g, "เส้นทึบ = หลัง (กำลังแก้)", _fXs, Palette.Text, px + 38, r.Y + 6);
+        Sample(px + 300, r.Y + 17, Palette.Text, true); Txt(g, "เส้นประ = ก่อน (ที่ติดตั้ง)", _fXs, Palette.Dim, px + 338, r.Y + 6);
+        int ih = Peak(hp), ih0 = Peak(hp0!), it = Peak(tq), it0 = Peak(tq0!);
+        if (ih >= 0 && ih0 >= 0 && it >= 0 && it0 >= 0)
+        {
+            float dh = hp[ih] - hp0![ih0], dt = tq[it] - tq0![it0];
+            string a = $"HP {hp[ih]:0.0} ({(dh >= 0f ? "+" : "")}{dh:0.0}) @{rpm[ih]:N0}", b = $"N·m {tq[it]:0.0} ({(dt >= 0f ? "+" : "")}{dt:0.0}) @{rpm[it]:N0}";
+            Txt(g, a, _fCap, Palette.Accent, px, r.Y + 38);
+            Txt(g, b, _fCap, Palette.Blue, px + (pw > 560f ? 280 : 250), r.Y + 38);
+        }
     }
 }

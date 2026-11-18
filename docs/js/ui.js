@@ -152,38 +152,90 @@ export class Ui {
     }
     g.stroke();
   }
-  chart(r, rpm, tq, hp, maxRpm) {
-    const g = this.g;
+  /**
+   * กราฟแรงบิด/แรงม้า  เส้นทึบ = ค่าปัจจุบัน (หลัง)  เส้นประ = ค่าก่อนหน้า (base = {tq, hp} ถ้ามี)
+   * แรเงาส่วนต่างกำลัง (เขียว = ดีขึ้น แดง = แย่ลง) + แถบผลต่างกำลังรายรอบด้านล่าง + สรุปพีคก่อน/หลัง
+   */
+  chart(r, rpm, tq, hp, maxRpm, base = null) {
+    const g = this.g, cmp = !!base, tq0 = base?.tq, hp0 = base?.hp;
     this.fillRR(r, 4, 'rgb(14,17,21)'); this.drawRR(r, 4, Palette.Border, 1);
     let top = 1;
-    for (let i = 0; i < rpm.length; i++) if (!Number.isNaN(tq[i])) top = Math.max(top, tq[i], hp[i]);
-    const stepV = top > 120 ? 20 : top > 60 ? 10 : top > 25 ? 5 : 2;
-    top = Math.ceil(top * 1.1 / stepV) * stepV;
-    const xMax = Math.max(maxRpm, 4000), grid = 'rgb(36,42,51)';
-    const px_ = r.x + 56, pw = r.w - 76, py = r.y + 40, ph = r.h - 76;
-    for (let k = 0; k <= xMax; k += 1000) {
-      const x = px_ + k / xMax * pw;
-      this.line(x, py, x, py + ph, k % 2000 === 0 ? 'rgb(48,55,66)' : grid, 1);
-      if (k % 2000 === 0) this.txtC(String(k / 1000), Fonts.xs, Palette.Dim, x, py + ph + 18);
+    for (let i = 0; i < rpm.length; i++) {
+      if (!Number.isNaN(tq[i])) top = Math.max(top, tq[i], hp[i]);
+      if (cmp && !Number.isNaN(tq0[i])) top = Math.max(top, tq0[i], hp0[i]);
     }
-    this.txtR('x1000 rpm', Fonts.xs, Palette.Dim, r.x + r.w - 14, r.y + 8);
+    const xMax = Math.max(maxRpm, 4000), xMin = rpm.length ? Math.floor(rpm[0] / 1000) * 1000 : 0, grid = 'rgb(36,42,51)', headH = cmp ? 62 : 40, stripH = cmp ? 30 : 0, gap = cmp ? 22 : 0;
+    const px_ = r.x + 56, pw = r.w - 76, py = r.y + headH, ph = r.h - headH - stripH - gap - 28;
+    let stepV = top > 120 ? 20 : top > 60 ? 10 : top > 25 ? 5 : 2;
+    while (ph / Math.max(1, top / stepV) < 26) stepV *= 2;
+    top = Math.ceil(top * 1.12 / stepV) * stepV;
+    const XS = v => px_ + (v - xMin) / (xMax - xMin) * pw;
+    for (let k = Math.ceil(xMin / 1000) * 1000; k <= xMax; k += 1000) {
+      const x = XS(k);
+      this.line(x, py, x, py + ph + gap + stripH, k % 2000 === 0 ? 'rgb(48,55,66)' : grid, 1);
+      if (k % 2000 === 0) this.txtC(String(k / 1000), Fonts.xs, Palette.Dim, x, py + ph + gap + stripH + 14);
+    }
+    this.txtR('x1000 rpm', Fonts.cap, Palette.Dim, r.x + r.w - 14, py + ph + gap + stripH + 6);
     for (let v = 0; v <= top; v += stepV) {
       const y = py + ph - v / top * ph;
       this.line(px_, y, px_ + pw, y, grid, 1);
       this.txtR(String(v), Fonts.xs, Palette.Dim, px_ - 6, y - 12);
     }
-    const curve = (vals, c) => {
-      g.strokeStyle = c; g.lineWidth = 2.6; g.beginPath(); let n = 0;
+    const X = i => XS(rpm[i]), Y = v => py + ph - Math.min(Math.max(v, 0), top) / top * ph;
+    if (cmp) {
+      for (let i = 0; i + 1 < rpm.length; i++) {
+        if ([hp[i], hp[i + 1], hp0[i], hp0[i + 1]].some(Number.isNaN)) continue;
+        g.fillStyle = (hp[i] - hp0[i] + hp[i + 1] - hp0[i + 1]) >= 0 ? 'rgba(72,204,124,0.37)' : 'rgba(228,62,56,0.37)';
+        g.beginPath(); g.moveTo(X(i), Y(hp0[i])); g.lineTo(X(i + 1), Y(hp0[i + 1])); g.lineTo(X(i + 1), Y(hp[i + 1])); g.lineTo(X(i), Y(hp[i])); g.closePath(); g.fill();
+      }
+    }
+    const light = c => (c === Palette.Blue ? 'rgb(150,215,245)' : c === Palette.Accent ? 'rgb(255,205,130)' : c);
+    const curve = (vals, c, dashed) => {
+      g.strokeStyle = dashed ? light(c) : c; g.lineWidth = dashed ? 2.6 : 3.6; g.lineJoin = 'round'; g.setLineDash(dashed ? [4, 2.5] : []);
+      g.beginPath(); let n = 0;
       for (let i = 0; i < rpm.length; i++) {
         if (Number.isNaN(vals[i])) continue;
-        const x = px_ + rpm[i] / xMax * pw, y = py + ph - Math.min(Math.max(vals[i], 0), top) / top * ph;
-        if (n++ === 0) g.moveTo(x, y); else g.lineTo(x, y);
+        if (n++ === 0) g.moveTo(X(i), Y(vals[i])); else g.lineTo(X(i), Y(vals[i]));
       }
       if (n >= 2) g.stroke();
+      g.setLineDash([]);
     };
-    curve(tq, Palette.Blue); curve(hp, Palette.Accent);
-    this.rect(px_, r.y + 14, 22, 4, Palette.Blue); this.txt('แรงบิด N·m', Fonts.sm, Palette.Blue, px_ + 30, r.y + 6);
-    this.rect(px_ + 190, r.y + 14, 22, 4, Palette.Accent); this.txt('กำลัง HP', Fonts.sm, Palette.Accent, px_ + 220, r.y + 6);
+    if (cmp) { curve(tq0, Palette.Blue, true); curve(hp0, Palette.Accent, true); }
+    curve(tq, Palette.Blue, false); curve(hp, Palette.Accent, false);
+    const peak = v => { let bi = -1; for (let i = 0; i < v.length; i++) if (!Number.isNaN(v[i]) && (bi < 0 || v[i] > v[bi])) bi = i; return bi; };
+    const mark = (v, c, v0) => {
+      const i = peak(v); if (i < 0) return;
+      const j = cmp ? peak(v0) : -1;
+      if (j >= 0) { g.beginPath(); g.arc(X(j), Y(v0[j]), 6, 0, 7); g.strokeStyle = c; g.lineWidth = 2.4; g.stroke(); }
+      g.beginPath(); g.arc(X(i), Y(v[i]), 6, 0, 7); g.fillStyle = c; g.fill(); g.strokeStyle = '#fff'; g.lineWidth = 1.6; g.stroke();
+    };
+    mark(hp, Palette.Accent, hp0); mark(tq, Palette.Blue, tq0);
+    if (cmp) {      // แถบผลต่างกำลังรายรอบ
+      const sy = py + ph + gap, sh = stripH, mid = sy + sh / 2;
+      let maxD = 0.5; for (let i = 0; i < rpm.length; i++) if (!Number.isNaN(hp[i]) && !Number.isNaN(hp0[i])) maxD = Math.max(maxD, Math.abs(hp[i] - hp0[i]));
+      this.rect(px_, sy, pw, sh, 'rgb(22,26,32)'); this.line(px_, mid, px_ + pw, mid, 'rgb(70,78,90)', 1);
+      const bw = Math.max(2, pw / rpm.length);
+      for (let i = 0; i < rpm.length; i++) {
+        if (Number.isNaN(hp[i]) || Number.isNaN(hp0[i])) continue;
+        const d = hp[i] - hp0[i], hgt = d / maxD * (sh / 2 - 1);
+        this.rect(X(i) - bw / 2, hgt >= 0 ? mid - hgt : mid, bw, Math.abs(hgt), d >= 0 ? Palette.Green : Palette.Red);
+      }
+      this.txt(`ผลต่างกำลังรายรอบ (±${maxD.toFixed(1)} HP)   เขียว = เพิ่ม  แดง = ลด`, Fonts.cap, Palette.Dim, px_, sy - 20);
+    }
+    const sample = (x, y, c, dashed) => { g.strokeStyle = dashed ? light(c) : c; g.lineWidth = dashed ? 2.6 : 3.6; g.setLineDash(dashed ? [4, 2.5] : []); g.beginPath(); g.moveTo(x, y); g.lineTo(x + 30, y); g.stroke(); g.setLineDash([]); };
+    if (!cmp) {
+      sample(px_, r.y + 17, Palette.Blue, false); this.txt('แรงบิด N·m', Fonts.sm, Palette.Blue, px_ + 38, r.y + 5);
+      sample(px_ + 200, r.y + 17, Palette.Accent, false); this.txt('กำลัง HP', Fonts.sm, Palette.Accent, px_ + 238, r.y + 5);
+      return;
+    }
+    sample(px_, r.y + 17, Palette.Text, false); this.txt('เส้นทึบ = หลัง (กำลังแก้)', Fonts.xs, Palette.Text, px_ + 38, r.y + 6);
+    sample(px_ + 300, r.y + 17, Palette.Text, true); this.txt('เส้นประ = ก่อน (ที่ติดตั้ง)', Fonts.xs, Palette.Dim, px_ + 338, r.y + 6);
+    const ih = peak(hp), ih0 = peak(hp0), it = peak(tq), it0 = peak(tq0);
+    if (ih >= 0 && ih0 >= 0 && it >= 0 && it0 >= 0) {
+      const dh = hp[ih] - hp0[ih0], dt = tq[it] - tq0[it0], sg = v => (v >= 0 ? '+' : '') + v.toFixed(1);
+      this.txt(`HP ${hp[ih].toFixed(1)} (${sg(dh)}) @${Math.round(rpm[ih]).toLocaleString()}`, Fonts.cap, Palette.Accent, px_, r.y + 38);
+      this.txt(`N·m ${tq[it].toFixed(1)} (${sg(dt)}) @${Math.round(rpm[it]).toLocaleString()}`, Fonts.cap, Palette.Blue, px_ + (pw > 560 ? 280 : 250), r.y + 38);
+    }
   }
 }
 export const inRect = (r, p) => p.x >= r.x && p.x < r.x + r.w && p.y >= r.y && p.y < r.y + r.h;

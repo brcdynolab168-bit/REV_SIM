@@ -410,6 +410,29 @@ public sealed partial class MainForm
     //  อู่: แผงสมรรถนะ (ขวา)
     // ====================================================================
 
+    private EngineModel? _baseModel;
+    private EngineDesign? _baseSrc;
+    /// <summary>เครื่องที่ติดตั้งอยู่ (ใช้เป็นเส้น "ก่อน" ในกราฟเทียบ)</summary>
+    private EngineModel BaseModel()
+    {
+        if (_baseModel == null || !ReferenceEquals(_baseSrc, _save.Design)) { _baseSrc = _save.Design; _baseModel = new EngineModel(_save.Design); }
+        return _baseModel;
+    }
+
+    private void DrawCompareChart(Graphics g, RectangleF rect, EngineModel m, float limiter)
+    {
+        var bm = BaseModel();
+        var rpms = new List<float>(); var tq = new List<float>(); var hp = new List<float>(); var tq0 = new List<float>(); var hp0 = new List<float>();
+        for (float r = 2000f; r <= limiter; r += 100f)
+        {
+            float t = m.BrakeTorqueWot(r);
+            rpms.Add(r); tq.Add(MathF.Max(0f, t)); hp.Add(MathF.Max(0f, EngineModel.Hp(t, r)));
+            if (r <= bm.D.Limiter) { float t0 = bm.BrakeTorqueWot(r); tq0.Add(MathF.Max(0f, t0)); hp0.Add(MathF.Max(0f, EngineModel.Hp(t0, r))); }
+            else { tq0.Add(float.NaN); hp0.Add(float.NaN); }
+        }
+        DrawChart(g, rect, rpms.ToArray(), tq.ToArray(), hp.ToArray(), limiter, tq0.ToArray(), hp0.ToArray());
+    }
+
     private void DrawGarageStats(Graphics g)
     {
         var m = _preview;
@@ -432,16 +455,8 @@ public sealed partial class MainForm
             Txt(g, sbr.ToString(), _fXs, Math.Abs(d.CalK - 1f) > 0.005f ? Palette.Green : Palette.Yellow, X + 28, 292);
         }
 
-        // กราฟ
-        var rpms = new List<float>();
-        var tq = new List<float>();
-        var hp = new List<float>();
-        for (float r = 2000f; r <= d.Limiter; r += 100f)
-        {
-            float t = m.BrakeTorqueWot(r);
-            rpms.Add(r); tq.Add(MathF.Max(0f, t)); hp.Add(MathF.Max(0f, EngineModel.Hp(t, r)));
-        }
-        DrawChart(g, new RectangleF(X, 326, W, 250), rpms.ToArray(), tq.ToArray(), hp.ToArray(), d.Limiter);
+        // กราฟ (เส้นทึบ = หลัง / เส้นประ = ก่อน)
+        DrawCompareChart(g, new RectangleF(X, 326, W, 250), m, d.Limiter);
 
         // ตรวจสภาพ
         PanelBox(g, new RectangleF(X, 592, W, 378), "ตรวจสภาพเครื่อง");

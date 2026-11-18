@@ -764,18 +764,14 @@ function drawEcu() {
   }
 
   const prpm = m.EcuRpmAt(ecuC1), pload = ecuLoadAt(ecuR1), s = m.EcuAt(prpm, pload, {});
-  ui.panelBox(R(RX, 672, RW, 134), `ช่องที่เลือก  ${fmtN(prpm)} rpm  โหลด ${f0(pload * 100)}%`);
+  ui.panelBox(R(RX, 672, RW, 112), `ช่องที่เลือก  ${fmtN(prpm)} rpm  โหลด ${f0(pload * 100)}%`);
   ui.txt(`AFR ${f1(s.Afr)} (λ ${f2(s.Lambda)})  •  ฉีด ${s.PulseMs.toFixed(2)} ms  •  หัวฉีด ${f0(s.Duty * 100)}%`, F.xs, s.Lambda > 1.12 ? C.Red : s.Lambda < 0.7 ? C.Blue : s.Lambda > 0.97 ? C.Yellow : C.Green, RX + 24, 706);
   const dl2 = s.Adv - s.Mbt;
   ui.txt(`จุด ${f1(s.Adv)}°  MBT ${f1(s.Mbt)}°  (${dl2 >= 0 ? 'แก่' : 'อ่อน'} ${f1(Math.abs(dl2))}°)  •  แรงบิด x${s.Mult.toFixed(3)}`, F.xs, dl2 > 1.5 ? C.Red : dl2 < -8 ? C.Blue : C.Green, RX + 24, 730);
   const warn = s.Egt > 1050 ? 'ไอเสียร้อนจัด! เสี่ยงลูกสูบพัง' : m.KnockWot(prpm) > 0.02 && pload > 0.7 ? 'น็อกที่ช่องนี้: ลดองศา/เติมน้ำมัน' : dl2 < -10 ? 'ไฟอ่อนมาก: แรงตก ไอเสียร้อน' : s.Lambda > 1.35 || s.Lambda < 0.6 ? 'ส่วนผสมนอกช่วงจุดติด' : '';
   ui.txt(`EGT ~${f0(s.Egt)}°C` + (warn ? '  •  ' + warn : ''), F.xs, warn ? C.Yellow : C.Dim, RX + 24, 754);
-  ui.txt('ปุ่ม: ลูกศร เลือก  •  PgUp/PgDn หรือ [ ] ปรับ  •  D สลับโหมด', F.cap, C.Dim, RX + 24, 780);
 
-  const rpms = [], tq = [], hp = [];
-  for (let r = 2000; r <= draft.Limiter; r += 100) { const t = m.BrakeTorqueWot(r); rpms.push(r); tq.push(Math.max(0, t)); hp.push(Math.max(0, Hp(t, r))); }
-  ui.chart(R(RX, 816, RW, 196), rpms, tq, hp, draft.Limiter);
-  ui.txtR(`${f1(m.PeakHp)} HP @ ${fmtN(m.PeakPsRpm)}   ${f1(m.PeakTq)} N·m`, F.xs, C.Accent, RX + RW - 18, 1016);
+  drawCompareChart(R(RX, 794, RW, 246), m, draft.Limiter);
   if (showEcuHelp) drawEcuHelp();
 }
 function drawEcuHelp() {
@@ -791,6 +787,16 @@ function drawEcuHelp() {
     let yy = y + 46; for (const ln of lines) yy = ui.wrap(ln, F.sm, C.Dim, x + 16, yy, colW - 16) + 3;
   });
   ui.hit(R(0, 0, VW, VH), () => { showEcuHelp = false; });
+}
+
+/** กราฟเทียบ: เส้นทึบ = เครื่องที่กำลังแก้ (หลัง)  เส้นประ = เครื่องที่ติดตั้งอยู่ (ก่อน) */
+function drawCompareChart(rect, m, limiter) {
+  const rpms = [], tq = [], hp = [], tq0 = [], hp0 = [], bm = installed;
+  for (let r = 2000; r <= limiter; r += 100) {
+    const t = m.BrakeTorqueWot(r); rpms.push(r); tq.push(Math.max(0, t)); hp.push(Math.max(0, Hp(t, r)));
+    if (r <= bm.D.Limiter) { const t0 = bm.BrakeTorqueWot(r); tq0.push(Math.max(0, t0)); hp0.push(Math.max(0, Hp(t0, r))); } else { tq0.push(NaN); hp0.push(NaN); }
+  }
+  ui.chart(rect, rpms, tq, hp, limiter, { tq: tq0, hp: hp0 });
 }
 
 function drawGarage() {
@@ -922,9 +928,7 @@ function drawGarageStats() {
     if (d.RealTq > 0) s += `${f1(d.RealTq)} N·m${d.RealTqRpm > 0 ? ' @ ' + fmtN(d.RealTqRpm) : ''} (ต่าง ${((m.PeakTq / d.RealTq - 1) * 100).toFixed(0)}%)`;
     ui.txt(s, F.xs, Math.abs(d.CalK - 1) > 0.005 ? C.Green : C.Yellow, X + 28, 292);
   }
-  const rpms = [], tq = [], hp = [];
-  for (let r = 2000; r <= d.Limiter; r += 100) { const t = m.BrakeTorqueWot(r); rpms.push(r); tq.push(Math.max(0, t)); hp.push(Math.max(0, Hp(t, r))); }
-  ui.chart(R(X, 326, W, 250), rpms, tq, hp, d.Limiter);
+  drawCompareChart(R(X, 326, W, 250), m, d.Limiter);
 
   ui.panelBox(R(X, 592, W, 378), 'ตรวจสภาพเครื่อง');
   let y = 640;
