@@ -16,7 +16,7 @@ public sealed class EngineSim
     public volatile bool StarterHeld;
     public volatile bool Ignition = true;
     public volatile float Volume = 0.8f;
-    private const float IdleBoost = 1.8f;       // เสริมเสียงเดินเบา (x2.8 ที่รอบเดินเบา)
+    private const float IdleBoost = 5.5f;       // เสริมเสียงเดินเบา (x6.5 ที่รอบเดินเบา)
     public volatile int GearInput;              // 0 = เกียร์ว่าง, 1..4
     public volatile bool ClutchEnabled = true;  // ระบบครัตช์มือ: ปิด = ไม่มีคันครัตช์ (คลัตช์แรงเหวี่ยงอย่างเดียว) เปลี่ยนเกียร์ได้ทันที
     public volatile float ClutchInput;          // คันครัตช์มือ (กด Shift): 0 = ปล่อย, 1 = กำสุด (เฉพาะรถเกียร์ธรรมดา)

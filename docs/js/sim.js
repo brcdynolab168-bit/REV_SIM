@@ -35,7 +35,7 @@ export function loadPulses(x, marksText, fs) {
   return P;
 }
 
-const IdleBoost = 1.8;      // เสริมเสียงเดินเบา (x2.8 ที่รอบเดินเบา)
+const IdleBoost = 5.5;      // เสริมเสียงเดินเบา (x6.5 ที่รอบเดินเบา)
 export class EngineSim {
   constructor(design, pulses, sampleRate) {
     this.Fs = sampleRate;
