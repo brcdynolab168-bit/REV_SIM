@@ -16,7 +16,7 @@ public sealed class EngineSim
     public volatile bool StarterHeld;
     public volatile bool Ignition = true;
     public volatile float Volume = 0.8f;
-    private const float IdleBoost = 5.5f;       // เสริมเสียงเดินเบา (x6.5 ที่รอบเดินเบา)
+    public volatile float IdleBoostK = 12f;      // เสริมเสียงเดินเบา (ตั้งในหน้าตั้งค่า) x(1+K) ที่รอบเดินเบา
     public volatile int GearInput;              // 0 = เกียร์ว่าง, 1..4
     public volatile bool ClutchEnabled = true;  // ระบบครัตช์มือ: ปิด = ไม่มีคันครัตช์ (คลัตช์แรงเหวี่ยงอย่างเดียว) เปลี่ยนเกียร์ได้ทันที
     public volatile float ClutchInput;          // คันครัตช์มือ (กด Shift): 0 = ปล่อย, 1 = กำสุด (เฉพาะรถเกียร์ธรรมดา)
@@ -598,7 +598,7 @@ public sealed class EngineSim
                 else if (_wantOn) amp = _cycAmp;
                 else amp = 0.75f * (0.35f + 0.65f * Clamp((_rpmAudio - 2500f) / 5000f, 0f, 1f)) * _cycleVar;
                 // เสียงเดินเบาเบาเกินไป (พัลส์โหลดต่ำ): เสริมระดับช่วงรอบเดินเบาให้ได้ยินชัด ค่อย ๆ ลดจนไม่มีผลที่ ~รอบเดินเบา+2,500
-                if (!_cycCut) amp *= 1f + IdleBoost * Clamp(1f - (_rpmAudio - _model.IdleRpm) / 2500f, 0f, 1f);
+                if (!_cycCut) amp *= 1f + IdleBoostK * Clamp(1f - (_rpmAudio - _model.IdleRpm) / 2500f, 0f, 1f);
                 EmitGrain(NextPulse(_rpmAudio, _wantOn), amp, _rpmAudio);
             }
 

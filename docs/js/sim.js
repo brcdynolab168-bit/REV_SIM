@@ -35,13 +35,13 @@ export function loadPulses(x, marksText, fs) {
   return P;
 }
 
-const IdleBoost = 5.5;      // เสริมเสียงเดินเบา (x6.5 ที่รอบเดินเบา)
 export class EngineSim {
   constructor(design, pulses, sampleRate) {
     this.Fs = sampleRate;
     this.P = pulses || { grains: [], pre: [], rpm: [], seg: [], on: [], gain: [] };
     this.model = new EngineModel(design); this.pending = null;
     // อินพุต
+    this.idleBoost = 12;      // เสริมเสียงเดินเบา (ตั้งในหน้าตั้งค่า) x(1+k) ที่รอบเดินเบา
     this.throttleInput = 0; this.starterHeld = false; this.ignition = true; this.volume = 0.8;
     this.gearInput = 0; this.clutchInput = 0; this.clutchEnabled = true; this.slopePct = 0; this.brakeInput = 0;
     this._lever = 0; this._cfLock = 0;
@@ -286,7 +286,7 @@ export class EngineSim {
         else if (this._wantOn) amp = this._cycAmp;
         else amp = 0.75 * (0.35 + 0.65 * clamp((this._rpmAudio - 2500) / 5000, 0, 1)) * this._cycleVar;
         // เสียงเดินเบาเบาเกินไป (พัลส์โหลดต่ำ) : เสริมระดับช่วงรอบเดินเบาให้ได้ยินชัด ค่อย ๆ ลดจนไม่มีผลที่ ~รอบเดินเบา+2,500
-        if (!this._cycCut) amp *= 1 + IdleBoost * clamp(1 - (this._rpmAudio - this.model.IdleRpm) / 2500, 0, 1);
+        if (!this._cycCut) amp *= 1 + this.idleBoost * clamp(1 - (this._rpmAudio - this.model.IdleRpm) / 2500, 0, 1);
         this._emitGrain(this._nextPulse(this._rpmAudio, this._wantOn), amp, this._rpmAudio);
       }
       if (ph >= 720) { ph -= 720; this._newCycle(); }

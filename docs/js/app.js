@@ -13,7 +13,7 @@ const f1 = v => v.toFixed(1), f0 = v => v.toFixed(0), f2 = v => v.toFixed(2);
 // ================================================================= บันทึก
 const KEY = 'revlab.web.v2';
 const save = (() => {
-  const s = { design: null, best: { b060: -1, b100: -1, b402: -1, top: 0 }, volume: 0.8, assist: matchMedia('(pointer:coarse)').matches, clutchSys: true, surface: 0 };
+  const s = { design: null, best: { b060: -1, b100: -1, b402: -1, top: 0 }, volume: 0.8, idleGain: 0.4, assist: matchMedia('(pointer:coarse)').matches, clutchSys: true, surface: 0 };
   try { Object.assign(s, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch { /* เริ่มใหม่ */ }
   return s;
 })();
@@ -316,12 +316,15 @@ function drawMenu() {
 // ================================================================= ตั้งค่า
 function drawSettings() {
   drawTopBar('ตั้งค่า', 'Esc กลับ  •  F11 เต็มจอ/หน้าต่าง');
-  const box = R(252, 124, 1100, 640);
+  const box = R(252, 124, 1100, 790);
   ui.panelBox(box, 'ระบบ');
   const x = box.x + 40, w = box.w - 80; let y = box.y + 80;
   ui.txt('ระดับเสียง', F.md, C.Text, x, y); ui.txtR(`${f0(save.volume * 100)}%`, F.num, C.Accent, x + w, y);
   ui.slider(R(x, y + 48, w, 36), save.volume, C.Accent, v => setVolume(v));
-  y += 150; ui.txt('การแสดงผล', F.md, C.Text, x, y);
+  y += 110; ui.txt('ความดังเสียงเดินเบา', F.md, C.Text, x, y); ui.txtR(save.idleGain <= 0.002 ? 'ปกติ (ไม่ขยาย)' : `ขยาย x${+(1 + save.idleGain * 30).toFixed(1)}`, F.num, C.Accent, x + w, y);
+  ui.slider(R(x, y + 48, w, 36), save.idleGain, C.Accent, v => { save.idleGain = clamp(v, 0, 1); persist(); });
+  ui.txt('ขยายเฉพาะช่วงรอบเดินเบา ลดลงจนไม่มีผลเมื่อรอบสูงกว่ารอบเดินเบา ~2,500  (เพิ่มมากไปเสียงจะเริ่มแตก)', F.xs, C.Dim, x, y + 92);
+  y += 160; ui.txt("การแสดงผล", F.md, C.Text, x, y);
   ui.btn(R(x + w - 520, y - 10, 520, 60), document.fullscreenElement ? 'เต็มจอ (กดเพื่อเป็นหน้าต่าง)' : 'หน้าต่าง (กดเพื่อเต็มจอ)', false, C.Blue, toggleFullscreen, F.sm);
   y += 90; ui.txt('แสดงเฟรมเรต (FPS)', F.md, C.Text, x, y);
   ui.btn(R(x + w - 260, y - 10, 260, 60), showFps ? 'เปิด' : 'ปิด', showFps, C.Green, () => { showFps = !showFps; }, F.sm);
@@ -1093,7 +1096,7 @@ function tick() {
     if (autoDrive && page === 'drive') { const o = autopilotStep(t); thr = o.thr; brake = o.brake; starter = o.starter; }
   } else { gradThr = 0; autoDrive = false; }
   send('throttleInput', +thr.toFixed(3)); send('brakeInput', brake); send('starterHeld', starter);
-  send('clutchEnabled', save.clutchSys); send('surface', save.surface);
+  send('clutchEnabled', save.clutchSys); send('surface', save.surface); send('idleBoost', +(save.idleGain * 30).toFixed(2));
   const shiftHeld = down('shift');
   send('clutchInput', ((page === 'drive' && !showDyno) || bench) && (shiftHeld || mouseClutch || t < assistUntil || t < apClutchUntil) ? 1 : 0);
   send('gearInput', gearSel); send('slopePct', slope);

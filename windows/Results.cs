@@ -50,6 +50,7 @@ public sealed class SaveData
 {
     public EngineDesign Design = EngineDesign.Presets[0].D.Clone();
     public float Best060 = -1f, Best100 = -1f, Best402 = -1f, BestTop;   // สถิติถนน: 0-60 กม./ชม., 100 ม., 402 ม. (วินาที), ท็อปสปีด (กม./ชม.)
+    public float IdleGain = 0.4f;                         // ความดังเสียงเดินเบา 0..1 (x(1+30*IdleGain))
     public float Volume = 0.8f;                           // ระดับเสียงที่ตั้งไว้
     public bool Fullscreen = true;
     public int Surface = 0;                               // พื้นถนน (0 ทั่วไป, 1 ราดยาง, 2 คอนกรีต, 3 แทร็ก)
@@ -80,6 +81,7 @@ public sealed class SaveData
                 else if (k == "best100") s.Best100 = F(v, -1f);
                 else if (k == "best402") s.Best402 = F(v, -1f);
                 else if (k == "volume") s.Volume = Math.Clamp(F(v, 0.8f), 0f, 1f);
+                else if (k == "idlegain") s.IdleGain = Math.Clamp(F(v, 0.4f), 0f, 1f);
                 else if (k == "fullscreen") s.Fullscreen = v != "0";
                 else if (k == "clutchsys") s.ClutchSys = v != "0";
                 else if (k == "surface") s.Surface = Math.Clamp((int)F(v, 0f), 0, 3);
@@ -108,6 +110,7 @@ public sealed class SaveData
                 "best100=" + S(Best100),
                 "best402=" + S(Best402),
                 "volume=" + S(Volume),
+                "idlegain=" + S(IdleGain),
                 "fullscreen=" + (Fullscreen ? "1" : "0"),
                 "clutchsys=" + (ClutchSys ? "1" : "0"),
                 "surface=" + Surface,

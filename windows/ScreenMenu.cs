@@ -90,7 +90,7 @@ public sealed partial class MainForm
     {
         DrawTopBar(g, "ตั้งค่า", "Esc กลับ  •  F11 เต็มจอ/หน้าต่าง");
 
-        var box = new RectangleF(252, 124, 1100, 560);
+        var box = new RectangleF(252, 124, 1100, 710);
         PanelBox(g, box, "ระบบ");
 
         float x = box.X + 40, w = box.Width - 80, y = box.Y + 80;
@@ -99,7 +99,13 @@ public sealed partial class MainForm
         TxtR(g, $"{_eng.Volume * 100f:0}%", _fNum, Palette.Accent, x + w, y);
         Slider(g, new RectangleF(x, y + 48, w, 36), _eng.Volume, Palette.Accent, v => _eng.Volume = v);
 
-        y += 150;
+        y += 110;
+        Txt(g, "ความดังเสียงเดินเบา", _fMd, Palette.Text, x, y);
+        TxtR(g, _eng.IdleBoostK <= 0.05f ? "ปกติ (ไม่ขยาย)" : $"ขยาย x{1f + _eng.IdleBoostK:0.#}", _fNum, Palette.Accent, x + w, y);
+        Slider(g, new RectangleF(x, y + 48, w, 36), _eng.IdleBoostK / 30f, Palette.Accent, v => _eng.IdleBoostK = v * 30f);
+        Txt(g, "ขยายเฉพาะช่วงรอบเดินเบา ลดลงจนไม่มีผลเมื่อรอบสูงกว่ารอบเดินเบา ~2,500  (เพิ่มมากไปเสียงจะเริ่มแตก)", _fXs, Palette.Dim, x, y + 92);
+
+        y += 160;
         Txt(g, "การแสดงผล", _fMd, Palette.Text, x, y);
         Btn(g, new RectangleF(x + w - 520, y - 10, 520, 60), _fullscreen ? "เต็มจอ (กดเพื่อเป็นหน้าต่าง)" : "หน้าต่าง (กดเพื่อเต็มจอ)",
             false, Palette.Blue, () => ApplyWindowMode(!_fullscreen), _fSm);

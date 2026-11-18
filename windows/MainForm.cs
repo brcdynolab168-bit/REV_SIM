@@ -72,7 +72,7 @@ public sealed partial class MainForm : Form
 
     public MainForm()
     {
-        _eng = new EngineSim(_save.Design) { Volume = _save.Volume, ClutchEnabled = _save.ClutchSys };
+        _eng = new EngineSim(_save.Design) { Volume = _save.Volume, ClutchEnabled = _save.ClutchSys, IdleBoostK = _save.IdleGain * 30f };
         Vehicle.SurfaceIndex = _save.Surface;
         _draft = _save.Design.Clone();
         _preview = new EngineModel(_draft);
@@ -126,7 +126,7 @@ public sealed partial class MainForm : Form
     protected override void OnFormClosed(FormClosedEventArgs e)
     {
         _timer.Stop();
-        _save.Volume = _eng.Volume;
+        _save.Volume = _eng.Volume; _save.IdleGain = _eng.IdleBoostK / 30f;
         _save.Save();
         _player?.Dispose();
         _player = null;
@@ -141,7 +141,7 @@ public sealed partial class MainForm : Form
 
     private void GoTo(Page p)
     {
-        if (_page == Page.Settings && p != Page.Settings) { _save.Volume = _eng.Volume; _save.Save(); }
+        if (_page == Page.Settings && p != Page.Settings) { _save.Volume = _eng.Volume; _save.IdleGain = _eng.IdleBoostK / 30f; _save.Save(); }
         if (p == Page.Menu && _page != Page.Menu) _prevPage = _page;
         _page = p;
         _mouseThrottle = _mouseStarter = _mouseClutch = false;
