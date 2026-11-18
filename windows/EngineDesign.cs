@@ -137,6 +137,25 @@ public sealed class EngineDesign
             GearF = 13, GearR = 40, FirstRed = 3.0f, BikeKg = 116f, RimInch = 12f, RimW = 2.50f, TireW = 100f, TireAsp = 90f, RiderKg = 65f, CdA = 0.40f,
             RealHp = 11.4f, RealHpRpm = 8750f, RealTq = 11.6f, RealTqRpm = 5250f, CalK = 0.975f,
         }),
+        // Yamaha MX King 155 (VVA): 155cc 58.0x58.7 4V เกียร์ 6 สปีด (เกมมี 4 สปีด จึงเลือกอัตราทดห่างสุดโต่ง) หนัก 119 กก. ยาง 90/80-17  ~16 PS/9,000  14.2 N·m/6,500
+        // CR 11.6, แคม/ก้านสูบ/ข้อเหวี่ยง/สเตอร์/อัตราทดเป็นค่าประมาณ (ไม่ได้ประกาศ)
+        ("MX King 155 เดิม", new EngineDesign
+        {
+            Bore = 58f, Stroke = 58.7f, Rod = 105f, CrankKg = 2.5f, FlywheelKg = 0.55f, Valves = 4, Throttle = 28f,
+            Lsa = 110f, Duration = 244f, DurationEx = 244f, Lift = 7.8f, LiftEx = 7.8f, Cr = 11.6f, Limiter = 10800f,
+            SprocketF = 15f, SprocketR = 42f, Primary = 3.05f, Gear1 = 2.833f, Gear2 = 1.875f, Gear3 = 1.364f, Gear4 = 0.95f,
+            BikeKg = 119f, RiderKg = 65f, CdA = 0.40f, RimInch = 17f, RimW = 1.6f, TireW = 90f, TireAsp = 80f,
+            RealHp = 15.9f, RealHpRpm = 9000f, RealTq = 14.2f, RealTqRpm = 6500f, CalK = 0.842f,
+        }),
+        // สเต็ป: ลูก 65 มม. ชัก +5 มม. (58.7 -> 63.7) = 211cc  แคม/กำลังอัด/รอบตัด แต่งเพิ่ม  ชุดเดียวกับเดิม ค่า CalK เดิม
+        ("MX King สเต็ป ลูก 65 ชัก+5*", new EngineDesign
+        {
+            Bore = 65f, Stroke = 63.7f, Rod = 110f, CrankKg = 2.8f, FlywheelKg = 0.45f, Valves = 4, Throttle = 30f,
+            Lsa = 110f, Duration = 256f, DurationEx = 256f, Lift = 8.8f, LiftEx = 8.8f, Cr = 12.0f, Limiter = 11500f, Fuel = 3,
+            SprocketF = 15f, SprocketR = 42f, Primary = 3.05f, Gear1 = 2.833f, Gear2 = 1.875f, Gear3 = 1.364f, Gear4 = 0.95f,
+            BikeKg = 119f, RiderKg = 65f, CdA = 0.40f, RimInch = 17f, RimW = 1.6f, TireW = 90f, TireAsp = 80f,
+            RealHp = 15.9f, RealHpRpm = 9000f, RealTq = 14.2f, RealTqRpm = 6500f, CalK = 0.842f,
+        }),
     };
 
     // ---------- บันทึก/โหลดแบบข้อความง่าย ๆ ----------
