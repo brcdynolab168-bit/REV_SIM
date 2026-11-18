@@ -45,6 +45,9 @@ public sealed class EngineSim
     private volatile float _speed;              // m/s
     private volatile float _dist;               // m
     private volatile int _gear;
+    private EngineModel.EcuState _ecu;
+    /// <summary>ค่า ECU ปัจจุบัน (AFR, องศาจุด, หัวฉีด ฯลฯ)</summary>
+    public EngineModel.EcuState Ecu => _ecu;
     private volatile float _clutchLock;         // 0..1 คลัตช์จับแน่นแค่ไหน (UI ใช้แสดง)
     private volatile float _cvtS;               // ตำแหน่งชุดขับหน้า CVT 0..1 (รถออโต้)
     public EngineModel Model => _model;
@@ -95,6 +98,7 @@ public sealed class EngineSim
     private float _huntPh, _huntRate;
     private float _idleWobble;                  // รอบเดินเบาที่เหวี่ยงขึ้นลงช้า ๆ (แคมโอเวอร์แลปมาก/กำลังอัดต่ำ)
     private float _load;                        // 0..1 ปริมาณไอดีต่อรอบ
+    public float KnockNow => _knock;
     private float _knock;                       // 0..1 การน็อกตอนนี้
     private float _softK;                       // 0..1 ความแรงของ soft cut ตอนนี้
     private bool _fuelOn;
@@ -226,7 +230,8 @@ public sealed class EngineSim
         }
         float eff = idleThr + thr * (1f - idleThr);
         _load = m.Load(eff, rpm);
-        _knock = m.Knock(rpm, _load);
+        _ecu = m.EcuAt(rpm, _load);
+        _knock = m.Knock(rpm, _load, _ecu.KnockShift);
 
         // ตัดรอบแบบ hard cut มี hysteresis ทำให้รอบเด้ง
         if (rpm > m.D.Limiter) _cut = true;
@@ -238,7 +243,7 @@ public sealed class EngineSim
         _starterActive = StarterHeld && rpm < 1000f;
 
         float drive = 0f;
-        if (_fuelOn && _cycleFiring) drive = m.TorqueInd(rpm) * _load * _cycleVar * (1f - 0.5f * _cycKnock) * (1f - 0.4f * _softK);
+        if (_fuelOn && _cycleFiring) drive = m.TorqueInd(rpm) * _load * _ecu.Mult * _cycleVar * (1f - 0.5f * _cycKnock) * (1f - 0.4f * _softK);
         float torque = drive;
         if (_starterActive) torque += 5.5f * MathF.Max(0f, 1f - rpm / 650f);
 

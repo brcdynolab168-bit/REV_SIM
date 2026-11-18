@@ -25,10 +25,16 @@ export function newDesign(o = {}) {
     SprocketF: 14, SprocketR: 36, RiderKg: 65, Auto: 0,
     RampDeg: 13.5, RampOutDeg: 13.5, Rollers: 6, RollerG: 8.5, RollerG2: 8.5, GearF: 13, GearR: 40, FirstRed: 3.0,
     BikeKg: 107, CdA: 0.415, RimInch: 17, RimW: 1.4, TireW: 80, TireAsp: 90,
+    Inj: 0, EcuFuel: null, EcuIgn: null,
     SpringK: 20, Primary: 3.35, Gear1: 2.5, Gear2: 1.55, Gear3: 1.15, Gear4: 0.923, Gears: 4, Gear5: 0.8, Gear6: 0.72, Pipe: 0, Fuel: 1,
   }, o);
 }
 export const gearAt = (d, g) => d['Gear' + clamp(Math.round(g), 1, clamp(d.Gears, 4, 6))];
+export const EcuN = 20;
+export const ecuLoadAt = j => (j + 1) / EcuN;
+const StoichTab = [14.7, 14.7, 14.1, 14.6, 9.76, 6.45, 5.2], FuelDens = [0.74, 0.74, 0.75, 0.74, 0.78, 0.79, 0.85], BurnK = [0, 0, -0.5, 0, -2, -3, -4];
+const timingF = d => Math.max(0.15, 1 - (d > 0 ? 0.0013 : 0.0009) * d * d);
+const lambdaF = l => Math.max(0.2, l >= 0.89 ? 1 - 1.8 * (l - 0.89) ** 2 : 1 - 2.4 * (l - 0.89) ** 2);
 export const crankPsi = cr => 14.7 * Math.pow(cr, 1.15);
 export const crFromPsi = psi => Math.pow(psi / 14.7, 1 / 1.15);
 export const camLoss = d => 1 - 0.002 * Math.max(0, d.Duration - 220);
@@ -101,7 +107,8 @@ export const Params = [
     'ค่าที่เกจวัดตอนสตาร์ท ปรับแยกจาก CR: ซีลแน่น = แรงบิดดีขึ้นแต่น็อกง่าย  ต่ำ = รั่ว กำลังตก จุดไม่ติด (Wave ~190, แต่งถนน 200-230, แข่ง 260-300+)', { text: v => Math.round(v) + ' psi' }),
   P('fuel', 'ชนิดน้ำมัน', '', 0, 6, 1, '0', ...pr('fuel', 'Fuel'), 'ออกเทนสูง = ทนกำลังอัดสูงก่อนน็อก  E85/เมทานอล/ไนโตร ฉีดหนาขึ้นได้กำลังเพิ่มด้วย',
     { text: v => { const f = Fuels[clamp(Math.round(v), 0, 6)]; return `${f.name}  (RON ${f.ron})`; } }),
-  num('limiter', 'รอบตัด (hard cut)', 'rpm', 6000, 15000, 100, '0', 'Limiter', 'ถึงรอบนี้ตัดไฟทั้งหมดทันที ตั้งเกินที่เครื่องรับไหว = พัง'),
+  P('inj', 'หัวฉีด (ขนาดรู)', 'cc/นาที', 0, 3000, 10, '0', d => d.Inj, (d, v) => { d.Inj = v; }, 'ความจุหัวฉีด (เบนซิน) ถ้าเครื่องต้องการน้ำมันมากกว่านี้ (รอบสูง/E85/เมทานอล ใช้น้ำมันมากกว่าเบนซิน 1.5-2.3 เท่า) หัวฉีดเต็ม 100% แล้วส่วนผสมจะบางลง  0 = ตามรถ (เหมาะกับซีซีและน้ำมันที่เลือก)', { text: v => (v <= 0 ? 'ตามรถ (อัตโนมัติ)' : `${Math.round(v)} cc/นาที`) }),
+  num('seal', 'รอบตัด (hard cut)', 'rpm', 6000, 15000, 100, '0', 'Limiter', 'ถึงรอบนี้ตัดไฟทั้งหมดทันที ตั้งเกินที่เครื่องรับไหว = พัง'),
   P('resume', 'รอบเด้งกลับหลัง hard cut', 'rpm', 20, 3000, 10, '0', ...pr('resume', 'ResumeGap'),
     'ตัดแล้วรอบต้องตกลงถึงรอบนี้จึงติดใหม่  ตัดน้อย = รัวถี่  ตัดมาก = รอบตกลึก', { text: (v, d) => `${Math.round(d.Limiter - v)} rpm  (ตกลง ${Math.round(v)})` }),
   P('softcut', 'Soft cut ห่างใต้ hard cut', 'rpm', 0, 2000, 50, '0', ...pr('softcut', 'SoftGap'),
@@ -159,9 +166,10 @@ export const GarageTabs = [
   ['อะไหล่', []],
   ['เครื่องยนต์', ['bore', 'stroke', 'rod', 'crank', 'fly', 'valves']],
   ['ไอดี·แคม·ท่อ', ['throttle', 'lsa', 'duration', 'durationex', 'lift', 'liftex', 'pipe']],
-  ['อัด·น้ำมัน', ['cr', 'psi', 'fuel', 'limiter', 'resume', 'softcut']],
+  ['อัด·น้ำมัน', ['cr', 'psi', 'fuel', 'inj', 'limiter', 'resume', 'softcut']],
   ['ส่งกำลัง', ['auto', 'prim', 'gears', 'g1', 'g2', 'g3', 'g4', 'g5', 'g6', 'sprf', 'sprr', 'ramp', 'rampout', 'rollers', 'rollerg', 'rollerg2', 'fdf', 'fdr', 'firstred', 'spring']],
   ['ตัวรถ', ['rider', 'bikekg', 'rim', 'rimw', 'tirew', 'tireasp', 'cda']],
+  ['จูนกล่อง', []],
   ['รถจริง', ['realhp', 'realhprpm', 'realtq', 'realtqrpm', 'calk']],
 ];
 
@@ -287,6 +295,7 @@ export class EngineModel {
     const pipeLoud = [1, 1.25, 1.55, 1.7][D.Pipe] || 1;
     this.Loudness = Math.min(2.0, Math.pow(Cc / 196, 0.45) * (0.85 + 0.15 * D.Throttle / 34) * pipeLoud);
 
+    this._veA = new Float64Array(NB);
     this._veN = new Float64Array(NB); this._tInd = new Float64Array(NB); this._fric = new Float64Array(NB);
     const dispL = Cc / 1000;
     let peakPs = 0, peakPsRpm = 0, peakTq = 0, peakTqRpm = 0;
@@ -297,7 +306,7 @@ export class EngineModel {
       ve /= Math.pow(1 + Math.pow(rpm / this.RpmFlow, 4), 0.25);
       if (rpm > this.FloatRpm) { const f = (rpm - this.FloatRpm) / 900; ve *= Math.exp(-f * f); }
       ve *= this._pipeGain(rpm);
-      this._veN[i] = ve;
+      this._veN[i] = ve; this._veA[i] = ve;
       this._tInd[i] = ve * dispL * 245 * eff * fuelPower * this.SealGain;
       const vp = 2 * stroke * rpm / 60000;
       const vpPen = vp > 24 ? 0.35 * (vp - 24) ** 2 * this.FrictionScale : 0;
@@ -326,15 +335,62 @@ export class EngineModel {
   Friction(rpm) { return lerpT(this._fric, rpm); }
   Load(thr, rpm) { return 1 - Math.exp(-thr * this.AirK / Math.max(rpm, 400)); }
   VeNorm(rpm) { return lerpT(this._veN, rpm); }
-  Knock(rpm, load) {
-    const k = (this.CrDyn - this.CrLimit) / 1.5;
+  Knock(rpm, load, shift = 0) {
+    const k = (this.CrDyn - this.CrLimit - shift) / 1.5;
     if (k <= 0) return 0;
     return clamp(k, 0, 1) * load * load * clamp(1.4 - rpm / 8000, 0.3, 1);
   }
   BrakeTorqueWot(rpm) {
-    const load = this.Load(1, rpm), kn = this.Knock(rpm, load);
-    return this.TorqueInd(rpm) * load * (1 - 0.5 * kn) - this.Friction(rpm);
+    const load = this.Load(1, rpm), e = this.EcuAt(rpm, load), kn = this.Knock(rpm, load, e.KnockShift);
+    return this.TorqueInd(rpm) * load * e.Mult * (1 - 0.5 * kn) - this.Friction(rpm);
   }
+  KnockWot(rpm) { const load = this.Load(1, rpm); return this.Knock(rpm, load, this.EcuAt(rpm, load).KnockShift); }
+
+  // ================================================================ ตารางจูนกล่อง (ECU): น้ำมัน / องศาจุดระเบิด / AFR
+  get Stoich() { return StoichTab[this._fi()]; }
+  _fi() { return clamp(this.D.Fuel | 0, 0, StoichTab.length - 1); }
+  get InjCapCc() { return this.D.Inj > 0 ? this.D.Inj : this.Cc * 14.7 / this.Stoich * 0.6; }
+  get EcuRpmMax() { return Math.max(6000, Math.ceil(this.D.Limiter / 500) * 500); }
+  EcuRpmAt(i) { return 1000 + (this.EcuRpmMax - 1000) * i / (EcuN - 1); }
+  LambdaBase(rpm, load) {
+    const hi = clamp((load - 0.55) / 0.45, 0, 1);
+    return 1 - 0.12 * hi - 0.02 * hi * clamp((rpm / this.D.Limiter - 0.7) / 0.3, 0, 1);
+  }
+  Mbt(rpm, load, lam) {
+    let m = 10 + 2.1 * Math.min(rpm, 11000) / 1000;
+    m += 14 * Math.pow(1 - clamp(load, 0, 1), 1.3);
+    m += 0.25 * (this.D.Bore - 55) - 1.0 * (this.CrEff - 10) - 6 * (this.RodRatio - 1.7) + 0.04 * this.Overlap + BurnK[this._fi()];
+    m += clamp(12 * (lam - 0.9), -1.5, 6);
+    return clamp(m, 5, 45);
+  }
+  StockAdv(rpm, load) { return Math.max(2, this.Mbt(rpm, load, this.LambdaBase(rpm, load)) - 4); }
+  _samp(t, x, y) {
+    x = clamp(x, 0, EcuN - 1); y = clamp(y, 0, EcuN - 1);
+    const x0 = Math.floor(x), y0 = Math.floor(y), x1 = Math.min(x0 + 1, EcuN - 1), y1 = Math.min(y0 + 1, EcuN - 1), fx = x - x0, fy = y - y0;
+    const a = t[y0 * EcuN + x0] + (t[y0 * EcuN + x1] - t[y0 * EcuN + x0]) * fx, b = t[y1 * EcuN + x0] + (t[y1 * EcuN + x1] - t[y1 * EcuN + x0]) * fx;
+    return a + (b - a) * fy;
+  }
+  TableFuel(rpm, load) { const t = this.D.EcuFuel; return t ? this._samp(t, (rpm - 1000) / (this.EcuRpmMax - 1000) * (EcuN - 1), load * EcuN - 1) : 100; }
+  TableAdv(rpm, load) { const t = this.D.EcuIgn; return t ? this._samp(t, (rpm - 1000) / (this.EcuRpmMax - 1000) * (EcuN - 1), load * EcuN - 1) : this.StockAdv(rpm, load); }
+  /** ผลของตารางจูนกล่อง ณ รอบ/โหลดนั้น (คืนออบเจ็กต์ที่ใช้ซ้ำ) */
+  EcuAt(rpm, load, out = this._ecuTmp || (this._ecuTmp = {})) {
+    load = clamp(load, 0.02, 1);
+    const fi = this._fi(), st = StoichTab[fi], lamB = this.LambdaBase(rpm, load), fuelPct = this.TableFuel(rpm, load);
+    const air = lerpT(this._veA, rpm) * (this.Cc / 1000) * rpm / 120 * load * 1.18;
+    const cmd = air / (st * lamB) * fuelPct / 100, cap = this.InjCapCc / 60 * FuelDens[fi];
+    const duty = cap > 0 ? cmd / cap : 0, del = Math.min(cmd, cap), afr = del > 1e-5 ? air / del : 99, lam = afr / st;
+    const adv = this.TableAdv(rpm, load), mbt = this.Mbt(rpm, load, lam), dlt = adv - mbt;
+    let mult = timingF(dlt) / timingF(-4) * lambdaF(lam) / lambdaF(lamB);
+    const mf = lam > 1.35 ? clamp((1.5 - lam) / 0.15, 0, 1) : lam < 0.6 ? clamp((lam - 0.45) / 0.15, 0, 1) : 1;
+    mult *= Math.max(0.1, mf);
+    out.Mult = mult; out.KnockShift = 1.8 * (lamB - lam) - 0.11 * (adv - this.StockAdv(rpm, load));
+    out.Afr = afr; out.Lambda = lam; out.Adv = adv; out.Mbt = mbt; out.Duty = duty; out.FuelPct = fuelPct;
+    out.Egt = 330 + 380 * load + 12 * rpm / 1000 + 300 * clamp((lam - 0.8) / 0.25, 0, 1) - 150 * clamp((lam - 1.1) / 0.3, 0, 1) + 9 * Math.max(0, mbt - adv);
+    return out;
+  }
+  CellFuel(c, r) { const t = this.D.EcuFuel; return t ? t[r * EcuN + c] : 100; }
+  CellAdv(c, r) { const t = this.D.EcuIgn; return t ? t[r * EcuN + c] : this.StockAdv(this.EcuRpmAt(c), ecuLoadAt(r)); }
+  FactoryIgnTable() { const t = new Array(EcuN * EcuN); for (let r = 0; r < EcuN; r++) for (let c = 0; c < EcuN; c++) t[r * EcuN + c] = Math.round(this.StockAdv(this.EcuRpmAt(c), ecuLoadAt(r)) * 2) / 2; return t; }
   PistonSpeed(rpm) { return 2 * this.D.Stroke * rpm / 60000; }
 }
 

@@ -108,7 +108,7 @@ public static class Advisor
         return new Perf(t060 < 0f ? 99f : t060, t100 < 0f ? 99f : t100, t402 < 0f ? 99f : t402, trap, top.Kmh, top.Rpm);
     }
 
-    private static bool Knocks(EngineModel m) => m.Knock(3500f, m.Load(1f, 3500f)) > 0.02f;
+    private static bool Knocks(EngineModel m) => m.KnockWot(3500f) > 0.02f;
 
     // ---------- ตัวเลือกที่ลองปรับ ----------
     private static readonly (string Key, float[] Deltas, bool Auto, bool Manual)[] Tweaks =

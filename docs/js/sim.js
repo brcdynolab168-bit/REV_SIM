@@ -47,7 +47,7 @@ export class EngineSim {
     this._roadReset = false; this._dynoRequest = false;
     // สถานะ
     this.rpm = 0; this.thr = 0; this.cut = false; this.softK = 0; this.speed = 0; this.dist = 0; this.gear = 0;
-    this.clutchLock = 0; this.cvtS = 0; this.load = 0; this.knock = 0;
+    this.clutchLock = 0; this.cvtS = 0; this.load = 0; this.knock = 0; this.ecuMult = 1; this.ecuAfr = 14.7; this.ecuAdv = 15; this.ecuDuty = 0; this.ecuEgt = 0; this.ecuMbt = 15;
     this.dynoPhase = 0; this.dynoVersion = 0; this.dynoFailed = false; this.dynoTq = new Float32Array(DynoBins).fill(NaN);
     this._dynoSum = new Float64Array(DynoBins); this._dynoCnt = new Int32Array(DynoBins); this._dynoRpm = 0;
     this._blockPos = 0; this._idleInt = 0; this._huntPh = 0; this._huntRate = 0; this._idleWobble = 0;
@@ -102,7 +102,9 @@ export class EngineSim {
     }
     const eff = idleThr + thr * (1 - idleThr);
     this.load = m.Load(eff, rpm);
-    this.knock = m.Knock(rpm, this.load);
+    const ecu = m.EcuAt(rpm, this.load);
+    this.ecuMult = ecu.Mult; this.ecuAfr = ecu.Afr; this.ecuAdv = ecu.Adv; this.ecuDuty = ecu.Duty; this.ecuEgt = ecu.Egt; this.ecuMbt = ecu.Mbt;
+    this.knock = m.Knock(rpm, this.load, ecu.KnockShift);
 
     const D = m.D;
     if (rpm > D.Limiter) this.cut = true;
@@ -112,7 +114,7 @@ export class EngineSim {
     this._starterActive = this.starterHeld && rpm < 1000;
 
     let drive = 0;
-    if (this._fuelOn && this._cycleFiring) drive = m.TorqueInd(rpm) * this.load * this._cycleVar * (1 - 0.5 * this._cycKnock) * (1 - 0.4 * this.softK);
+    if (this._fuelOn && this._cycleFiring) drive = m.TorqueInd(rpm) * this.load * this.ecuMult * this._cycleVar * (1 - 0.5 * this._cycKnock) * (1 - 0.4 * this.softK);
     let torque = drive;
     if (this._starterActive) torque += 5.5 * Math.max(0, 1 - rpm / 650);
     let friction = m.Friction(rpm) + (1 - this.load) * (0.30 + 0.00018 * rpm) * m.FrictionScale;

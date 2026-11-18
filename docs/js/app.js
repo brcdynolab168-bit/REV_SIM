@@ -1,7 +1,7 @@
 // Rev Lab (เว็บ/มือถือ): หน้าจอเหมือนเวอร์ชัน C# (วาดบนผืน 1920x1080) + ลูปเกม
 // เสียง/ฟิสิกส์อยู่ใน AudioWorklet: worklet.js + sim.js
 import {
-  Surfaces, EngineModel, Presets, Params, paramDisplay, nudge, GarageTabs, PartCats, partCurrent, Fuels, newDesign,
+  Surfaces, EcuN, ecuLoadAt, EngineModel, Presets, Params, paramDisplay, nudge, GarageTabs, PartCats, partCurrent, Fuels, newDesign,
   Veh, Cvt, clamp, Hp, Ps, PsToHp, calibrate, tireCode, MaxRpm,
 } from './engine.js';
 import * as Adv from './advisor.js';
@@ -476,6 +476,8 @@ function drawGauge(cx, cy, r) {
   ui.txtC(`กม./ชม.     ${gear}`, F.sm, C.Text, cx, cy + 238 * k);
   ui.txt('ระยะจากจอด', F.xs, C.Dim, 262, 800);
   ui.txt(runDist < 0 ? '-' : `${runDist < 1000 ? f0(runDist) + ' ม.' : f2(runDist / 1000) + ' กม.'}`, F.num, C.Accent, 262, 826);
+  ui.txt(`AFR ${f1(S.ecuAfr ?? 14.7)}  •  จุด ${f0(S.ecuAdv ?? 0)}° (MBT ${f0(S.ecuMbt ?? 0)})`, F.xs, (S.ecuAfr ?? 14.7) / installed.Stoich > 1.12 ? C.Red : C.Dim, 262, 912);
+  ui.txt(`หัวฉีด ${f0((S.ecuDuty ?? 0) * 100)}%  •  EGT ${f0(S.ecuEgt ?? 0)}°C  •  น็อก ${f0((S.knock ?? 0) * 100)}%`, F.xs, (S.knock ?? 0) > 0.05 || (S.ecuEgt ?? 0) > 1050 ? C.Red : C.Dim, 262, 934);
   ui.txt(runDist < 0 ? 'ออกตัวจากหยุดนิ่งเพื่อวัด' : `${f1(runTime)} วิ  ${runFull ? '• เต็มคันเร่ง' : '• ไม่เต็มคันเร่ง'}`, F.xs, runDist >= 0 && runFull ? C.Green : C.Dim, 262, 876);
   if (S.dynoPhase !== 0) ui.txtC('กำลังวัดไดโน...', F.btn, C.Green, cx, cy - 112 * k);
   else if (!S.running) ui.txtC(S.ignition ? 'กด S ค้างเพื่อสตาร์ท' : 'ดับเครื่องอยู่ - กด S ค้างเพื่อสตาร์ท', F.md, C.Accent, cx, cy - 112 * k);
@@ -555,6 +557,7 @@ function assemble() {
 }
 function garageKey(k, shift) {
   if (advisorOn && ['arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) return;
+  if (!advisorOn && isEcuTab() && ecuKey(k, shift)) return;
   const n = vis().length, parts = gTab === 0, prow = PartCats.length + 1;
   switch (k) {
     case 'arrowup': if (parts) gPartRow = (gPartRow + prow - 1) % prow; else if (n > 0) gSel = (gSel + n - 1) % n; break;
@@ -572,6 +575,130 @@ function garageKey(k, shift) {
   }
 }
 
+// ================================================================= แท็บ "จูนกล่อง": ตาราง ECU 20x20 (น้ำมัน % / องศาจุด / AFR)
+let ecuMode = 0, ecuC0 = 0, ecuR0 = 19, ecuC1 = 0, ecuR1 = 19;
+const EcuModeNames = ['น้ำมัน (%)', 'องศาจุด (°)', 'AFR'];
+const isEcuTab = () => GarageTabs[gTab][0] === 'จูนกล่อง';
+const mixC = (a, b, t) => { t = clamp(t, 0, 1); return `rgb(${Math.round(a[0] + (b[0] - a[0]) * t)},${Math.round(a[1] + (b[1] - a[1]) * t)},${Math.round(a[2] + (b[2] - a[2]) * t)})`; };
+const ecuRange = () => ({ c0: Math.min(ecuC0, ecuC1), c1: Math.max(ecuC0, ecuC1), r0: Math.min(ecuR0, ecuR1), r1: Math.max(ecuR0, ecuR1) });
+// ตารางเป็นแบบ copy-on-write เสมอ (ไม่ให้ไปแก้ตารางของเครื่องที่ติดตั้งแล้ว)
+const ecuFuelW = () => (draft.EcuFuel = (draft.EcuFuel || new Array(EcuN * EcuN).fill(100)).slice());
+const ecuIgnW = () => (draft.EcuIgn = (draft.EcuIgn || preview.FactoryIgnTable()).slice());
+function ecuAdjust(dir, coarse) {
+  const { c0, c1, r0, r1 } = ecuRange(), m = preview;
+  if (ecuMode === 1) {
+    const t = ecuIgnW(), st = (coarse ? 2 : 0.5) * dir;
+    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) t[r * EcuN + c] = clamp(t[r * EcuN + c] + st, -5, 50);
+  } else {
+    const t = ecuFuelW();
+    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
+      const i = r * EcuN + c;
+      if (ecuMode === 0) t[i] = clamp(t[i] + (coarse ? 5 : 1) * dir, 50, 160);
+      else {
+        const baseAfr = m.Stoich * m.LambdaBase(m.EcuRpmAt(c), ecuLoadAt(r)), afr = baseAfr * 100 / t[i] + (coarse ? 0.5 : 0.1) * dir;
+        t[i] = clamp(Math.round(baseAfr * 100 / Math.max(afr, 1) * 10) / 10, 50, 160);
+      }
+    }
+  }
+  draftChanged();
+}
+function ecuEdit(fn) {
+  const { c0, c1, r0, r1 } = ecuRange(), ign = ecuMode === 1, t = ign ? ecuIgnW() : ecuFuelW();
+  fn(t, c0, c1, r0, r1, ign); draftChanged();
+}
+function ecuSmooth() {
+  ecuEdit((t, c0, c1, r0, r1) => {
+    const src = t.slice();
+    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
+      let s = 0, n = 0;
+      for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) { const rr = r + dr, cc = c + dc; if (rr < 0 || cc < 0 || rr >= EcuN || cc >= EcuN) continue; s += src[rr * EcuN + cc]; n++; }
+      t[r * EcuN + c] = Math.round(s / n * 10) / 10;
+    }
+  });
+  toast('เกลี่ยค่าที่เลือกแล้ว');
+}
+function ecuEqualize() { ecuEdit((t, c0, c1, r0, r1) => { const v = t[ecuR0 * EcuN + ecuC0]; for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) t[r * EcuN + c] = v; }); }
+function ecuFactorySel() {
+  const fac = preview.FactoryIgnTable();
+  ecuEdit((t, c0, c1, r0, r1, ign) => { for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) t[r * EcuN + c] = ign ? fac[r * EcuN + c] : 100; });
+}
+function ecuFactoryAll() { if (ecuMode === 1) draft.EcuIgn = null; else draft.EcuFuel = null; draftChanged(); toast('คืนตารางเป็นค่าโรงงานแล้ว'); }
+function ecuNearMbt() {
+  const m = preview;
+  ecuEdit((t, c0, c1, r0, r1) => { for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) t[r * EcuN + c] = Math.round((m.EcuAt(m.EcuRpmAt(c), ecuLoadAt(r)).Mbt - 1) * 2) / 2; });
+  toast('ตั้งองศาใกล้ MBT แล้ว (ระวังน็อกถ้ากำลังอัดสูง/ออกเทนต่ำ)');
+}
+function ecuKey(k, shift) {
+  const mv = (dc, dr) => { ecuC1 = clamp(ecuC1 + dc, 0, EcuN - 1); ecuR1 = clamp(ecuR1 + dr, 0, EcuN - 1); if (!shift) { ecuC0 = ecuC1; ecuR0 = ecuR1; } return true; };
+  switch (k) {
+    case 'arrowleft': return mv(-1, 0);
+    case 'arrowright': return mv(1, 0);
+    case 'arrowup': return mv(0, 1);
+    case 'arrowdown': return mv(0, -1);
+    case '+': case '=': case 'pageup': ecuAdjust(1, shift || k === 'pageup'); return true;
+    case '-': case '_': case 'pagedown': ecuAdjust(-1, shift || k === 'pagedown'); return true;
+    case 'd': ecuMode = (ecuMode + 1) % 3; return true;
+  }
+  return false;
+}
+function drawEcu() {
+  const m = preview, g = ui.g;
+  EcuModeNames.forEach((n, i) => ui.btn(R(GL + i * 208, 176, 200, 40), n, ecuMode === i, i === 1 ? C.Red : i === 0 ? C.Blue : C.Green, () => { ecuMode = i; }, F.xs));
+  ui.txtR(ecuMode === 0 ? '100 = แมพโรงงาน' : ecuMode === 1 ? 'แก่ = จุดเร็ว  อ่อน = จุดช้า' : 'ตั้งเป้า AFR', F.cap, C.Dim, GL + GW, 188);
+  const labW = 58, hdrY = 224, gridY = 248, cellH = 29, gx = GL + labW, cw = (GW - labW) / EcuN, { c0: sc0, c1: sc1, r0: sr0, r1: sr1 } = ecuRange();
+  ui.txt('x1000', F.cap, C.Dim, GL + 4, hdrY + 2);
+  for (let c = 0; c < EcuN; c++) ui.txtC((m.EcuRpmAt(c) / 1000).toFixed(1), F.cap, c >= sc0 && c <= sc1 ? C.Accent : C.Dim, gx + (c + 0.5) * cw, hdrY + 10);
+  const e = {};
+  for (let dr = 0; dr < EcuN; dr++) {
+    const r = EcuN - 1 - dr, y = gridY + dr * cellH;
+    ui.txtC(`${(r + 1) * 5}%`, F.cap, r >= sr0 && r <= sr1 ? C.Accent : C.Dim, GL + labW / 2 - 4, y + cellH / 2);
+    for (let c = 0; c < EcuN; c++) {
+      const rpm = m.EcuRpmAt(c), load = ecuLoadAt(r); m.EcuAt(rpm, load, e);
+      let col, txt;
+      if (ecuMode === 0) {
+        const v = m.CellFuel(c, r);
+        col = v >= 100 ? mixC([20, 23, 28], [200, 120, 20], (v - 100) / 25) : mixC([20, 23, 28], [40, 120, 190], (100 - v) / 25); txt = v.toFixed(0);
+      } else if (ecuMode === 1) {
+        const v = m.CellAdv(c, r), d = v - e.Mbt;
+        col = d >= -1 ? mixC([120, 100, 30], [200, 50, 45], (d + 1) / 6) : mixC([20, 23, 28], [40, 110, 180], (-1 - d) / 12);
+        if (d >= -1 && d < 1) col = 'rgb(70,140,80)';
+        txt = v.toFixed(1);
+      } else {
+        const l = e.Lambda;
+        col = l < 0.8 ? mixC([50, 100, 170], [40, 70, 130], (0.8 - l) / 0.3) : l < 0.95 ? 'rgb(50,130,80)' : l < 1.05 ? 'rgb(150,130,40)' : mixC([190, 90, 40], [200, 40, 40], (l - 1.05) / 0.3);
+        txt = e.Afr.toFixed(1);
+      }
+      ui.rect(gx + c * cw, y, cw - 1, cellH - 1, col);
+      ui.txtC(txt, F.cap, C.Text, gx + c * cw + cw / 2, y + cellH / 2);
+    }
+  }
+  for (let c = 0; c < EcuN; c++) {     // เส้นทางตอนเปิดคันเร่งสุด (ไดโน) = จุดขาว
+    const lw = m.Load(1, m.EcuRpmAt(c)), r = clamp(Math.round(lw * EcuN - 1), 0, EcuN - 1), y = gridY + (EcuN - 1 - r) * cellH;
+    g.beginPath(); g.arc(gx + (c + 0.5) * cw, y + cellH - 5, 3, 0, 7); g.fillStyle = C.Text; g.fill();
+  }
+  ui.drawRR(R(gx + sc0 * cw, gridY + (EcuN - 1 - sr1) * cellH, (sc1 - sc0 + 1) * cw - 1, (sr1 - sr0 + 1) * cellH - 1), 0, C.Accent, 3);
+  const cellAt = p => [clamp(Math.floor((p.x - gx) / cw), 0, EcuN - 1), clamp(EcuN - 1 - Math.floor((p.y - gridY) / cellH), 0, EcuN - 1)];
+  ui.hit(R(gx, gridY, EcuN * cw, EcuN * cellH), p => { const [c, r] = cellAt(p); ecuC0 = ecuC1 = c; ecuR0 = ecuR1 = r; },
+    p => { const [c, r] = cellAt(p); ecuC1 = c; ecuR1 = r; }, () => { }, dir => ecuAdjust(dir, keys.has('shift')));
+
+  let bx = GL; const by = 848;
+  const B = (t, w, fn, col = C.Accent) => { ui.btn(R(bx, by, w, 42), t, false, col, fn, F.xs); bx += w + 8; };
+  B('−−', 56, () => ecuAdjust(-1, true)); B('−', 56, () => ecuAdjust(-1, false)); B('+', 56, () => ecuAdjust(1, false)); B('++', 56, () => ecuAdjust(1, true));
+  B('เกลี่ย', 84, ecuSmooth, C.Blue); B('เท่ากัน', 90, ecuEqualize, C.Blue);
+  B('โรงงาน (ที่เลือก)', 150, ecuFactorySel, C.Green); B('โรงงาน (ทั้งตาราง)', 150, ecuFactoryAll, C.Red);
+  if (ecuMode === 1) B('ใกล้ MBT', 100, ecuNearMbt, C.Yellow);
+
+  const prpm = m.EcuRpmAt(ecuC1), pload = ecuLoadAt(ecuR1), s = m.EcuAt(prpm, pload, {}), box = R(GL, 900, GW, 120);
+  ui.fillRR(box, 4, C.Panel); ui.drawRR(box, 4, C.Border, 1); ui.rect(box.x + 14, box.y + 12, 4, 20, C.Yellow);
+  ui.txt(`ช่อง: ${fmtN(prpm)} rpm  โหลด ${f0(pload * 100)}%`, F.cap, C.Dim, box.x + 28, box.y + 12);
+  const fuelNote = s.Duty > 1 ? '  หัวฉีดเต็ม! ส่วนผสมบางลง' : s.Duty > 0.85 ? '  หัวฉีดใกล้เต็ม' : '';
+  ui.txt(`AFR ${f1(s.Afr)} (λ ${f2(s.Lambda)})  •  น้ำมัน ${f0(s.FuelPct)}%  •  หัวฉีด ${f0(s.Duty * 100)}%${fuelNote}`, F.xs, s.Lambda > 1.12 ? C.Red : s.Lambda < 0.7 ? C.Blue : s.Lambda > 0.97 ? C.Yellow : C.Green, box.x + 20, box.y + 40);
+  const dlt = s.Adv - s.Mbt;
+  ui.txt(`จุดระเบิด ${f1(s.Adv)}° (MBT ${f1(s.Mbt)}°  ${dlt >= 0 ? 'แก่กว่า' : 'อ่อนกว่า'} ${f1(Math.abs(dlt))}°)  •  แรงบิด x${s.Mult.toFixed(3)}`, F.xs, dlt > 1.5 ? C.Red : dlt < -8 ? C.Blue : C.Green, box.x + 20, box.y + 66);
+  const warn = s.Egt > 1050 ? 'ไอเสียร้อนจัด! บางเกิน/จุดอ่อนเกิน เสี่ยงลูกสูบพัง' : m.KnockWot(prpm) > 0.02 && pload > 0.7 ? 'น็อกที่ช่องนี้: ลดองศา/เติมน้ำมันเพิ่ม/ใช้ออกเทนสูงขึ้น' : dlt < -10 ? 'จุดอ่อนมาก: แรงบิดตก ไอเสียร้อน' : s.Lambda > 1.35 || s.Lambda < 0.6 ? 'ส่วนผสมนอกช่วงจุดติด: เครื่องสะดุด/ดับ' : '';
+  ui.txt(`EGT ~${f0(s.Egt)}°C` + (warn ? '  •  ' + warn : '  •  พื้นสีเขียว = ใกล้ MBT / AFR กำลังสูงสุด  จุดขาว = เส้นไดโน (คันเร่งสุด)'), F.xs, warn ? C.Yellow : C.Dim, box.x + 20, box.y + 92);
+}
+
 function drawGarage() {
   drawTopBar('อู่ออกแบบเครื่อง', '↑ ↓ เลือก  •  ← → ปรับ (Shift = เร็ว)  •  Tab เปลี่ยนหมวด  •  1-6 แบบเดิม  •  A จูนเม็ด  •  T ที่ปรึกษาจูน  •  C ปรับเทียบรถจริง  •  Enter ประกอบแล้วไปทดสอบ');
   const tw = (GW - 136) / GarageTabs.length;
@@ -585,6 +712,7 @@ function drawGarage() {
   ui.btn(R(GL + GW - 132, 112, 132, 52), 'T ที่ปรึกษา', advisorOn, C.Blue, () => { advisorOn = !advisorOn; advKey = ''; }, F.sm);
   if (advisorOn) drawAdvisor();
   else if (gTab === 0) drawParts();
+  else if (isEcuTab()) drawEcu();
   else { drawSpecRows(); if (GarageTabs[gTab][1].includes('realhp')) drawCalibrateButtons(); }
   drawGarageStats();
 }
@@ -721,6 +849,8 @@ function drawGarageStats() {
   const idle = m.Lope < 0.12 ? 'เดินเบานิ่ง' : m.Lope < 0.5 ? 'เดินเบาสะดุดเบา ๆ' : 'เดินเบาลูปจัด';
   const tone = m.SoundBright < -0.35 ? 'นุ่ม' : m.SoundBright > 0.55 ? 'แผดคม' : 'กลาง';
   const size = m.PitchStretch < 0.92 ? '  •  เสียงเล็กแหลม' : m.PitchStretch > 1.08 ? '  •  เสียงใหญ่ทุ้ม' : '';
+  const ep = preview.EcuAt(m.PeakPsRpm, m.Load(1, m.PeakPsRpm), {});
+  line(`ECU @พีค: AFR ${f1(ep.Afr)}  •  จุด ${f1(ep.Adv)}° (MBT ${f1(ep.Mbt)})  •  หัวฉีด ${f0(ep.Duty * 100)}%`, ep.Duty > 1 || ep.Egt > 1050 || ep.Adv - ep.Mbt > 1.5 ? 2 : 1);
   line(`เสียง: ${idle}  •  โทน${tone}${size}`, 0);
   if (d.Auto === 1) {
     const hold = Cvt.holdRpm(m), ok = hold >= m.PeakPsRpm * 0.93 && hold <= m.PeakPsRpm * 1.08;

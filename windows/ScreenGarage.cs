@@ -67,9 +67,10 @@ public sealed partial class MainForm
         ("อะไหล่", Array.Empty<string>()),
         ("เครื่องยนต์", new[] { "bore", "stroke", "rod", "crank", "fly", "valves" }),
         ("ไอดี·แคม·ท่อ", new[] { "throttle", "lsa", "duration", "durationex", "lift", "liftex", "pipe" }),
-        ("อัด·น้ำมัน", new[] { "cr", "psi", "fuel", "limiter", "resume", "softcut" }),
+        ("อัด·น้ำมัน", new[] { "cr", "psi", "fuel", "inj", "limiter", "resume", "softcut" }),
         ("ส่งกำลัง", new[] { "auto", "prim", "gears", "g1", "g2", "g3", "g4", "g5", "g6", "sprf", "sprr", "ramp", "rampout", "rollers", "rollerg", "rollerg2", "fdf", "fdr", "firstred", "spring" }),
         ("ตัวรถ", new[] { "rider", "bikekg", "rim", "rimw", "tirew", "tireasp", "cda" }),
+        ("จูนกล่อง", Array.Empty<string>()),
         ("รถจริง", new[] { "realhp", "realhprpm", "realtq", "realtqrpm", "calk" }),
     };
 
@@ -137,6 +138,7 @@ public sealed partial class MainForm
     private void GarageKey(Keys k, bool shift)
     {
         if (_advisor && (k == Keys.Up || k == Keys.Down || k == Keys.Left || k == Keys.Right)) return;     // แผงที่ปรึกษาไม่มีแถวให้ปรับ
+        if (IsEcuTab && !_advisor && EcuKey(k, shift)) return;
         int n = _vis.Count;
         bool parts = _tab == 0;
         int prow = Parts.Categories.Length + 1;
@@ -234,6 +236,7 @@ public sealed partial class MainForm
 
         if (_advisor) DrawAdvisor(g);
         else if (_tab == 0) DrawParts(g);
+        else if (IsEcuTab) DrawEcu(g);
         else
         {
             DrawSpecRows(g);
@@ -461,7 +464,7 @@ public sealed partial class MainForm
         float vpL = m.PistonSpeed(d.Limiter);
         Line($"ลูกสูบเฉลี่ย {vpL:0.0} ม./วิ ที่รอบตัด" + (vpL > 24f ? "  (ชักยาวเกิน กำลังตก)" : ""), vpL > 24f ? 2 : vpL > 22f ? 0 : 1);
 
-        float kn = m.Knock(3500f, m.Load(1f, 3500f));
+        float kn = m.KnockWot(3500f);
         float margin = m.CrLimit - m.CrDyn;
         string fuel = EngineDesign.Fuels[Math.Clamp(d.Fuel, 0, EngineDesign.Fuels.Length - 1)].Name;
         Line(kn > 0.02f
@@ -474,6 +477,8 @@ public sealed partial class MainForm
         string idleTxt = m.Lope < 0.12f ? "เดินเบานิ่ง" : m.Lope < 0.5f ? "เดินเบาสะดุดเบา ๆ" : "เดินเบาลูปจัด";
         string tone = m.SoundBright < -0.35f ? "นุ่ม" : m.SoundBright > 0.55f ? "แผดคม" : "กลาง";
         string size = m.PitchStretch < 0.92f ? "  •  เสียงเล็กแหลม" : m.PitchStretch > 1.08f ? "  •  เสียงใหญ่ทุ้ม" : "";
+        var ep = m.EcuAt(m.PeakPsRpm, m.Load(1f, m.PeakPsRpm));
+        Line($"ECU @พีค: AFR {ep.Afr:0.0}  •  จุด {ep.Adv:0.#}° (MBT {ep.Mbt:0.#})  •  หัวฉีด {ep.Duty * 100f:0}%", ep.Duty > 1f || ep.Egt > 1050f || ep.Adv - ep.Mbt > 1.5f ? 2 : 1);
         Line($"เสียง: {idleTxt}  •  โทน{tone}{size}", 0);
 
         if (d.Auto == 1)

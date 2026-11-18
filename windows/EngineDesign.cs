@@ -22,6 +22,9 @@ public sealed class EngineDesign
     public float RealHp, RealHpRpm;     // แรงม้าที่วัดจากรถจริง (HP) และรอบ (0 = ไม่ระบุ) ใช้อ้างอิง/ปรับเทียบโมเดล
     public float RealTq, RealTqRpm;     // แรงบิดจากรถจริง (N·m) และรอบ
     public float CalK = 1.0f;           // ตัวคูณปรับเทียบแรงบิดของโมเดลให้ตรงรถจริง (1.00 = ไม่ปรับ)
+    public float Inj = 0f;          // หัวฉีด (cc/นาที, น้ำมันเบนซิน) 0 = ตามรถ (ขนาดพอดีกับซีซีและชนิดน้ำมัน)
+    public float[]? EcuFuel;        // ตารางจูนกล่อง 20x20 (แถว = โหลด 5..100%, คอลัมน์ = รอบ) : เติมน้ำมัน % ของแมพโรงงาน  null = ค่าโรงงาน
+    public float[]? EcuIgn;         // ตารางองศาจุดระเบิด (°ก่อนศูนย์ตายบน)  null = ค่าโรงงาน
     public float Seal = 1.0f;       // แรงดันอัดจริงเทียบค่าที่ CR+แคมควรได้ (ซีลดี = 1.0) -> แรงดัน psi แยกจาก CR
     public float Limiter = 9500f;   // รอบตัดแรง (hard cut) rpm: ตัดไฟเด็ดขาด
     public float SoftGap = 0f;      // soft cut อยู่ใต้ hard cut กี่ rpm (0 = ไม่ใช้) เช่น hard 10500 ห่าง 100 = soft เริ่มที่ 10400
@@ -93,7 +96,13 @@ public sealed class EngineDesign
     public float CamLossFactor => 1f - 0.0020f * MathF.Max(0f, Duration - 220f);
     public float CrDynamic => Cr * CamLossFactor;
 
-    public EngineDesign Clone() => (EngineDesign)MemberwiseClone();
+    public EngineDesign Clone()
+    {
+        var c = (EngineDesign)MemberwiseClone();
+        c.EcuFuel = (float[]?)EcuFuel?.Clone();
+        c.EcuIgn = (float[]?)EcuIgn?.Clone();
+        return c;
+    }
 
     public static readonly (string Name, EngineDesign D)[] Presets =
     {
@@ -170,7 +179,22 @@ public sealed class EngineDesign
     };
 
     // ---------- บันทึก/โหลดแบบข้อความง่าย ๆ ----------
-    public string Serialize() => string.Join(";", Params.Where(p => p.Persist).Select(p => p.Key + "=" + p.Get(this).ToString(CultureInfo.InvariantCulture)));
+    public string Serialize()
+    {
+        string s = string.Join(";", Params.Where(p => p.Persist).Select(p => p.Key + "=" + p.Get(this).ToString(CultureInfo.InvariantCulture)));
+        if (EcuFuel != null) s += ";ecuf=" + string.Join(",", EcuFuel.Select(v => v.ToString("0.#", CultureInfo.InvariantCulture)));
+        if (EcuIgn != null) s += ";ecui=" + string.Join(",", EcuIgn.Select(v => v.ToString("0.#", CultureInfo.InvariantCulture)));
+        return s;
+    }
+
+    private static float[]? ParseTable(string s)
+    {
+        var a = s.Split(',');
+        if (a.Length != 400) return null;
+        var t = new float[400];
+        for (int i = 0; i < 400; i++) if (!float.TryParse(a[i], NumberStyles.Float, CultureInfo.InvariantCulture, out t[i])) return null;
+        return t;
+    }
 
     public static EngineDesign Deserialize(string s)
     {
@@ -180,6 +204,14 @@ public sealed class EngineDesign
         {
             var parts = kv.Split('=');
             if (parts.Length != 2) continue;
+            if (parts[0] == "ecuf") { d.EcuFuel = ParseTable(parts[1]); continue; }
+            if (parts[0] == "ecui") { d.EcuIgn = ParseTable(parts[1]); continue; }
+            if (parts[0] == "ecuf") { d.EcuFuel = ParseTable(parts[1]); continue; }
+            if (parts[0] == "ecui") { d.EcuIgn = ParseTable(parts[1]); continue; }
+            if (parts[0] == "ecuf") { d.EcuFuel = ParseTable(parts[1]); continue; }
+            if (parts[0] == "ecui") { d.EcuIgn = ParseTable(parts[1]); continue; }
+            if (parts[0] == "ecuf") { d.EcuFuel = ParseTable(parts[1]); continue; }
+            if (parts[0] == "ecui") { d.EcuIgn = ParseTable(parts[1]); continue; }
             var p = Params.FirstOrDefault(x => x.Key == parts[0]);
             if (p != null && float.TryParse(parts[1], NumberStyles.Float, CultureInfo.InvariantCulture, out float v))
                 p.Set(d, Math.Clamp(v, p.Min, p.Max));
@@ -249,6 +281,9 @@ public sealed class EngineDesign
         new("psi", "แรงดันอัด (วัดจริง)", "psi", 100f, 480f, 5f, "0", d => d.Psi, (d, v) => d.Seal = Math.Clamp(v / CrankPsi(d.CrDynamic), 0.6f, 1.5f),
             "ค่าที่เกจวัดตอนสตาร์ท ปรับแยกจาก CR: ซีลแน่น = แรงบิดดีขึ้นแต่น็อกง่าย  ต่ำ = รั่ว กำลังตก จุดไม่ติด (Wave ~190 psi, แต่งถนน 200-230, แข่ง 260-300+)",
             text: v => $"{v:0} psi", persist: false),
+        new("inj", "หัวฉีด (ขนาดรู)", "cc/นาที", 0f, 3000f, 10f, "0", d => d.Inj, (d, v) => d.Inj = v,
+            "ความจุหัวฉีด (เบนซิน) ถ้าเครื่องต้องการน้ำมันมากกว่านี้ (รอบสูง/E85/เมทานอล ใช้น้ำมันมากกว่าเบนซิน 1.5-2.3 เท่า) หัวฉีดเต็ม 100% แล้วส่วนผสมจะบางลง  0 = ตามรถ (เหมาะกับซีซีและน้ำมันที่เลือก)",
+            textD: (d, v) => v <= 0f ? "ตามรถ (อัตโนมัติ)" : $"{v:0} cc/นาที"),
         new("seal", "ความแน่นซีล", "x", 0.6f, 1.5f, 0.01f, "0.00", d => d.Seal, (d, v) => d.Seal = v, "", d => false),
         new("fuel", "ชนิดน้ำมัน", "", 0f, 6f, 1f, "0", d => d.Fuel, (d, v) => d.Fuel = (int)v,
             "ออกเทนสูง = ทนกำลังอัดสูงก่อนน็อก  E85/เมทานอล/ไนโตร ฉีดหนาขึ้นได้กำลังเพิ่มด้วย",
@@ -384,6 +419,7 @@ public sealed class EngineModel
     public readonly float CrAmp;             // กำลังอัดสูง = แรงดันพุ่งออกท่อแรงกว่า
     public readonly float LowCrMisfire;      // กำลังอัดต่ำ เดินเบาจุดไม่ติดบางรอบ
     private readonly float[] _veN = new float[N];
+    private readonly float[] _veA = new float[N];      // VE สัมบูรณ์ (ไม่ normalize) ใช้คำนวณมวลอากาศให้ ECU
     public readonly float Inertia;           // kg·m² (ข้อเหวี่ยง + จานไฟ)
     public readonly float IdleSteady;        // จานไฟหนัก = เดินเบานิ่ง
     public readonly float Psi;               // แรงดันอัดจริง (psi)
@@ -491,6 +527,7 @@ public sealed class EngineModel
             }
             ve *= PipeGain(rpm);
             _veN[i] = ve;
+            _veA[i] = ve;
             _tInd[i] = ve * dispL * 245f * eff * D.FuelPower * SealGain;
             // ความเร็วลูกสูบเฉลี่ย (ม./วิ) เกิน ~24 แรงเสียดทาน/แรงเฉื่อยพุ่ง (ชักยาว รอบจัดลากไม่ไหว)
             float vp = 2f * stroke * rpm / 60000f;
@@ -544,9 +581,9 @@ public sealed class EngineModel
     public float VeNorm(float rpm) => Lerp(_veN, rpm);
 
     /// <summary>ความแรงของการน็อก 0..1 (ภาระสูง รอบต่ำ น็อกง่ายสุด)</summary>
-    public float Knock(float rpm, float load)
+    public float Knock(float rpm, float load, float shift = 0f)
     {
-        float k = (CrDyn - CrLimit) / 1.5f;
+        float k = (CrDyn - CrLimit - shift) / 1.5f;
         if (k <= 0f) return 0f;
         return Math.Clamp(k, 0f, 1f) * load * load * Math.Clamp(1.4f - rpm / 8000f, 0.3f, 1f);
     }
@@ -555,8 +592,112 @@ public sealed class EngineModel
     public float BrakeTorqueWot(float rpm)
     {
         float load = Load(1f, rpm);
-        float kn = Knock(rpm, load);
-        return TorqueInd(rpm) * load * (1f - 0.5f * kn) - Friction(rpm);
+        var e = EcuAt(rpm, load);
+        float kn = Knock(rpm, load, e.KnockShift);
+        return TorqueInd(rpm) * load * e.Mult * (1f - 0.5f * kn) - Friction(rpm);
+    }
+
+    /// <summary>ความแรงน็อกที่ไอดีเต็ม (รวมผลตารางจูนกล่อง)</summary>
+    public float KnockWot(float rpm)
+    {
+        float load = Load(1f, rpm);
+        return Knock(rpm, load, EcuAt(rpm, load).KnockShift);
+    }
+
+    // ====================================================================
+    //  ตารางจูนกล่อง (ECU): น้ำมัน / องศาจุดระเบิด / AFR
+    // ====================================================================
+    public const int EcuN = 20;
+    private static readonly float[] StoichTab = { 14.7f, 14.7f, 14.1f, 14.6f, 9.76f, 6.45f, 5.2f };     // อัตราส่วนสโตอิกของน้ำมันแต่ละชนิด (อากาศ:น้ำมัน)
+    private static readonly float[] FuelDens = { 0.74f, 0.74f, 0.75f, 0.74f, 0.78f, 0.79f, 0.85f };     // ความหนาแน่นน้ำมัน (กรัม/cc)
+    private static readonly float[] BurnK = { 0f, 0f, -0.5f, 0f, -2f, -3f, -4f };                       // เปลวไฟวิ่งไว (เอทานอล/เมทานอล) ใช้องศาน้อยลง
+
+    public readonly record struct EcuState(float Mult, float KnockShift, float Afr, float Lambda, float Adv, float Mbt, float Duty, float Egt, float FuelPct);
+
+    private int FuelIdx => Math.Clamp(D.Fuel, 0, StoichTab.Length - 1);
+    public float Stoich => StoichTab[FuelIdx];
+    /// <summary>ความจุหัวฉีดที่ใช้จริง (cc/นาที)</summary>
+    public float InjCapCc => D.Inj > 0f ? D.Inj : Cc * 14.7f / Stoich * 0.6f;
+    public float EcuRpmMax => MathF.Max(6000f, MathF.Ceiling(D.Limiter / 500f) * 500f);
+    public float EcuRpmAt(int i) => 1000f + (EcuRpmMax - 1000f) * i / (EcuN - 1);
+    public static float EcuLoadAt(int j) => (j + 1) / (float)EcuN;
+
+    /// <summary>แมพน้ำมันโรงงาน: λ ฐาน (1.00 = สโตอิก) ตอนโหลดเบาประหยัด ตอนโหลดหนักเติมหนาให้เย็นและแรง</summary>
+    public float LambdaBase(float rpm, float load)
+    {
+        float hi = Math.Clamp((load - 0.55f) / 0.45f, 0f, 1f);
+        return 1f - 0.12f * hi - 0.02f * hi * Math.Clamp((rpm / D.Limiter - 0.7f) / 0.3f, 0f, 1f);
+    }
+
+    /// <summary>องศาจุดระเบิดที่แรงบิดสูงสุด (MBT) ของเครื่องนี้ ที่ rpm/โหลด/λ นั้น</summary>
+    public float Mbt(float rpm, float load, float lam)
+    {
+        float m = 10f + 2.1f * MathF.Min(rpm, 11000f) / 1000f;         // เวลาเผาไหม้คงที่ แต่ข้อเหวี่ยงหมุนไวขึ้น -> ต้องจุดเร็วขึ้นตามรอบ
+        m += 14f * MathF.Pow(1f - Math.Clamp(load, 0f, 1f), 1.3f);      // โหลดเบา ส่วนผสมเจือจาง เผาช้า -> จุดแก่ขึ้น
+        m += 0.25f * (D.Bore - 55f);                                    // ลูกโต เปลวไฟวิ่งไกล
+        m -= 1.0f * (CrEff - 10f);                                      // กำลังอัดสูง ส่วนผสมแน่น เผาไวขึ้น
+        m -= 6f * (RodRatio - 1.7f);                                    // ก้านยาว ลูกสูบอยู่แถวศูนย์ตายนานขึ้น
+        m += 0.04f * Overlap;                                           // โอเวอร์แลปมาก ไอเสียตกค้างเจือจาง
+        m += BurnK[FuelIdx];                                            // เชื้อเพลิงเผาไว
+        m += Math.Clamp(12f * (lam - 0.9f), -1.5f, 6f);                // ส่วนผสมบางเผาช้า
+        return Math.Clamp(m, 5f, 45f);
+    }
+
+    /// <summary>องศาโรงงาน (ไม่สุดขอบ MBT: เผื่อไว้ 4° กันน็อก)</summary>
+    public float StockAdv(float rpm, float load) => MathF.Max(2f, Mbt(rpm, load, LambdaBase(rpm, load)) - 4f);
+
+    private static float Samp(float[] t, float x, float y)
+    {
+        x = Math.Clamp(x, 0f, EcuN - 1f); y = Math.Clamp(y, 0f, EcuN - 1f);
+        int x0 = (int)x, y0 = (int)y, x1 = Math.Min(x0 + 1, EcuN - 1), y1 = Math.Min(y0 + 1, EcuN - 1);
+        float fx = x - x0, fy = y - y0;
+        float a = t[y0 * EcuN + x0] + (t[y0 * EcuN + x1] - t[y0 * EcuN + x0]) * fx;
+        float b = t[y1 * EcuN + x0] + (t[y1 * EcuN + x1] - t[y1 * EcuN + x0]) * fx;
+        return a + (b - a) * fy;
+    }
+    private float EcuX(float rpm) => (rpm - 1000f) / (EcuRpmMax - 1000f) * (EcuN - 1);
+    private static float EcuY(float load) => load * EcuN - 1f;
+
+    public float TableFuel(float rpm, float load) => D.EcuFuel == null ? 100f : Samp(D.EcuFuel, EcuX(rpm), EcuY(load));
+    public float TableAdv(float rpm, float load) => D.EcuIgn == null ? StockAdv(rpm, load) : Samp(D.EcuIgn, EcuX(rpm), EcuY(load));
+
+    private static float TimingF(float d) => MathF.Max(0.15f, 1f - (d > 0f ? 0.0013f : 0.0009f) * d * d);
+    private static float LambdaF(float l) => MathF.Max(0.2f, l >= 0.89f ? 1f - 1.8f * (l - 0.89f) * (l - 0.89f) : 1f - 2.4f * (l - 0.89f) * (l - 0.89f));
+
+    /// <summary>ผลของตารางจูนกล่อง ณ รอบ/โหลดนั้น: ตัวคูณแรงบิด, ค่าน็อก, AFR จริง, หัวฉีด, EGT</summary>
+    public EcuState EcuAt(float rpm, float load)
+    {
+        load = Math.Clamp(load, 0.02f, 1f);
+        int fi = FuelIdx;
+        float lamB = LambdaBase(rpm, load);
+        float fuelPct = TableFuel(rpm, load);
+        float air = Lerp(_veA, rpm) * (Cc / 1000f) * rpm / 120f * load * 1.18f;        // มวลอากาศ g/s  (VE x ซีซี x รอบ/2 x ความหนาแน่น)
+        float cmd = air / (StoichTab[fi] * lamB) * fuelPct / 100f;                     // น้ำมันที่ ECU สั่ง g/s
+        float cap = InjCapCc / 60f * FuelDens[fi];                                     // หัวฉีดฉีดได้สูงสุด g/s
+        float duty = cap > 0f ? cmd / cap : 0f;
+        float del = MathF.Min(cmd, cap);
+        float afr = del > 1e-5f ? air / del : 99f;
+        float lam = afr / StoichTab[fi];
+        float adv = TableAdv(rpm, load);
+        float mbt = Mbt(rpm, load, lam);
+        float dlt = adv - mbt;
+        float mult = TimingF(dlt) / TimingF(-4f) * LambdaF(lam) / LambdaF(lamB);
+        float mf = lam > 1.35f ? Math.Clamp((1.5f - lam) / 0.15f, 0f, 1f) : lam < 0.6f ? Math.Clamp((lam - 0.45f) / 0.15f, 0f, 1f) : 1f;   // บาง/หนาเกิน จุดไม่ติด
+        mult *= MathF.Max(0.1f, mf);
+        float shift = 1.8f * (lamB - lam) - 0.11f * (adv - StockAdv(rpm, load));       // หนา = เย็น ทนน็อกขึ้น  จุดแก่/บาง = น็อกง่าย
+        float egt = 330f + 380f * load + 12f * rpm / 1000f + 300f * Math.Clamp((lam - 0.8f) / 0.25f, 0f, 1f)
+                    - 150f * Math.Clamp((lam - 1.1f) / 0.3f, 0f, 1f) + 9f * MathF.Max(0f, mbt - adv);
+        return new EcuState(mult, shift, afr, lam, adv, mbt, duty, egt, fuelPct);
+    }
+
+    /// <summary>ค่าโรงงาน/ค่าที่ตั้งไว้ของเซลล์ตาราง (คอลัมน์ = รอบ, แถว = โหลด)</summary>
+    public float CellFuel(int c, int r) => D.EcuFuel != null ? D.EcuFuel[r * EcuN + c] : 100f;
+    public float CellAdv(int c, int r) => D.EcuIgn != null ? D.EcuIgn[r * EcuN + c] : StockAdv(EcuRpmAt(c), EcuLoadAt(r));
+    public float[] FactoryIgnTable()
+    {
+        var t = new float[EcuN * EcuN];
+        for (int r = 0; r < EcuN; r++) for (int c = 0; c < EcuN; c++) t[r * EcuN + c] = MathF.Round(StockAdv(EcuRpmAt(c), EcuLoadAt(r)) * 2f) / 2f;
+        return t;
     }
 
     public static float Ps(float torque, float rpm) => torque * rpm / 7023f;
