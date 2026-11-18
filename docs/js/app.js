@@ -33,6 +33,7 @@ const runAny = r => r.b060 > 0 || r.b100 > 0 || r.b402 > 0 || r.top > 0 || r.hp 
 const bestOf = (cur, v) => (v > 0 && (cur < 0 || v < cur) ? v : cur);
 let cur = newRun(), before = null;
 let last060 = -1, last100 = -1, last402 = -1, trap402 = 0, topSession = 0, peakRpm = 0;
+let runDist = -1, runTime = 0, runFull = true;      // ระยะ/เวลาที่ขับได้จากความเร็ว 0 (ค้างค่าไว้ถึงออกตัวรอบใหม่)
 let dynoRes = null;
 
 // ================================================================= เสียง / worklet
@@ -243,9 +244,10 @@ function roadTests(t) {
   if (topSession > cur.top) cur.top = topSession;
   if (topSession > save.best.top + 0.5) { save.best.top = topSession; persist(); }
   if (kmh < 1) { roadArmed = true; roadTiming = false; distStart = S.dist; }
-  else if (roadArmed && !roadTiming) { roadArmed = false; if (kmh < 8) { roadTiming = true; roadStart = t; got060 = got100 = got402 = false; } }
+  else if (roadArmed && !roadTiming) { roadArmed = false; if (kmh < 8) { roadTiming = true; roadStart = t; got060 = got100 = got402 = false; runFull = true; } }
   if (!roadTiming) return;
   const el = t - roadStart, dist = S.dist - distStart;
+  runDist = dist; runTime = el; if (S.thr < 0.95) runFull = false;
   if (!got060 && kmh >= 60) { got060 = true; last060 = el; if (el >= 0.8) { cur.b060 = bestOf(cur.b060, el); if (save.best.b060 < 0 || el < save.best.b060) { save.best.b060 = el; persist(); } } }
   if (!got100 && dist >= 100) { got100 = true; last100 = el; if (el >= 2) { cur.b100 = bestOf(cur.b100, el); if (save.best.b100 < 0 || el < save.best.b100) { save.best.b100 = el; persist(); } } }
   if (!got402 && dist >= 402.3) { got402 = true; last402 = el; trap402 = kmh; if (el >= 5) { cur.b402 = bestOf(cur.b402, el); if (save.best.b402 < 0 || el < save.best.b402) { save.best.b402 = el; persist(); } } }
@@ -324,7 +326,7 @@ function drawSettings() {
   ui.btn(R(x + w - 260, y - 10, 260, 60), showFps ? 'เปิด' : 'ปิด', showFps, C.Green, () => { showFps = !showFps; }, F.sm);
   y += 90; ui.txt('ล้างสถิติบนถนน', F.md, C.Text, x, y);
   ui.btn(R(x + w - 260, y - 10, 260, 60), 'ล้างสถิติ', false, C.Red, () => {
-    save.best = { b060: -1, b100: -1, b402: -1, top: 0 }; last060 = last100 = last402 = -1; topSession = 0; cur = newRun(); before = null; persist(); toast('ล้างสถิติแล้ว');
+    save.best = { b060: -1, b100: -1, b402: -1, top: 0 }; last060 = last100 = last402 = -1; runDist = -1; topSession = 0; cur = newRun(); before = null; persist(); toast('ล้างสถิติแล้ว');
   }, F.sm);
   y += 90; ui.txt('ช่วยกำครัตช์อัตโนมัติ (มือถือ)', F.md, C.Text, x, y);
   ui.btn(R(x + w - 260, y - 10, 260, 60), save.assist ? 'เปิด' : 'ปิด', save.assist, C.Green, () => { save.assist = !save.assist; persist(); }, F.sm);
@@ -471,6 +473,9 @@ function drawGauge(cx, cy, r) {
   const gear = S.isAuto ? 'ออโต้ ' + f2(Cvt.ratio(S.cvtS)) : 'เกียร์ ' + (S.gear === 0 ? 'N' : S.gear);
   ui.txtC(f0(S.speed * 3.6), F.speed, C.Accent, cx, cy + 205 * k);
   ui.txtC(`กม./ชม.     ${gear}`, F.sm, C.Text, cx, cy + 238 * k);
+  ui.txt('ระยะจากจอด', F.xs, C.Dim, 262, 800);
+  ui.txt(runDist < 0 ? '-' : `${runDist < 1000 ? f0(runDist) + ' ม.' : f2(runDist / 1000) + ' กม.'}`, F.num, C.Accent, 262, 826);
+  ui.txt(runDist < 0 ? 'ออกตัวจากหยุดนิ่งเพื่อวัด' : `${f1(runTime)} วิ  ${runFull ? '• เต็มคันเร่ง' : '• ไม่เต็มคันเร่ง'}`, F.xs, runDist >= 0 && runFull ? C.Green : C.Dim, 262, 876);
   if (S.dynoPhase !== 0) ui.txtC('กำลังวัดไดโน...', F.btn, C.Green, cx, cy - 112 * k);
   else if (!S.running) ui.txtC(S.ignition ? 'กด S ค้างเพื่อสตาร์ท' : 'ดับเครื่องอยู่ - กด S ค้างเพื่อสตาร์ท', F.md, C.Accent, cx, cy - 112 * k);
   const na = ang(needle);
@@ -538,7 +543,7 @@ function assemble() {
   const changed = JSON.stringify(draft) !== JSON.stringify(design);
   if (changed) {
     if (runAny(cur)) before = cur;
-    cur = newRun(); last060 = last100 = last402 = -1; peakRpm = 0; topSession = 0; dynoRes = null;
+    cur = newRun(); last060 = last100 = last402 = -1; runDist = -1; peakRpm = 0; topSession = 0; dynoRes = null;
   }
   design = { ...draft }; save.design = design; persist();
   installed = new EngineModel(design);

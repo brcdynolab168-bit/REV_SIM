@@ -114,7 +114,7 @@ public sealed partial class MainForm
         {
             _save.Best060 = _save.Best100 = _save.Best402 = -1f;
             _save.BestTop = 0f;
-            _last060 = _last100 = _last402 = -1f;
+            _last060 = _last100 = _last402 = -1f; _runDist = -1f;
             _topSession = 0f;
             _cur = new RunStats();
             _before = null;

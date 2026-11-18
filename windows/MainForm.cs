@@ -56,6 +56,8 @@ public sealed partial class MainForm : Form
     private float _distStart;
     private bool _got060, _got100, _got402;
     private float _last060 = -1f, _last100 = -1f, _last402 = -1f, _trap402, _topSession;
+    private float _runDist = -1f, _runTime;      // ระยะ/เวลาที่ขับได้จากความเร็ว 0 (ค้างค่าไว้ถึงออกตัวรอบใหม่)
+    private bool _runFull = true;
     private bool _saveDirty;
     private RunStats _cur = new();                  // สถิติของชุดที่ประกอบอยู่ (หลังแก้)
     private RunStats? _before;                      // สถิติของชุดก่อนแก้ล่าสุด (เทียบ)
@@ -284,7 +286,7 @@ public sealed partial class MainForm : Form
         {
             if (_cur.Any) _before = _cur;
             _cur = new RunStats();
-            _last060 = _last100 = _last402 = -1f;
+            _last060 = _last100 = _last402 = -1f; _runDist = -1f;
             _peakRpm = 0f;
             _topSession = 0f;
             _dyno = null;
@@ -403,12 +405,15 @@ public sealed partial class MainForm : Form
                 _roadTiming = true;
                 _roadStart = now;
                 _got060 = _got100 = _got402 = false;
+                _runFull = true;
             }
         }
         if (!_roadTiming) return;
 
         float el = (float)(now - _roadStart);
         float dist = _eng.DistanceM - _distStart;
+        _runDist = dist; _runTime = el;
+        if (_eng.Throttle < 0.95f) _runFull = false;
         if (!_got060 && kmh >= 60f)
         {
             _got060 = true;

@@ -276,6 +276,9 @@ public sealed partial class MainForm
         string gear = _eng.IsAuto ? "ออโต้ " + _eng.CvtRatio.ToString("0.00") : "เกียร์ " + (_eng.Gear == 0 ? "N" : _eng.Gear.ToString());
         TxtC(g, $"{_eng.SpeedKmh:0}", _fSpeed, Palette.Accent, cx, cy + 205 * k);
         TxtC(g, $"กม./ชม.     {gear}", _fSm, Palette.Text, cx, cy + 238 * k);
+        Txt(g, "ระยะจากจอด", _fXs, Palette.Dim, 262, 800);
+        Txt(g, _runDist < 0f ? "-" : (_runDist < 1000f ? $"{_runDist:0} ม." : $"{_runDist / 1000f:0.00} กม."), _fNum, Palette.Accent, 262, 826);
+        Txt(g, _runDist < 0f ? "ออกตัวจากหยุดนิ่งเพื่อวัด" : $"{_runTime:0.0} วิ  " + (_runFull ? "• เต็มคันเร่ง" : "• ไม่เต็มคันเร่ง"), _fXs, _runDist >= 0f && _runFull ? Palette.Green : Palette.Dim, 262, 876);
 
         // ข้อความสถานะ
         if (_eng.DynoRunning)
