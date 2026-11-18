@@ -659,6 +659,14 @@ function liveBar(x, y, w, label, value, frac, col, marker = -1) {
   const bw = clamp(frac, 0, 1) * w; if (bw > 1) ui.fillRR(R(x, y + 28, bw, 10), 2, col);
   if (marker >= 0) ui.rect(x + clamp(marker, 0, 1) * w - 1.5, y + 24, 3, 18, C.Text);
 }
+/** สเปกตรัมความร้อน: 0 = น้ำเงิน → เขียว → เหลือง → 1 = แดง  คืน [สี, ความสว่าง] */
+function heat(t) {
+  t = clamp(t, 0, 1);
+  const h = 240 * (1 - t) / 60, sat = 0.78, v = 0.88, i = Math.floor(h) % 6, f = h - Math.floor(h);
+  const pp = v * (1 - sat), q = v * (1 - sat * f), tt = v * (1 - sat * (1 - f));
+  const [R_, G_, B_] = [[v, tt, pp], [q, v, pp], [pp, v, tt], [pp, q, v], [tt, pp, v], [v, pp, q]][i].map(x => Math.round(x * 255));
+  return [`rgb(${R_},${G_},${B_})`, 0.299 * R_ + 0.587 * G_ + 0.114 * B_];
+}
 function drawEcu() {
   const m = preview, g = ui.g, bench = benchOn && benchApplied;
   const LX = 252, labW = 56, cw = 47, cellH = 30, gridY = 248, hdrY = 224, gx = LX + labW;
@@ -674,22 +682,16 @@ function drawEcu() {
     ui.txtC(`${(r + 1) * 5}%`, F.cap, r >= sr0 && r <= sr1 ? C.Accent : C.Dim, LX + labW / 2 - 4, y + cellH / 2);
     for (let c = 0; c < EcuN; c++) {
       m.EcuAt(m.EcuRpmAt(c), ecuLoadAt(r), e);
-      let col, txt;
-      if (ecuMode === 0) {
-        const v = m.CellFuel(c, r);
-        col = v >= 100 ? mixC([20, 23, 28], [200, 120, 20], (v - 100) / 25) : mixC([20, 23, 28], [40, 120, 190], (100 - v) / 25); txt = v.toFixed(0);
-      } else if (ecuMode === 1) {
-        const v = m.CellAdv(c, r), d = v - e.Mbt;
-        col = d >= -1 ? mixC([120, 100, 30], [200, 50, 45], (d + 1) / 6) : mixC([20, 23, 28], [40, 110, 180], (-1 - d) / 12);
-        if (d >= -1 && d < 1) col = 'rgb(70,140,80)';
-        txt = v.toFixed(1);
-      } else {
-        const l = e.Lambda;
-        col = l < 0.8 ? mixC([50, 100, 170], [40, 70, 130], (0.8 - l) / 0.3) : l < 0.95 ? 'rgb(50,130,80)' : l < 1.05 ? 'rgb(150,130,40)' : mixC([190, 90, 40], [200, 40, 40], (l - 1.05) / 0.3);
-        txt = e.Afr.toFixed(1);
+      let col, txt, dMbt = 0;
+      if (ecuMode === 0) { const v = m.CellFuel(c, r); col = heat((v - 70) / 60); txt = v.toFixed(0); }
+      else if (ecuMode === 1) { const v = m.CellAdv(c, r); dMbt = v - e.Mbt; col = heat(v / 45); txt = v.toFixed(1); }
+      else { col = heat((e.Lambda - 0.7) / 0.6); txt = e.Afr.toFixed(1); }
+      ui.rect(gx + c * cw, y, cw - 1, cellH - 1, col[0]);
+      ui.txtC(txt, F.cap, col[1] > 135 ? 'rgb(18,20,24)' : '#fff', gx + c * cw + cw / 2, y + cellH / 2);
+      if (ecuMode === 1) {      // มุมขวาบน: เทียบ MBT  แดง = แก่เกิน  ขาว = ใกล้ MBT  ดำ = ไฟอ่อน
+        g.fillStyle = dMbt > 1 ? 'rgb(255,30,30)' : dMbt > -2.5 ? '#fff' : 'rgb(20,20,30)';
+        const rx = gx + c * cw + cw - 1; g.beginPath(); g.moveTo(rx - 9, y); g.lineTo(rx, y); g.lineTo(rx, y + 9); g.closePath(); g.fill();
       }
-      ui.rect(gx + c * cw, y, cw - 1, cellH - 1, col);
-      ui.txtC(txt, F.cap, C.Text, gx + c * cw + cw / 2, y + cellH / 2);
     }
   }
   for (let c = 0; c < EcuN; c++) {
@@ -708,9 +710,13 @@ function drawEcu() {
   const cellAt = p => [clamp(Math.floor((p.x - gx) / cw), 0, EcuN - 1), clamp(EcuN - 1 - Math.floor((p.y - gridY) / cellH), 0, EcuN - 1)];
   ui.hit(R(gx, gridY, EcuN * cw, EcuN * cellH), p => { const [c, r] = cellAt(p); ecuC0 = ecuC1 = c; ecuR0 = ecuR1 = r; },
     p => { const [c, r] = cellAt(p); ecuC1 = c; ecuR1 = r; }, () => { }, dir => ecuAdjust(dir, keys.has('shift')));
-  ui.txt(ecuMode === 0 ? 'น้ำเงิน = ลดน้ำมัน (บาง)   •   ส้ม = เพิ่มน้ำมัน (หนา)   •   จุดขาว = เส้นไดโน (คันเร่งสุด)'
-    : ecuMode === 1 ? 'น้ำเงิน = ไฟอ่อน   •   เขียว = ใกล้ MBT   •   แดง = ไฟแก่เกิน MBT (เสี่ยงน็อก)'
-      : 'น้ำเงิน = หนามาก   •   เขียว = กำลังสูงสุด (λ 0.82–0.95)   •   เหลือง = ประหยัด (λ ~1)   •   แดง = บางเกิน', F.cap, C.Dim, gx, gridY + EcuN * cellH + 4);
+  const ly = gridY + EcuN * cellH + 6;
+  for (let i = 0; i < 240; i++) ui.rect(gx + i * 1.25, ly + 3, 1.3, 14, heat(i / 239)[0]);
+  ui.txtR(ecuMode === 0 ? '70%' : ecuMode === 1 ? '0°' : 'λ0.7 หนา', F.cap, C.Dim, gx - 6, ly);
+  ui.txt(ecuMode === 0 ? '130%' : ecuMode === 1 ? '45°' : 'λ1.3 บาง', F.cap, C.Dim, gx + 306, ly);
+  ui.txt(ecuMode === 0 ? 'ฟ้า = ลดน้ำมัน  เขียว = 100  ส้ม/แดง = เพิ่ม  จุดขาว = ไดโน'
+    : ecuMode === 1 ? 'มุมขวาบน: แดง = แก่เกิน MBT  ขาว = ใกล้  ดำ = ไฟอ่อน'
+      : 'ฟ้า = หนา  เขียว = แรงสุด  เหลือง = บาง  แดง = บางเกิน', F.cap, C.Dim, gx + 372, ly);
 
   let bx = LX; const by = 884;
   const B = (t, w, fn, col = C.Accent) => { ui.btn(R(bx, by, w, 40), t, false, col, fn, F.xs); bx += w + 8; };

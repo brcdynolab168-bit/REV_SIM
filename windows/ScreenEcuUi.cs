@@ -54,6 +54,18 @@ public sealed partial class MainForm
         if (marker >= 0f) g.FillRectangle(Br(Palette.Text), bar.X + Math.Clamp(marker, 0f, 1f) * bar.Width - 1.5f, bar.Y - 4, 3, bar.Height + 8);
     }
 
+    /// <summary>สเปกตรัมความร้อน: 0 = น้ำเงิน → เขียว → เหลือง → 1 = แดง</summary>
+    private static Color Heat(float t)
+    {
+        t = Math.Clamp(t, 0f, 1f);
+        float h = 240f * (1f - t) / 60f, sat = 0.78f, v = 0.88f;
+        int i = (int)Math.Floor(h) % 6; float f = h - MathF.Floor(h);
+        float pp = v * (1f - sat), q = v * (1f - sat * f), tt = v * (1f - sat * (1f - f));
+        (float R, float G, float B) = i switch { 0 => (v, tt, pp), 1 => (q, v, pp), 2 => (pp, v, tt), 3 => (pp, q, v), 4 => (tt, pp, v), _ => (v, pp, q) };
+        return Color.FromArgb((int)(R * 255), (int)(G * 255), (int)(B * 255));
+    }
+    private static float Lum(Color c) => 0.299f * c.R + 0.587f * c.G + 0.114f * c.B;
+
     private void DrawEcu(Graphics g)
     {
         var m = _preview;
@@ -82,32 +94,30 @@ public sealed partial class MainForm
             for (int c = 0; c < EN; c++)
             {
                 var e = m.EcuAt(m.EcuRpmAt(c), EngineModel.EcuLoadAt(r));
-                Color col; string txt;
+                Color col; string txt; float dMbt = 0f;
                 if (_ecuMode == 0)
                 {
                     float v = m.CellFuel(c, r);
-                    col = v >= 100f ? Mix(Palette.Panel, Color.FromArgb(200, 120, 20), (v - 100f) / 25f) : Mix(Palette.Panel, Color.FromArgb(40, 120, 190), (100f - v) / 25f);
-                    txt = v.ToString("0");
+                    col = Heat((v - 70f) / 60f); txt = v.ToString("0");
                 }
                 else if (_ecuMode == 1)
                 {
-                    float v = m.CellAdv(c, r), d = v - e.Mbt;
-                    col = d >= -1f ? Mix(Color.FromArgb(120, 100, 30), Color.FromArgb(200, 50, 45), (d + 1f) / 6f) : Mix(Palette.Panel, Color.FromArgb(40, 110, 180), (-1f - d) / 12f);
-                    if (d >= -1f && d < 1f) col = Color.FromArgb(70, 140, 80);
-                    txt = v.ToString("0.0");
+                    float v = m.CellAdv(c, r);
+                    dMbt = v - e.Mbt;
+                    col = Heat(v / 45f); txt = v.ToString("0.0");
                 }
                 else
                 {
-                    float l = e.Lambda;
-                    col = l < 0.80f ? Mix(Color.FromArgb(50, 100, 170), Color.FromArgb(40, 70, 130), (0.8f - l) / 0.3f)
-                        : l < 0.95f ? Color.FromArgb(50, 130, 80)
-                        : l < 1.05f ? Color.FromArgb(150, 130, 40)
-                        : Mix(Color.FromArgb(190, 90, 40), Color.FromArgb(200, 40, 40), (l - 1.05f) / 0.3f);
-                    txt = e.Afr.ToString("0.0");
+                    col = Heat((e.Lambda - 0.7f) / 0.6f); txt = e.Afr.ToString("0.0");
                 }
                 var cell = new RectangleF(gx + c * cw, y, cw - 1, cellH - 1);
                 g.FillRectangle(Br(col), cell);
-                TxtC(g, txt, _fCap, Palette.Text, cell.X + cell.Width / 2, cell.Y + cell.Height / 2);
+                TxtC(g, txt, _fCap, Lum(col) > 135f ? Color.FromArgb(18, 20, 24) : Color.White, cell.X + cell.Width / 2, cell.Y + cell.Height / 2);
+                if (_ecuMode == 1)      // มุมขวาบน: เทียบ MBT  แดง = ไฟแก่เกิน  เขียว = ใกล้ MBT  น้ำเงิน = ไฟอ่อน
+                {
+                    var mk = dMbt > 1f ? Color.FromArgb(255, 30, 30) : dMbt > -2.5f ? Color.FromArgb(255, 255, 255) : Color.FromArgb(20, 20, 30);
+                    g.FillPolygon(Br(mk), new[] { new PointF(cell.Right - 9, cell.Y), new PointF(cell.Right, cell.Y), new PointF(cell.Right, cell.Y + 9) });
+                }
             }
         }
         for (int c = 0; c < EN; c++)          // เส้นไดโน (คันเร่งสุด) = จุดขาว
@@ -140,11 +150,16 @@ public sealed partial class MainForm
         AddHit(gridRect, down: p => { var (c, r) = CellAt(p); _ecuC0 = _ecuC1 = c; _ecuR0 = _ecuR1 = r; },
             drag: p => { var (c, r) = CellAt(p); _ecuC1 = c; _ecuR1 = r; }, up: () => { }, wheel: dir => EcuAdjust(dir, ModifierKeys.HasFlag(Keys.Shift)));
 
-        // คำอธิบายสี
-        string legend = _ecuMode == 0 ? "น้ำเงิน = ลดน้ำมัน (บาง)   •   ส้ม = เพิ่มน้ำมัน (หนา)   •   จุดขาว = เส้นไดโน (คันเร่งสุด)"
-            : _ecuMode == 1 ? "น้ำเงิน = ไฟอ่อน   •   เขียว = ใกล้ MBT   •   แดง = ไฟแก่เกิน MBT (เสี่ยงน็อก)"
-            : "น้ำเงิน = หนามาก   •   เขียว = กำลังสูงสุด (λ 0.82–0.95)   •   เหลือง = ประหยัด (λ ~1)   •   แดง = บางเกิน";
-        Txt(g, legend, _fCap, Palette.Dim, gx, gridY + EN * cellH + 4);
+        // คำอธิบายสี (แถบไล่สี)
+        float ly = gridY + EN * cellH + 6;
+        for (int i = 0; i < 240; i++) g.FillRectangle(Br(Heat(i / 239f)), gx + i * 1.25f, ly + 3, 1.3f, 14);
+        string lo = _ecuMode == 0 ? "70%" : _ecuMode == 1 ? "0°" : "λ0.7 หนา", hi = _ecuMode == 0 ? "130%" : _ecuMode == 1 ? "45°" : "λ1.3 บาง";
+        TxtR(g, lo, _fCap, Palette.Dim, gx - 6, ly);
+        Txt(g, hi, _fCap, Palette.Dim, gx + 306, ly);
+        string legend = _ecuMode == 0 ? "ฟ้า = ลดน้ำมัน  เขียว = 100  ส้ม/แดง = เพิ่ม  จุดขาว = ไดโน"
+            : _ecuMode == 1 ? "มุมขวาบน: แดง = แก่เกิน MBT  ขาว = ใกล้  ดำ = ไฟอ่อน"
+            : "ฟ้า = หนา  เขียว = แรงสุด  เหลือง = บาง  แดง = บางเกิน";
+        Txt(g, legend, _fCap, Palette.Dim, gx + 372, ly);
 
         // ---------- แถบเครื่องมือ ----------
         float by = 884f, bx = LX;
