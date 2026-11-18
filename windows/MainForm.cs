@@ -183,8 +183,9 @@ public sealed partial class MainForm : Form
         else if (_page == Page.Garage && !_showDyno && (e.KeyCode == Keys.Left || e.KeyCode == Keys.Right))
             GarageKey(e.KeyCode, e.Shift);                   // กดค้างเพื่อปรับต่อเนื่อง
 
-        if (e.KeyCode == Keys.Oemplus || e.KeyCode == Keys.Add) _eng.Volume = Math.Min(1f, _eng.Volume + 0.05f);
-        if (e.KeyCode == Keys.OemMinus || e.KeyCode == Keys.Subtract) _eng.Volume = Math.Max(0f, _eng.Volume - 0.05f);
+        bool typing = _page == Page.Garage && IsEcuTab && !_advisor;          // แท็บจูนกล่อง: ปุ่ม − ใช้พิมพ์เลขติดลบ ไม่ใช้ปรับเสียง
+        if (!typing && (e.KeyCode == Keys.Oemplus || e.KeyCode == Keys.Add)) _eng.Volume = Math.Min(1f, _eng.Volume + 0.05f);
+        if (!typing && (e.KeyCode == Keys.OemMinus || e.KeyCode == Keys.Subtract)) _eng.Volume = Math.Max(0f, _eng.Volume - 0.05f);
         if (!e.Alt)                                     // ปล่อย Alt+F4 ให้ Windows จัดการ
         {
             e.Handled = true;

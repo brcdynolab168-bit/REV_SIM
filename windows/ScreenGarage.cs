@@ -139,7 +139,7 @@ public sealed partial class MainForm
     private void GarageKey(Keys k, bool shift)
     {
         if (_advisor && (k == Keys.Up || k == Keys.Down || k == Keys.Left || k == Keys.Right)) return;     // แผงที่ปรึกษาไม่มีแถวให้ปรับ
-        if (IsEcuTab && !_advisor && EcuKey(k, shift)) return;
+        if (IsEcuTab && !_advisor && (EcuTypeKey(k) || EcuKey(k, shift))) return;      // แท็บจูนกล่อง: ตัวเลขใช้พิมพ์ใส่ตาราง ไม่ใช้สลับรถ
         int n = _vis.Count;
         bool parts = _tab == 0;
         int prow = Parts.Categories.Length + 1;

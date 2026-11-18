@@ -152,7 +152,7 @@ window.addEventListener('keydown', e => {
     else if (page === 'drive') driveKey(k);
   } else if (page === 'garage' && !showDyno && (k === 'arrowleft' || k === 'arrowright')) garageKey(k, e.shiftKey);
   if (k === '+' || k === '=') setVolume(save.volume + 0.05);
-  if (k === '-') setVolume(save.volume - 0.05);
+  if (k === '-' && !(page === 'garage' && isEcuTab() && !advisorOn)) setVolume(save.volume - 0.05);
 });
 window.addEventListener('keyup', e => keys.delete(e.key.toLowerCase()));
 window.addEventListener('blur', () => { keys.clear(); mouseThrottle = mouseStarter = mouseClutch = mouseBrake = false; ui?.releaseAll(); });
@@ -561,7 +561,7 @@ function assemble() {
 }
 function garageKey(k, shift) {
   if (advisorOn && ['arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(k)) return;
-  if (!advisorOn && isEcuTab() && ecuKey(k, shift)) return;
+  if (!advisorOn && isEcuTab() && (ecuTypeKey(k) || ecuKey(k, shift))) return;      // แท็บจูนกล่อง: ตัวเลขใช้พิมพ์ใส่ตาราง ไม่ใช้สลับรถ
   const n = vis().length, parts = gTab === 0, prow = PartCats.length + 1;
   switch (k) {
     case 'arrowup': if (parts) gPartRow = (gPartRow + prow - 1) % prow; else if (n > 0) gSel = (gSel + n - 1) % n; break;
@@ -634,6 +634,35 @@ function ecuNearMbt() {
   for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) t[r * EcuN + c] = Math.round((m.EcuAt(m.EcuRpmAt(c), EngineModel.TpsAxis(r), {}).Mbt - 1) * 2) / 2;
   draftChanged();
   toast('ตั้งองศาใกล้ MBT แล้ว (ระวังน็อกถ้ากำลังอัดสูง/ออกเทนต่ำ)');
+}
+// ---------- พิมพ์ตัวเลขใส่ตาราง ----------
+let ecuInput = '';
+/** ใส่ค่าที่พิมพ์ลงช่องที่เลือก (คลุมช่วงแล้วพิมพ์ Enter)  โหมด AFR = ตั้ง AFR เป้าหมาย  MAP = kPa */
+function ecuApplyValue(v) {
+  const { c0, c1, r0, r1 } = ecuRange(), m = preview;
+  if (ecuMode === 4) {
+    const t = ecuTableW(0);
+    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) { const rpmC = m.EcuRpmAt(c), tpsR = EngineModel.TpsAxis(r); t[r * EcuN + c] = clamp(Math.round(m.MsForAfr(rpmC, m._loadOf(tpsR, rpmC), Math.max(v, 1)) * 100) / 100, 0, 40); }
+  } else {
+    const [, , lo, hi, rnd] = ECU_SPEC[ecuMode], t = ecuTableW(ecuMode), val = clamp(Math.round(v / rnd) * rnd, lo, hi);
+    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) t[r * EcuN + c] = val;
+  }
+  draftChanged();
+  toast(`ใส่ค่า ${+v.toFixed(2)} ในช่องที่เลือก ${(c1 - c0 + 1) * (r1 - r0 + 1)} ช่องแล้ว`);
+}
+/** พิมพ์ตัวเลข: 0-9 . - ใส่ในกล่อง  Enter ใช้ค่า  Esc ยกเลิก  Backspace ลบ (เลขไม่ไปสลับรถ) */
+function ecuTypeKey(k) {
+  if (/^[0-9.-]$/.test(k)) {
+    if (k === '.' && ecuInput.includes('.')) return true;
+    if (k === '-' && ecuInput.length > 0) return true;
+    if (ecuInput.length < 7) ecuInput += k;
+    return true;
+  }
+  if (!ecuInput) return false;
+  if (k === 'backspace') { ecuInput = ecuInput.slice(0, -1); return true; }
+  if (k === 'escape') { ecuInput = ''; return true; }
+  if (k === 'enter') { const v = parseFloat(ecuInput); if (Number.isFinite(v)) ecuApplyValue(v); ecuInput = ''; return true; }
+  return false;
 }
 function ecuKey(k, shift) {
   // แกนนอน = โหลด/คันเร่ง (ซ้าย-ขวา)  แกนตั้ง = รอบ (ขึ้น-ลง)
@@ -814,6 +843,13 @@ function drawEcu() {
       cells.forEach(([l, v, c], i) => { const cx = ix + (i % 3) * cwid, cy = 624 + Math.floor(i / 3) * 58; ui.txt(l, F.cap, C.Dim, cx, cy); ui.txt(v, F.sm, c, cx, cy + 20); });
     }
   }
+  if (ecuInput) {
+    const { c0: ic0, c1: ic1, r0: ir0, r1: ir1 } = ecuRange(), ib = R(gx + 230, gridY + 230, 440, 120);
+    ui.fillRR(ib, 6, 'rgba(14,17,21,0.94)'); ui.drawRR(ib, 6, C.Accent, 2);
+    ui.txt(`ใส่ค่าในช่องที่เลือก ${(ic1 - ic0 + 1) * (ir1 - ir0 + 1)} ช่อง`, F.cap, C.Dim, ib.x + 20, ib.y + 14);
+    ui.txt(ecuInput + (Math.floor(Date.now() / 500) % 2 === 0 ? '▮' : ' '), F.numL, C.Accent, ib.x + 20, ib.y + 30);
+    ui.txt('Enter = ใช้ค่า  •  Esc = ยกเลิก  •  Backspace = ลบ', F.cap, C.Dim, ib.x + 20, ib.y + ib.h - 26);
+  } else ui.txtR('คลุมช่อง แล้วพิมพ์เลข + Enter เพื่อใส่ค่า', F.cap, C.Dim, LX + 960, 963);
   if (showEcuHelp) drawEcuHelp();
 }
 function drawEcuHelp() {

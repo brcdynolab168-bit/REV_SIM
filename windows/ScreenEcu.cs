@@ -144,6 +144,64 @@ public sealed partial class MainForm
         Toast("ตั้งองศาใกล้ MBT แล้ว (ระวังน็อกถ้ากำลังอัดสูง/ออกเทนต่ำ)");
     }
 
+    // ---------- พิมพ์ตัวเลขใส่ตาราง ----------
+    private string _ecuInput = "";
+
+    /// <summary>ใส่ค่าที่พิมพ์ลงช่องที่เลือก (คลุมช่วงแล้วพิมพ์ Enter)  โหมด AFR = ตั้ง AFR เป้าหมาย  MAP = kPa</summary>
+    private void EcuApplyValue(float v)
+    {
+        EcuRange(out int c0, out int c1, out int r0, out int r1);
+        var m = _preview;
+        if (_ecuMode == 4)
+        {
+            var t = EcuTable(0);
+            for (int r = r0; r <= r1; r++) for (int c = c0; c <= c1; c++)
+            {
+                float rpmC = m.EcuRpmAt(c), tpsR = EngineModel.TpsAxis(r);
+                t[r * EN + c] = Math.Clamp(MathF.Round(m.MsForAfr(rpmC, m.LoadOf(tpsR, rpmC), MathF.Max(v, 1f)) * 100f) / 100f, 0f, 40f);
+            }
+        }
+        else
+        {
+            var sp = EcuSpec(_ecuMode);
+            var t = EcuTable(_ecuMode);
+            float val = Math.Clamp(MathF.Round(v / sp.Round) * sp.Round, sp.Lo, sp.Hi);
+            for (int r = r0; r <= r1; r++) for (int c = c0; c <= c1; c++) t[r * EN + c] = val;
+        }
+        DraftChanged();
+        Toast($"ใส่ค่า {v:0.##} ในช่องที่เลือก {(c1 - c0 + 1) * (r1 - r0 + 1)} ช่องแล้ว");
+    }
+
+    /// <summary>พิมพ์ตัวเลข: 0-9 . - ใส่ในกล่อง  Enter ใช้ค่า  Esc ยกเลิก  Backspace ลบ (กันไม่ให้เลขไปสลับแบบเครื่อง)</summary>
+    private bool EcuTypeKey(Keys k)
+    {
+        char ch = k switch
+        {
+            >= Keys.D0 and <= Keys.D9 => (char)('0' + (k - Keys.D0)),
+            >= Keys.NumPad0 and <= Keys.NumPad9 => (char)('0' + (k - Keys.NumPad0)),
+            Keys.OemPeriod or Keys.Decimal => '.',
+            Keys.OemMinus or Keys.Subtract => '-',
+            _ => '\0',
+        };
+        if (ch != '\0')
+        {
+            if (ch == '.' && _ecuInput.Contains('.')) return true;
+            if (ch == '-' && _ecuInput.Length > 0) return true;
+            if (_ecuInput.Length < 7) _ecuInput += ch;
+            return true;
+        }
+        if (_ecuInput.Length == 0) return false;
+        if (k == Keys.Back) { _ecuInput = _ecuInput[..^1]; return true; }
+        if (k == Keys.Escape) { _ecuInput = ""; return true; }
+        if (k == Keys.Enter)
+        {
+            if (float.TryParse(_ecuInput, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out float v)) EcuApplyValue(v);
+            _ecuInput = "";
+            return true;
+        }
+        return false;
+    }
+
     private bool EcuKey(Keys k, bool shift)
     {
         switch (k)

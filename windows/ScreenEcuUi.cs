@@ -345,6 +345,18 @@ public sealed partial class MainForm
             }
         }
 
+        // กล่องพิมพ์ตัวเลข (แสดงตอนกำลังพิมพ์)
+        if (_ecuInput.Length > 0)
+        {
+            EcuRange(out int ic0, out int ic1, out int ir0, out int ir1);
+            var ib = new RectangleF(gx + 230, gridY + 230, 440, 120);
+            FillRR(g, ib, 6, Color.FromArgb(240, 14, 17, 21)); DrawRR(g, ib, 6, Palette.Accent, 2f);
+            Txt(g, "ใส่ค่าในช่องที่เลือก " + ((ic1 - ic0 + 1) * (ir1 - ir0 + 1)) + " ช่อง", _fCap, Palette.Dim, ib.X + 20, ib.Y + 14);
+            Txt(g, _ecuInput + (Environment.TickCount / 500 % 2 == 0 ? "▮" : " "), _fNumL, Palette.Accent, ib.X + 20, ib.Y + 30);
+            Txt(g, "Enter = ใช้ค่า  •  Esc = ยกเลิก  •  Backspace = ลบ", _fCap, Palette.Dim, ib.X + 20, ib.Bottom - 26);
+        }
+        else TxtR(g, "คลุมช่อง แล้วพิมพ์เลข + Enter เพื่อใส่ค่า", _fCap, Palette.Dim, LX + 960, 963);
+
         if (_showEcuHelp) DrawEcuHelp(g);
     }
 
