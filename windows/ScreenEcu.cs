@@ -60,8 +60,8 @@ public sealed partial class MainForm
             for (int r = r0; r <= r1; r++) for (int c = c0; c <= c1; c++)
             {
                 // โหมด AFR: ตั้ง AFR เป้าหมายของช่อง แล้วแปลงเป็นเวลาฉีด (ms)
-                float rpmC = m.EcuRpmAt(c), loadR = EngineModel.EcuLoadAt(r);
-                float cur = m.EcuAt(rpmC, loadR).Afr;
+                float rpmC = m.EcuRpmAt(c), tpsR = EngineModel.TpsAxis(r), loadR = m.LoadOf(tpsR, rpmC);
+                float cur = m.EcuAt(rpmC, tpsR).Afr;
                 t[r * EN + c] = Math.Clamp(MathF.Round(m.MsForAfr(rpmC, loadR, cur + (coarse ? 0.5f : 0.1f) * dir) * 100f) / 100f, 0f, 40f);
             }
         }
@@ -163,7 +163,7 @@ public sealed partial class MainForm
         var m = _preview;
         for (int r = r0; r <= r1; r++) for (int c = c0; c <= c1; c++)
         {
-            var e = m.EcuAt(m.EcuRpmAt(c), EngineModel.EcuLoadAt(r));
+            var e = m.EcuAt(m.EcuRpmAt(c), EngineModel.TpsAxis(r));
             t[r * EN + c] = MathF.Round((e.Mbt - 1f) * 2f) / 2f;
         }
         DraftChanged();

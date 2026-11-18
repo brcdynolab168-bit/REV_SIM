@@ -100,6 +100,9 @@ public sealed class EngineSim
     private float _load;                        // 0..1 ปริมาณไอดีต่อรอบ
     public float KnockNow => _knock;
     public float LoadNow => _load;
+    private float _thrEff;
+    /// <summary>ตำแหน่งลิ้นเร่งจริง (TPS 0..1) รวมที่ระบบคุมรอบเดินเบาเปิดให้</summary>
+    public float ThrEffNow => _thrEff;
     private float _knock;                       // 0..1 การน็อกตอนนี้
     private float _softK;                       // 0..1 ความแรงของ soft cut ตอนนี้
     private bool _fuelOn;
@@ -230,8 +233,9 @@ public sealed class EngineSim
             idleThr = Clamp(0.022f + err * 0.00006f + _idleInt, 0f, 0.10f) * (24500f / m.AirK);
         }
         float eff = idleThr + thr * (1f - idleThr);
+        _thrEff = eff;
         _load = m.Load(eff, rpm);
-        _ecu = m.EcuAt(rpm, _load);
+        _ecu = m.EcuAt(rpm, eff);
         _knock = m.Knock(rpm, _load, _ecu.KnockShift);
 
         // ตัดรอบแบบ hard cut มี hysteresis ทำให้รอบเด้ง

@@ -107,16 +107,16 @@ public sealed partial class MainForm
         float fMin = float.MaxValue, fMax = float.MinValue;      // ช่วงค่าของตาราง ใช้ไล่สี
         Func<int, int, float>? cellVal = _ecuMode == 0 ? m.CellMs : _ecuMode == 1 ? m.CellEoi : _ecuMode == 3 ? m.CellDwell : _ecuMode == 5 ? m.CellMap : null;
         if (cellVal != null) for (int rr0 = 0; rr0 < EN; rr0++) for (int cc0 = 0; cc0 < EN; cc0++) { float vv = cellVal(cc0, rr0); fMin = MathF.Min(fMin, vv); fMax = MathF.Max(fMax, vv); }
-        Txt(g, _ecuMode == 5 ? "TPS %" : "โหลด→", _fCap, Palette.Dim, LX + 4, hdrY + 2);
+        Txt(g, "TPS %", _fCap, Palette.Dim, LX + 4, hdrY + 2);
         for (int r = 0; r < EN; r++)
-            TxtC(g, _ecuMode == 5 ? (EngineModel.TpsAxis(r) * 100f).ToString("0") : $"{(r + 1) * 5}%", _fCap, r >= sr0 && r <= sr1 ? Palette.Accent : Palette.Dim, gx + (r + 0.5f) * cw, hdrY + 10);
+            TxtC(g, (EngineModel.TpsAxis(r) * 100f).ToString("0"), _fCap, r >= sr0 && r <= sr1 ? Palette.Accent : Palette.Dim, gx + (r + 0.5f) * cw, hdrY + 10);
         for (int c = 0; c < EN; c++)
         {
             float y = gridY + c * cellH;
             TxtC(g, (m.EcuRpmAt(c) / 1000f).ToString("0.0"), _fCap, c >= sc0 && c <= sc1 ? Palette.Accent : Palette.Dim, LX + labW / 2 - 4, y + cellH / 2);
             for (int r = 0; r < EN; r++)
             {
-                var e = m.EcuAt(m.EcuRpmAt(c), EngineModel.EcuLoadAt(r));
+                var e = m.EcuAt(m.EcuRpmAt(c), EngineModel.TpsAxis(r));
                 Color col; string txt; float dMbt = 0f;
                 if (_ecuMode == 0)
                 {
@@ -164,18 +164,13 @@ public sealed partial class MainForm
                     g.FillPolygon(Br(mk.Value), new[] { new PointF(cell.Right - 8, cell.Y), new PointF(cell.Right, cell.Y), new PointF(cell.Right, cell.Y + 8) });
             }
         }
-        for (int c = 0; c < EN; c++)          // เส้นไดโน (คันเร่งสุด) = จุดขาว ที่ช่องโหลดของแต่ละรอบ
-        {
-            int r = _ecuMode == 5 ? EN - 1 : Math.Clamp((int)MathF.Round(m.Load(1f, m.EcuRpmAt(c)) * EN - 1f), 0, EN - 1);
-            g.FillEllipse(Br(Palette.Text), gx + (r + 0.5f) * cw - 3, gridY + c * cellH + cellH - 9, 6, 6);
-        }
         g.DrawRectangle(Pn(Palette.Accent, 3f), gx + sr0 * cw, gridY + sc0 * cellH, (sr1 - sr0 + 1) * cw, (sc1 - sc0 + 1) * cellH);
 
         // จุดทำงานสด (ติดเครื่องอยู่): วงกลม + ร่องรอย
         if (bench && _eng.Running)
         {
             float colF = Math.Clamp((_eng.Rpm - 1000f) / (m.EcuRpmMax - 1000f) * (EN - 1), 0f, EN - 1f);
-            float rowF = _ecuMode == 5 ? EngineModel.TpsToIndex(_eng.Throttle) : Math.Clamp(_eng.LoadNow * EN - 1f, 0f, EN - 1f);
+            float rowF = EngineModel.TpsToIndex(_eng.ThrEffNow);
             var pt = new PointF(gx + (rowF + 0.5f) * cw, gridY + (colF + 0.5f) * cellH);
             _benchTrail.Add(pt);
             if (_benchTrail.Count > 50) _benchTrail.RemoveAt(0);
@@ -198,7 +193,7 @@ public sealed partial class MainForm
         string hi = _ecuMode == 0 ? $"{fMax:0.0} ms" : _ecuMode == 1 ? $"{fMax:0}°" : _ecuMode == 2 ? "45°" : _ecuMode == 3 ? $"{fMax:0.0} ms" : _ecuMode == 5 ? $"{fMax:0} kPa" : "λ1.3 บาง";
         TxtR(g, lo, _fCap, Palette.Dim, gx - 8, ly);
         Txt(g, hi, _fCap, Palette.Dim, gx + 250, ly);
-        string legend = _ecuMode == 0 ? "ฟ้า = ฉีดน้อย (โหลดเบา)  •  แดง = ฉีดมาก  •  จุดขาว = เส้นไดโน"
+        string legend = _ecuMode == 0 ? "ฟ้า = ฉีดน้อย (โหลดเบา)  •  แดง = ฉีดมาก (TPS เปิดมาก)"
             : _ecuMode == 1 ? "ฟ้า = จบฉีดช้า  •  แดง = จบฉีดเร็ว  •  มุมดำ = ฉีดตอนวาล์วเปิด"
             : _ecuMode == 2 ? "มุมขวาบน: แดง = แก่เกิน MBT  •  ขาว = ใกล้  •  ดำ = ไฟอ่อน"
             : _ecuMode == 3 ? "มุมแดง = ประกายอ่อน (ชาร์จไม่พอ)  •  มุมดำ = คอยล์ร้อน"
@@ -218,17 +213,17 @@ public sealed partial class MainForm
 
         // ---------- ซ้ายล่าง: ช่องที่เลือก ----------
         int cc = _ecuC1, rr = _ecuR1;
-        float prpm = m.EcuRpmAt(cc), pload = EngineModel.EcuLoadAt(rr);
-        var s = m.EcuAt(prpm, pload);
+        float prpm = m.EcuRpmAt(cc), ptps = EngineModel.TpsAxis(rr), pload = m.LoadOf(ptps, prpm);
+        var s = m.EcuAt(prpm, ptps);
         float dl2 = s.Adv - s.Mbt;
-        FillRR(g, new RectangleF(LX, 962, 976, 78), 4, Palette.Panel); DrawRR(g, new RectangleF(LX, 962, 976, 78), 4, Palette.Border, 1f);
-        g.FillRectangle(Br(Palette.Accent), LX + 14, 974, 4, 18);
-        Txt(g, $"ช่องที่เลือก  {prpm:N0} rpm  •  โหลด {pload * 100f:0}%", _fCap, Palette.Dim, LX + 28, 972);
+        FillRR(g, new RectangleF(LX, 956, 976, 84), 4, Palette.Panel); DrawRR(g, new RectangleF(LX, 956, 976, 84), 4, Palette.Border, 1f);
+        g.FillRectangle(Br(Palette.Accent), LX + 14, 965, 4, 18);
+        Txt(g, $"ช่องที่เลือก  {prpm:N0} rpm  •  TPS {ptps * 100f:0}%  •  โหลด {pload * 100f:0}%", _fCap, Palette.Dim, LX + 28, 963);
         Color afrC2 = s.Lambda > 1.12f ? Palette.Red : s.Lambda < 0.7f ? Palette.Blue : s.Lambda > 0.97f ? Palette.Yellow : Palette.Green;
         string warn = s.Egt > 1050f ? "ไอเสียร้อนจัด! เสี่ยงลูกสูบพัง" : m.KnockWot(prpm) > 0.02f && pload > 0.7f ? "น็อกที่ช่องนี้" : dl2 < -10f ? "ไฟอ่อนมาก แรงตก" : s.Lambda > 1.35f || s.Lambda < 0.6f ? "ส่วนผสมนอกช่วงจุดติด" : "";
-        Txt(g, $"AFR {(s.Afr >= 90f ? "∞ ตัดน้ำมัน" : s.Afr.ToString("0.0"))} (λ {s.Lambda:0.00})   ฉีด {s.PulseMs:0.00} ms ({s.Duty * 100f:0}%)   จบฉีด {s.Eoi:0}°   MAP {m.MapKpa(pload):0} kPa", _fXs, afrC2, LX + 340, 970);
+        Txt(g, $"AFR {(s.Afr >= 90f ? "∞ ตัดน้ำมัน" : s.Afr.ToString("0.0"))} (λ {s.Lambda:0.00})   ฉีด {s.PulseMs:0.00} ms ({s.Duty * 100f:0}%)   จบฉีด {s.Eoi:0}°   MAP {m.MapKpa(pload):0} kPa", _fXs, afrC2, LX + 28, 985);
         Txt(g, $"จุด {s.Adv:0.0}° / MBT {s.Mbt:0.0}°   คอยล์ {s.DwellMs:0.00} ms (ประกาย {s.Spark * 100f:0}%)   แรงบิด x{s.Mult:0.000}   EGT {s.Egt:0}°C" + (warn.Length > 0 ? "   ⚠ " + warn : ""),
-            _fXs, warn.Length > 0 ? Palette.Yellow : dl2 > 1.5f ? Palette.Red : s.Spark < 0.95f ? Palette.Red : Palette.Dim, LX + 28, 1004);
+            _fXs, warn.Length > 0 ? Palette.Yellow : dl2 > 1.5f ? Palette.Red : s.Spark < 0.95f ? Palette.Red : Palette.Dim, LX + 28, 1011);
 
         // ---------- ขวา: เครื่องจูนสด ----------
         float ix = RX + 28f, iw = RW - 56f;
@@ -327,7 +322,7 @@ public sealed partial class MainForm
                     ("น้ำมัน", $"{lph:0.0} ล./ชม.", Palette.Text),
                     ("BSFC", bsfc > 0f ? $"{bsfc:0} g/kWh" : "-", bsfc > 0f && bsfc > 380f ? Palette.Yellow : Palette.Text),
                     ("จุดระเบิด", $"{ec.Adv:0.0} °", advCol),
-                    ("MBT", $"{ec.Mbt:0.0} °", Palette.Text),
+                    ("TPS ลิ้นเร่งจริง", $"{_eng.ThrEffNow * 100f:0.0} %", Palette.Text),
                     ("ไทม์คอยล์", $"{ec.DwellMs:0.00} ms", Palette.Text),
                     ("ประกายไฟ", $"{ec.Spark * 100f:0} %", ec.Spark < 0.95f ? Palette.Red : Palette.Green),
                     ("ความเร็วลูกสูบ", $"{em.PistonSpeed(rpmNow):0.0} ม./วิ", em.PistonSpeed(rpmNow) > 22f ? Palette.Yellow : Palette.Text),

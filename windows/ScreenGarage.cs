@@ -493,7 +493,7 @@ public sealed partial class MainForm
         string idleTxt = m.Lope < 0.12f ? "เดินเบานิ่ง" : m.Lope < 0.5f ? "เดินเบาสะดุดเบา ๆ" : "เดินเบาลูปจัด";
         string tone = m.SoundBright < -0.35f ? "นุ่ม" : m.SoundBright > 0.55f ? "แผดคม" : "กลาง";
         string size = m.PitchStretch < 0.92f ? "  •  เสียงเล็กแหลม" : m.PitchStretch > 1.08f ? "  •  เสียงใหญ่ทุ้ม" : "";
-        var ep = m.EcuAt(m.PeakPsRpm, m.Load(1f, m.PeakPsRpm));
+        var ep = m.EcuAt(m.PeakPsRpm, 1f);
         Line($"ECU @พีค: AFR {ep.Afr:0.0}  •  จุด {ep.Adv:0.#}° (MBT {ep.Mbt:0.#})  •  หัวฉีด {ep.Duty * 100f:0}%", ep.Duty > 1f || ep.Egt > 1050f || ep.Adv - ep.Mbt > 1.5f ? 2 : 1);
         Line($"เสียง: {idleTxt}  •  โทน{tone}{size}", 0);
 
