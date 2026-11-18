@@ -13,13 +13,22 @@ public sealed partial class MainForm
     private void DrawDrive(Graphics g)
     {
         DrawTopBar(g, "ห้องทดสอบ",
-            "W เร่งสุด  •  X ค่อย ๆ เร่ง (ไม่ตัดรอบ)  •  Z ค่อย ๆ เร่ง (แตะรอบตัดเบา ๆ)  •  Space เบรก  •  S สตาร์ท  •  E/Q เกียร์  •  D ไดโน  •  [ ] ความชัน  •  P ขับเอง  •  G อู่");
+            "W เร่งสุด  •  X ค่อย ๆ เร่ง (ไม่ตัดรอบ)  •  Z ค่อย ๆ เร่ง (แตะรอบตัดเบา ๆ)  •  Space เบรก  •  S สตาร์ท  •  E/Q เกียร์  •  D ไดโน  •  [ ] ความชัน  •  P ขับเอง  •  V พื้นถนน  •  G อู่");
 
         var m = _eng.Model;
         var d = m.D;
         bool auto = d.Auto == 1;
         _gaugeMax = Math.Max(10000f, MathF.Ceiling((_eng.LimiterRpm + 1000f) / 1000f) * 1000f);
 
+        // พื้นถนน (เหนือเกจ)
+        Txt(g, "พื้นถนน  [V]", _fSm, Palette.Dim, 252, 116);
+        for (int i = 0; i < Vehicle.Surfaces.Length; i++)
+        {
+            int si = i;
+            Btn(g, new RectangleF(420 + i * 150, 108, 140, 44), Vehicle.Surfaces[i].Name, Vehicle.SurfaceIndex == i, Palette.Accent, () => SetSurface(si), _fSm);
+        }
+        var sf = Vehicle.Surfaces[Vehicle.SurfaceIndex];
+        Txt(g, $"{sf.Note}   •   แรงเกาะ x{sf.MuK:0.00}   •   ต้านการกลิ้ง x{sf.CrrK:0.00}", _fXs, Palette.Dim, 254, 158);
         DrawGauge(g, 640, 552, 335);
         DrawThrottle(g, 1056, 170, 64, 660);
 

@@ -322,14 +322,23 @@ export function calibrate(d) {
 }
 
 // ---------------------------------------------------------------- ตัวรถ
+/** พื้นถนน: ตัวคูณแรงเกาะ (μ) และแรงต้านการกลิ้ง */
+export const Surfaces = [
+  { name: 'ถนนทั่วไป', muK: 1.0, crrK: 1.0, note: 'ลาดยางทั่วไป แห้ง ค่าอ้างอิง' },
+  { name: 'ราดยาง', muK: 0.9, crrK: 1.25, note: 'ผิวหยาบ/หินเกล็ดราดยาง เกาะน้อยลง ต้านการกลิ้งมาก' },
+  { name: 'คอนกรีต', muK: 1.05, crrK: 0.92, note: 'ผิวแข็งเรียบ เกาะดี ต้านการกลิ้งน้อย' },
+  { name: 'แทร็ก', muK: 1.25, crrK: 0.85, note: 'ผิวแข่ง/สนามดรักเรียบเหนียว เกาะสูงสุด ต้านต่ำสุด' },
+];
 export const Veh = {
+  surface: 0,
+  setSurface(i) { Veh.surface = clamp(Math.round(i), 0, Surfaces.length - 1); },
   DriveEff: 0.93, Crr: 0.012, AirRho: 1.18, Mu: 0.95, CgRear: 0.5, CgHeight: 0.4, G: 9.81, BrakeDecel: 7.0, WheelInertia: 0.9,
   mass: d => d.BikeKg + d.RiderKg,
   wheelRadius: d => (d.RimInch * 12.7 + d.TireW * d.TireAsp / 100) * 0.992 / 1000,
   idealRim: tw => 0.000125 * tw * tw + 0.0075 * tw,
   rimFit(d) { const ideal = Veh.idealRim(d.TireW); const m = Math.max(0, Math.abs(d.RimW - ideal) - 0.2) / ideal; return clamp(1 - 0.5 * m, 0.7, 1); },
-  muFor(d) { return Veh.Mu * Math.pow(d.TireW / 90, 0.3) * Veh.rimFit(d); },
-  crrFor(d) { return Veh.Crr * Math.pow(d.TireW / 90, 0.25) / (0.5 + 0.5 * Veh.rimFit(d)); },
+  muFor(d) { return Veh.Mu * Surfaces[Veh.surface].muK * Math.pow(d.TireW / 90, 0.3) * Veh.rimFit(d); },
+  crrFor(d) { return Veh.Crr * Surfaces[Veh.surface].crrK * Math.pow(d.TireW / 90, 0.25) / (0.5 + 0.5 * Veh.rimFit(d)); },
   wheelInertiaFor(d) { const r = Veh.wheelRadius(d) / 0.285; return Veh.WheelInertia * r * r * (0.7 + 0.3 * d.TireW / 80) * (0.85 + 0.15 * d.RimW / 1.4); },
   effMass(d) { const r = Veh.wheelRadius(d); return Veh.mass(d) + Veh.wheelInertiaFor(d) / (r * r); },
   tractionMax(d) { const mu = Veh.muFor(d); return mu * Veh.mass(d) * Veh.G * Veh.CgRear / (1 - mu * Veh.CgHeight); },

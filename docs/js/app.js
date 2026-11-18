@@ -1,7 +1,7 @@
 // Rev Lab (เว็บ/มือถือ): หน้าจอเหมือนเวอร์ชัน C# (วาดบนผืน 1920x1080) + ลูปเกม
 // เสียง/ฟิสิกส์อยู่ใน AudioWorklet: worklet.js + sim.js
 import {
-  EngineModel, Presets, Params, paramDisplay, nudge, GarageTabs, PartCats, partCurrent, Fuels, newDesign,
+  Surfaces, EngineModel, Presets, Params, paramDisplay, nudge, GarageTabs, PartCats, partCurrent, Fuels, newDesign,
   Veh, Cvt, clamp, Hp, Ps, PsToHp, calibrate, tireCode, MaxRpm,
 } from './engine.js';
 import * as Adv from './advisor.js';
@@ -13,13 +13,14 @@ const f1 = v => v.toFixed(1), f0 = v => v.toFixed(0), f2 = v => v.toFixed(2);
 // ================================================================= บันทึก
 const KEY = 'revlab.web.v2';
 const save = (() => {
-  const s = { design: null, best: { b060: -1, b100: -1, b402: -1, top: 0 }, volume: 0.8, assist: matchMedia('(pointer:coarse)').matches, clutchSys: true };
+  const s = { design: null, best: { b060: -1, b100: -1, b402: -1, top: 0 }, volume: 0.8, assist: matchMedia('(pointer:coarse)').matches, clutchSys: true, surface: 0 };
   try { Object.assign(s, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch { /* เริ่มใหม่ */ }
   return s;
 })();
 let saveTimer = 0;
 const persist = () => { clearTimeout(saveTimer); saveTimer = setTimeout(() => { try { localStorage.setItem(KEY, JSON.stringify(save)); } catch { /* ไม่เป็นไร */ } }, 250); };
 
+Veh.setSurface(save.surface || 0);
 let design = newDesign(save.design || {});
 let draft = { ...design };
 let installed = new EngineModel(design);
@@ -115,6 +116,11 @@ function selectGear(gi) {
 }
 const shiftGear = d => selectGear(clamp(gearSel + d, 0, 4));
 const changeSlope = d => { slope = clamp(slope + d, -6, 20); };
+function setSurface(i) {
+  save.surface = i; Veh.setSurface(i); send('surface', i); persist(); advKey = '';
+  const s = Surfaces[i];
+  toast(`พื้นถนน: ${s.name}  (แรงเกาะ x${f2(s.muK)}, ต้านการกลิ้ง x${f2(s.crrK)})`);
+}
 function toggleClutchSys() {
   save.clutchSys = !save.clutchSys; persist();
   toast(save.clutchSys ? 'ระบบครัตช์มือ: เปิด (ค้าง Shift = กำครัตช์)' : 'ระบบครัตช์มือ: ปิด (เปลี่ยนเกียร์ได้ทันที คลัตช์แรงเหวี่ยงจับเอง)');
@@ -200,6 +206,7 @@ function driveKey(k) {
   else if (k === 'n') selectGear(0);
   else if (k === 'c') toggleClutchSys();
   else if (k === 'p') toggleAutopilot();
+  else if (k === 'v') setSurface((save.surface + 1) % Surfaces.length);
   else if (k === '[') changeSlope(-1);
   else if (k === ']') changeSlope(1);
   else if (k === 'escape') goTo('menu');
@@ -326,8 +333,12 @@ function drawSettings() {
 const gaugeMaxOf = lim => Math.max(10000, Math.ceil((lim + 1000) / 1000) * 1000);
 let needle = 0;
 function drawDrive() {
-  drawTopBar('ห้องทดสอบ', 'W เร่งสุด  •  X ค่อย ๆ เร่ง (ไม่ตัดรอบ)  •  Z ค่อย ๆ เร่ง (แตะรอบตัดเบา ๆ)  •  Space เบรก  •  S สตาร์ท  •  E/Q เกียร์  •  C ครัตช์  •  P ขับเอง  •  D ไดโน  •  [ ] ความชัน  •  G อู่');
+  drawTopBar('ห้องทดสอบ', 'W เร่งสุด  •  X ค่อย ๆ เร่ง (ไม่ตัดรอบ)  •  Z ค่อย ๆ เร่ง (แตะรอบตัดเบา ๆ)  •  Space เบรก  •  S สตาร์ท  •  E/Q เกียร์  •  C ครัตช์  •  P ขับเอง  •  V พื้นถนน  •  D ไดโน  •  [ ] ความชัน  •  G อู่');
   const m = installed, d = m.D, auto = d.Auto === 1;
+  ui.txt('พื้นถนน  [V]', F.sm, C.Dim, 252, 116);
+  Surfaces.forEach((s, i) => ui.btn(R(420 + i * 150, 108, 140, 44), s.name, save.surface === i, C.Accent, () => setSurface(i), F.sm));
+  const sf = Surfaces[save.surface];
+  ui.txt(`${sf.note}   •   แรงเกาะ x${f2(sf.muK)}   •   ต้านการกลิ้ง x${f2(sf.crrK)}`, F.xs, C.Dim, 254, 158);
   drawGauge(640, 552, 335);
   drawThrottle(1056, 170, 64, 660);
 
@@ -782,7 +793,7 @@ function tick() {
     if (autoDrive) { const o = autopilotStep(t); thr = o.thr; brake = o.brake; starter = o.starter; }
   } else { gradThr = 0; autoDrive = false; }
   send('throttleInput', +thr.toFixed(3)); send('brakeInput', brake); send('starterHeld', starter);
-  send('clutchEnabled', save.clutchSys);
+  send('clutchEnabled', save.clutchSys); send('surface', save.surface);
   const shiftHeld = down('shift');
   send('clutchInput', page === 'drive' && !showDyno && (shiftHeld || mouseClutch || t < assistUntil || t < apClutchUntil) ? 1 : 0);
   send('gearInput', gearSel); send('slopePct', slope);

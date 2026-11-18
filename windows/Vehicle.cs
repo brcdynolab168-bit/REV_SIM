@@ -45,10 +45,22 @@ public static class Vehicle
     }
 
     /// <summary>แรงเกาะยางหลัง: หน้ายางกว้างเกาะดีขึ้น (อ้างอิง 90 มม.) x ความเหมาะของขอบล้อ</summary>
-    public static float MuFor(EngineDesign d) => Mu * MathF.Pow(d.TireW / 90f, 0.3f) * RimFit(d);
+    /// <summary>พื้นถนน: ตัวคูณแรงเกาะ (μ) และแรงต้านการกลิ้ง</summary>
+    public readonly record struct SurfaceDef(string Name, float MuK, float CrrK, string Note);
+    public static readonly SurfaceDef[] Surfaces =
+    {
+        new("ถนนทั่วไป", 1.00f, 1.00f, "ลาดยางทั่วไป แห้ง ค่าอ้างอิง"),
+        new("ราดยาง", 0.90f, 1.25f, "ผิวหยาบ/หินเกล็ดราดยาง เกาะน้อยลง ต้านการกลิ้งมาก"),
+        new("คอนกรีต", 1.05f, 0.92f, "ผิวแข็งเรียบ เกาะดี ต้านการกลิ้งน้อย"),
+        new("แทร็ก", 1.25f, 0.85f, "ผิวแข่ง/สนามดรักเรียบเหนียว เกาะสูงสุด ต้านต่ำสุด"),
+    };
+    public static int SurfaceIndex = 0;
+    private static SurfaceDef Surf => Surfaces[Math.Clamp(SurfaceIndex, 0, Surfaces.Length - 1)];
+
+    public static float MuFor(EngineDesign d) => Mu * Surf.MuK * MathF.Pow(d.TireW / 90f, 0.3f) * RimFit(d);
 
     /// <summary>แรงต้านการกลิ้ง: ยางกว้างต้านมากขึ้น ขอบไม่พอดียิ่งต้านมาก</summary>
-    public static float CrrFor(EngineDesign d) => Crr * MathF.Pow(d.TireW / 90f, 0.25f) / (0.5f + 0.5f * RimFit(d));
+    public static float CrrFor(EngineDesign d) => Crr * Surf.CrrK * MathF.Pow(d.TireW / 90f, 0.25f) / (0.5f + 0.5f * RimFit(d));
 
     /// <summary>ความเฉื่อยล้อ: โตขึ้นตามรัศมียกกำลังสอง และหนักขึ้นตามหน้ายาง/ความกว้างขอบ</summary>
     public static float WheelInertiaFor(EngineDesign d)

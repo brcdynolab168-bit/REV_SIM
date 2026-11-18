@@ -52,6 +52,7 @@ public sealed class SaveData
     public float Best060 = -1f, Best100 = -1f, Best402 = -1f, BestTop;   // สถิติถนน: 0-60 กม./ชม., 100 ม., 402 ม. (วินาที), ท็อปสปีด (กม./ชม.)
     public float Volume = 0.8f;                           // ระดับเสียงที่ตั้งไว้
     public bool Fullscreen = true;
+    public int Surface = 0;                               // พื้นถนน (0 ทั่วไป, 1 ราดยาง, 2 คอนกรีต, 3 แทร็ก)
     public bool ClutchSys = true;                         // ระบบครัตช์มือ (เปิด/ปิด)
 
     private static string PathName => System.IO.Path.Combine(
@@ -81,6 +82,7 @@ public sealed class SaveData
                 else if (k == "volume") s.Volume = Math.Clamp(F(v, 0.8f), 0f, 1f);
                 else if (k == "fullscreen") s.Fullscreen = v != "0";
                 else if (k == "clutchsys") s.ClutchSys = v != "0";
+                else if (k == "surface") s.Surface = Math.Clamp((int)F(v, 0f), 0, 3);
                 else if (k == "besttop") s.BestTop = F(v, 0f);
             }
         }
@@ -108,6 +110,7 @@ public sealed class SaveData
                 "volume=" + S(Volume),
                 "fullscreen=" + (Fullscreen ? "1" : "0"),
                 "clutchsys=" + (ClutchSys ? "1" : "0"),
+                "surface=" + Surface,
                 "besttop=" + S(BestTop),
             });
         }

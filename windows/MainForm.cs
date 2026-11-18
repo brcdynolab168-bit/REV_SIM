@@ -71,6 +71,7 @@ public sealed partial class MainForm : Form
     public MainForm()
     {
         _eng = new EngineSim(_save.Design) { Volume = _save.Volume, ClutchEnabled = _save.ClutchSys };
+        Vehicle.SurfaceIndex = _save.Surface;
         _draft = _save.Design.Clone();
         _preview = new EngineModel(_draft);
         RefreshVisible();
@@ -227,10 +228,20 @@ public sealed partial class MainForm : Form
             case Keys.N: SelectGear(0); break;
             case Keys.C: ToggleClutchSystem(); break;
             case Keys.P: ToggleAutopilot(); break;
+            case Keys.V: SetSurface((Vehicle.SurfaceIndex + 1) % Vehicle.Surfaces.Length); break;
             case Keys.OemOpenBrackets: ChangeSlope(-1); break;
             case Keys.OemCloseBrackets: ChangeSlope(+1); break;
             case Keys.Escape: GoTo(Page.Menu); break;
         }
+    }
+
+    private void SetSurface(int i)
+    {
+        Vehicle.SurfaceIndex = i;
+        _save.Surface = i;
+        _save.Save();
+        var s = Vehicle.Surfaces[i];
+        Toast($"พื้นถนน: {s.Name}  (แรงเกาะ x{s.MuK:0.00}, ต้านการกลิ้ง x{s.CrrK:0.00})");
     }
 
     private void ToggleClutchSystem()

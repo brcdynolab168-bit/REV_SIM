@@ -59,6 +59,7 @@ export class EngineSim {
     this.scope = new Float32Array(2048); this.scopeW = 0; this.slipRpm = 0; this.tracUse = 0; this.spin = false; this.driveForce = 0; this.gripMax = 0; this._gearApplied = 0; this._shiftT = 0; this._tcSmooth = 0;
   }
 
+  set surface(i) { Veh.setSurface(i); }
   assemble(design) { this.pending = new EngineModel(design); this._roadReset = true; }
   startDyno() { if (this.running && this.dynoPhase === 0) this._dynoRequest = true; }
   get running() { return this.ignition && this.rpm > 700; }
