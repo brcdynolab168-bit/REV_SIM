@@ -109,14 +109,33 @@ public sealed class EngineDesign
             Auto = 1, RampDeg = 13.5f, Rollers = 6, RollerG = 8.5f, RollerG2 = 8.5f,
             GearF = 13, GearR = 40, FirstRed = 3.0f, BikeKg = 113f, RimInch = 14f, RimW = 1.60f, TireW = 90f, TireAsp = 90f,
         }),
-        // Yamaha XMAX 300: สเปกจริง (คู่มือเจ้าของรถ/ผู้ผลิต) 292cc 70x75.8 กำลังอัด 10.9 4 วาล์ว 28 PS/7,250 29 N·m/5,750
-        // ลดขั้นแรก 48/18 (ตายตัว) x เฟืองท้าย 37/13 = 7.59, ยางหลัง 140/70-14, รถ 179 กก. ส่วนแคม/เรือน/ก้านสูบ/ข้อเหวี่ยง/เม็ด/สปริงเป็นค่าประมาณ ปรับให้ได้กำลังตรงสเปก
+        // รถจริง: ตัวเลขที่ผู้ผลิตประกาศ (ซีซี ลูก x ชัก CR กำลัง แรงบิด น้ำหนัก ยาง) ส่วน เรือน/แคม/ก้านสูบ/เม็ด/องศาชาม/สปริง ผู้ผลิตไม่เปิดเผย เป็นค่าประมาณ แล้วปรับ CalK ให้พีคตรงรถจริง
+        // Yamaha XMAX 300: 292cc 70.0x75.9 CR 10.9 4V  20.6 kW (27.6 HP)/7,250  29 N·m/5,750  หนัก ~180 กก. ยางหลัง 140/70-14  ลดขั้นแรก 48/18
         ("XMAX 300 (CVT)", new EngineDesign
         {
-            Bore = 70f, Stroke = 75.8f, Rod = 118f, CrankKg = 4.7f, FlywheelKg = 0.8f, Valves = 4, Throttle = 30f,
-            Lsa = 110f, Duration = 225f, Lift = 7.5f, LiftEx = 7.5f, Cr = 10.9f, Limiter = 8800f,
-            Auto = 1, RampDeg = 13.5f, Rollers = 6, RollerG = 13.5f, RollerG2 = 13.5f, SpringK = 20f,
+            Bore = 70f, Stroke = 75.9f, Rod = 118f, CrankKg = 4.7f, FlywheelKg = 0.8f, Valves = 4, Throttle = 32f,
+            Lsa = 110f, Duration = 225f, DurationEx = 225f, Lift = 7.5f, LiftEx = 7.5f, Cr = 10.9f, Limiter = 8800f,
+            Auto = 1, RampDeg = 13.5f, RampOutDeg = 13.5f, Rollers = 6, RollerG = 13.5f, RollerG2 = 13.5f, SpringK = 20f,
             GearF = 13, GearR = 37, FirstRed = 48f / 18f, BikeKg = 180f, RimInch = 14f, RimW = 3.50f, TireW = 140f, TireAsp = 70f, RiderKg = 75f, CdA = 0.32f,
+            RealHp = 27.6f, RealHpRpm = 7250f, RealTq = 29f, RealTqRpm = 5750f, CalK = 0.975f,
+        }),
+        // Honda Forza 350: 330cc 77.0x70.8 CR 10.5 4V  21.5 kW (28.8 HP)/7,500  31.5 N·m/5,250  หนัก ~186 กก. ยางหลัง 140/70-14
+        ("Forza 350 (CVT)", new EngineDesign
+        {
+            Bore = 77f, Stroke = 70.8f, Rod = 115f, CrankKg = 4.9f, FlywheelKg = 0.85f, Valves = 4, Throttle = 34f,
+            Lsa = 110f, Duration = 225f, DurationEx = 225f, Lift = 7.5f, LiftEx = 7.5f, Cr = 10.5f, Limiter = 8800f,
+            Auto = 1, RampDeg = 13.5f, RampOutDeg = 13.5f, Rollers = 6, RollerG = 14f, RollerG2 = 14f, SpringK = 20f,
+            GearF = 13, GearR = 37, FirstRed = 48f / 18f, BikeKg = 186f, RimInch = 14f, RimW = 3.50f, TireW = 140f, TireAsp = 70f, RiderKg = 75f, CdA = 0.32f,
+            RealHp = 28.8f, RealHpRpm = 7500f, RealTq = 31.5f, RealTqRpm = 5250f, CalK = 0.95f,
+        }),
+        // Honda Giorno+ 125: 125cc 53.5x55.5 CR 11.5 2V  8.49 kW (11.4 HP)/8,750  11.6 N·m/5,250  หนัก ~116 กก. ยาง 100/90-12 หน้า-หลัง
+        ("Giorno+ 125 (CVT)", new EngineDesign
+        {
+            Bore = 53.5f, Stroke = 55.5f, Rod = 90f, CrankKg = 2.4f, FlywheelKg = 0.6f, Valves = 2, Throttle = 24f,
+            Lsa = 110f, Duration = 232f, DurationEx = 232f, Lift = 7.5f, LiftEx = 7.5f, Cr = 11.5f, Limiter = 9800f,
+            Auto = 1, RampDeg = 13.5f, RampOutDeg = 13.5f, Rollers = 6, RollerG = 8f, RollerG2 = 8f, SpringK = 18f,
+            GearF = 13, GearR = 40, FirstRed = 3.0f, BikeKg = 116f, RimInch = 12f, RimW = 2.50f, TireW = 100f, TireAsp = 90f, RiderKg = 65f, CdA = 0.40f,
+            RealHp = 11.4f, RealHpRpm = 8750f, RealTq = 11.6f, RealTqRpm = 5250f, CalK = 0.975f,
         }),
     };
 

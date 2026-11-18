@@ -153,6 +153,8 @@ public sealed partial class MainForm
             case Keys.D4: case Keys.NumPad4: LoadPreset(3); break;
             case Keys.D5: case Keys.NumPad5: LoadPreset(4); break;
             case Keys.D6: case Keys.NumPad6: LoadPreset(5); break;
+            case Keys.D7: case Keys.NumPad7: LoadPreset(6); break;
+            case Keys.D8: case Keys.NumPad8: LoadPreset(7); break;
             case Keys.T: ToggleAdvisor(); break;
             case Keys.C: CalibrateToReal(); break;
             case Keys.A: AutoTuneRollers(); break;

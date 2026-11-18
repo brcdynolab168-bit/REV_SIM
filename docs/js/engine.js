@@ -42,8 +42,19 @@ export const Presets = [
   ['ลูก 53 แคมแต่ง*', newDesign({ Bore: 53, Stroke: 55.6, Rod: 89, CrankKg: 2.2, FlywheelKg: 0.5, Throttle: 26, Lsa: 108, Duration: 245, DurationEx: 245, Lift: 7, LiftEx: 7, Cr: 10, Limiter: 10500 })],
   ['ลูก 67 ซิ่ง*', newDesign({ Bore: 67, Stroke: 55.6, Rod: 89, CrankKg: 1.4, FlywheelKg: 0.4, Throttle: 34, Lsa: 104, Duration: 290, DurationEx: 290, Lift: 9, LiftEx: 9, Cr: 11.5, Limiter: 12800 })],
   ['ออโต้ 125 (CVT)*', newDesign(CVT125)],
-  ['XMAX 300 (CVT)', newDesign({ Bore: 70, Stroke: 75.8, Rod: 118, CrankKg: 4.7, FlywheelKg: 0.8, Valves: 4, Throttle: 30, Lsa: 110, Duration: 225, DurationEx: 225, Lift: 7.5, LiftEx: 7.5, Cr: 10.9, Limiter: 8800,
-    Auto: 1, RampDeg: 13.5, Rollers: 6, RollerG: 13.5, RollerG2: 13.5, SpringK: 20, GearF: 13, GearR: 37, FirstRed: 48 / 18, BikeKg: 180, RimInch: 14, RimW: 3.5, TireW: 140, TireAsp: 70, RiderKg: 75, CdA: 0.32 })],
+  // รถจริง: ตัวเลขที่ผู้ผลิตประกาศ (ซีซี ลูก x ชัก CR กำลัง แรงบิด น้ำหนัก ยาง) ส่วน เรือน/แคม/ก้านสูบ/เม็ด/องศาชาม/สปริง ผู้ผลิตไม่เปิดเผย เป็นค่าประมาณ แล้วปรับ CalK ให้พีคตรงรถจริง
+  // Yamaha XMAX 300: 292cc 70.0x75.9 CR 10.9 4V  20.6 kW (27.6 HP)/7,250  29 N·m/5,750  หนัก ~180 กก. ยางหลัง 140/70-14
+  ['XMAX 300 (CVT)', newDesign({ Bore: 70, Stroke: 75.9, Rod: 118, CrankKg: 4.7, FlywheelKg: 0.8, Valves: 4, Throttle: 32, Lsa: 110, Duration: 225, DurationEx: 225, Lift: 7.5, LiftEx: 7.5, Cr: 10.9, Limiter: 8800,
+    Auto: 1, RampDeg: 13.5, RampOutDeg: 13.5, Rollers: 6, RollerG: 13.5, RollerG2: 13.5, SpringK: 20, GearF: 13, GearR: 37, FirstRed: 48 / 18, BikeKg: 180, RimInch: 14, RimW: 3.5, TireW: 140, TireAsp: 70, RiderKg: 75, CdA: 0.32,
+    RealHp: 27.6, RealHpRpm: 7250, RealTq: 29, RealTqRpm: 5750, CalK: 0.975 })],
+  // Honda Forza 350: 330cc 77.0x70.8 CR 10.5 4V  21.5 kW (28.8 HP)/7,500  31.5 N·m/5,250  หนัก ~186 กก. ยางหลัง 140/70-14
+  ['Forza 350 (CVT)', newDesign({ Bore: 77, Stroke: 70.8, Rod: 115, CrankKg: 4.9, FlywheelKg: 0.85, Valves: 4, Throttle: 34, Lsa: 110, Duration: 225, DurationEx: 225, Lift: 7.5, LiftEx: 7.5, Cr: 10.5, Limiter: 8800,
+    Auto: 1, RampDeg: 13.5, RampOutDeg: 13.5, Rollers: 6, RollerG: 14, RollerG2: 14, SpringK: 20, GearF: 13, GearR: 37, FirstRed: 48 / 18, BikeKg: 186, RimInch: 14, RimW: 3.5, TireW: 140, TireAsp: 70, RiderKg: 75, CdA: 0.32,
+    RealHp: 28.8, RealHpRpm: 7500, RealTq: 31.5, RealTqRpm: 5250, CalK: 0.95 })],
+  // Honda Giorno+ 125: 125cc 53.5x55.5 CR 11.5 2V  8.49 kW (11.4 HP)/8,750  11.6 N·m/5,250  หนัก ~116 กก. ยาง 100/90-12 หน้า-หลัง
+  ['Giorno+ 125 (CVT)', newDesign({ Bore: 53.5, Stroke: 55.5, Rod: 90, CrankKg: 2.4, FlywheelKg: 0.6, Valves: 2, Throttle: 24, Lsa: 110, Duration: 232, DurationEx: 232, Lift: 7.5, LiftEx: 7.5, Cr: 11.5, Limiter: 9800,
+    Auto: 1, RampDeg: 13.5, RampOutDeg: 13.5, Rollers: 6, RollerG: 8, RollerG2: 8, SpringK: 18, GearF: 13, GearR: 40, FirstRed: 3.0, BikeKg: 116, RimInch: 12, RimW: 2.5, TireW: 100, TireAsp: 90, RiderKg: 65, CdA: 0.40,
+    RealHp: 11.4, RealHpRpm: 8750, RealTq: 11.6, RealTqRpm: 5250, CalK: 0.975 })],
   ['สตรีท 150 ลูก 58*', newDesign({ Bore: 58, Stroke: 57.9, Rod: 90, CrankKg: 2.5, FlywheelKg: 0.5, Throttle: 28, Lsa: 110, Duration: 240, DurationEx: 240, Lift: 8, LiftEx: 8, Cr: 10.5, Limiter: 10500, Fuel: 2 })],
   ['เดี่ยว 300 ลูก 80*', newDesign({ Bore: 80, Stroke: 60, Rod: 100, CrankKg: 4.8, FlywheelKg: 0.7, Valves: 4, Throttle: 38, Lsa: 108, Duration: 255, DurationEx: 255, Lift: 9.5, LiftEx: 9.5, Cr: 11.5, Limiter: 11000, Fuel: 3, BikeKg: 120 })],
   ['เดี่ยว 600 ลูก 100*', newDesign({ Bore: 100, Stroke: 76.5, Rod: 125, CrankKg: 7.2, FlywheelKg: 1.3, Valves: 4, Throttle: 46, Lsa: 108, Duration: 250, DurationEx: 250, Lift: 10.5, LiftEx: 10.5, Cr: 12.5, Limiter: 10500, Fuel: 3, BikeKg: 140 })],

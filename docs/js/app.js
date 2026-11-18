@@ -561,7 +561,7 @@ function garageKey(k, shift) {
     case 'arrowleft': if (parts) partStep(gPartRow, -1); else nudgeRow(gSel, -1, shift); break;
     case 'arrowright': if (parts) partStep(gPartRow, 1); else nudgeRow(gSel, 1, shift); break;
     case 'tab': setTab(gTab + (shift ? -1 : 1)); break;
-    case '1': case '2': case '3': case '4': case '5': case '6': loadPreset(+k - 1); break;
+    case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': loadPreset(+k - 1); break;
     case 't': advisorOn = !advisorOn; advKey = ''; break;
     case 'c': calibrateToReal(); break;
     case 'a': autoTuneRollers(); break;
