@@ -6,7 +6,7 @@ public sealed partial class MainForm
     private int _ecuMode;                              // 0 = น้ำมัน %, 1 = องศาจุด, 2 = AFR (เป้าหมาย)
     private int _ecuC0, _ecuR0 = 19, _ecuC1, _ecuR1 = 19;  // มุมเลือก (จุดเริ่ม, จุดล่าสุด)
     private const int EN = EngineModel.EcuN;
-    private static readonly string[] EcuModeNames = { "น้ำมัน (%)", "องศาจุด (°)", "AFR" };
+    private static readonly string[] EcuModeNames = { "น้ำมัน (ms)", "องศาจุด (°)", "AFR" };
 
     private bool IsEcuTab => GarageTabs[_tab].Name == "จูนกล่อง";
 
@@ -16,7 +16,7 @@ public sealed partial class MainForm
         r0 = Math.Min(_ecuR0, _ecuR1); r1 = Math.Max(_ecuR0, _ecuR1);
     }
 
-    private void EnsureFuel() => _draft.EcuFuel ??= Enumerable.Repeat(100f, EN * EN).ToArray();
+    private void EnsureFuel() => _draft.EcuMs ??= _preview.FactoryMsTable();
     private void EnsureIgn() => _draft.EcuIgn ??= _preview.FactoryIgnTable();
 
     private static Color Mix(Color a, Color b, float t)
@@ -43,13 +43,13 @@ public sealed partial class MainForm
             for (int r = r0; r <= r1; r++) for (int c = c0; c <= c1; c++)
             {
                 int i = r * EN + c;
-                if (_ecuMode == 0) _draft.EcuFuel![i] = Math.Clamp(_draft.EcuFuel[i] + (coarse ? 5f : 1f) * dir, 50f, 160f);
+                if (_ecuMode == 0) _draft.EcuMs![i] = Math.Clamp(MathF.Round((_draft.EcuMs[i] + (coarse ? 0.5f : 0.1f) * dir) * 100f) / 100f, 0.3f, 40f);
                 else
                 {
-                    // โหมด AFR: ปรับ AFR เป้าหมายของ ECU แล้วแปลงกลับเป็น % น้ำมัน
-                    float baseAfr = m.Stoich * m.LambdaBase(m.EcuRpmAt(c), EngineModel.EcuLoadAt(r));
-                    float afr = baseAfr * 100f / _draft.EcuFuel![i] + (coarse ? 0.5f : 0.1f) * dir;
-                    _draft.EcuFuel[i] = Math.Clamp(MathF.Round(baseAfr * 100f / Math.Max(afr, 1f) * 10f) / 10f, 50f, 160f);
+                    // โหมด AFR: ตั้ง AFR เป้าหมายของช่อง แล้วแปลงเป็นเวลาฉีด (ms)
+                    float rpmC = m.EcuRpmAt(c), loadR = EngineModel.EcuLoadAt(r);
+                    float cur = m.EcuAt(rpmC, loadR).Afr;
+                    _draft.EcuMs![i] = Math.Clamp(MathF.Round(m.MsForAfr(rpmC, loadR, cur + (coarse ? 0.5f : 0.1f) * dir) * 100f) / 100f, 0.3f, 40f);
                 }
             }
         }
@@ -61,7 +61,7 @@ public sealed partial class MainForm
         EcuRange(out int c0, out int c1, out int r0, out int r1);
         bool ign = _ecuMode == 1;
         if (ign) EnsureIgn(); else EnsureFuel();
-        var t = ign ? _draft.EcuIgn! : _draft.EcuFuel!;
+        var t = ign ? _draft.EcuIgn! : _draft.EcuMs!;
         var src = (float[])t.Clone();
         for (int r = r0; r <= r1; r++) for (int c = c0; c <= c1; c++)
         {
@@ -83,7 +83,7 @@ public sealed partial class MainForm
         EcuRange(out int c0, out int c1, out int r0, out int r1);
         bool ign = _ecuMode == 1;
         if (ign) EnsureIgn(); else EnsureFuel();
-        var t = ign ? _draft.EcuIgn! : _draft.EcuFuel!;
+        var t = ign ? _draft.EcuIgn! : _draft.EcuMs!;
         float v = t[_ecuR0 * EN + _ecuC0];
         for (int r = r0; r <= r1; r++) for (int c = c0; c <= c1; c++) t[r * EN + c] = v;
         DraftChanged();
@@ -100,15 +100,16 @@ public sealed partial class MainForm
         }
         else
         {
+            var facMs = _preview.FactoryMsTable();
             EnsureFuel();
-            for (int r = r0; r <= r1; r++) for (int c = c0; c <= c1; c++) _draft.EcuFuel![r * EN + c] = 100f;
+            for (int r = r0; r <= r1; r++) for (int c = c0; c <= c1; c++) _draft.EcuMs![r * EN + c] = facMs[r * EN + c];
         }
         DraftChanged();
     }
 
     private void EcuFactoryAll()
     {
-        if (_ecuMode == 1) _draft.EcuIgn = null; else _draft.EcuFuel = null;
+        if (_ecuMode == 1) _draft.EcuIgn = null; else _draft.EcuMs = null;
         DraftChanged();
         Toast("คืนตารางเป็นค่าโรงงานแล้ว");
     }

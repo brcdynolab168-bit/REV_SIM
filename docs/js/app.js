@@ -578,12 +578,12 @@ function garageKey(k, shift) {
 
 // ================================================================= แท็บ "จูนกล่อง": ตาราง ECU 20x20 (น้ำมัน % / องศาจุด / AFR)
 let ecuMode = 0, ecuC0 = 0, ecuR0 = 19, ecuC1 = 0, ecuR1 = 19;
-const EcuModeNames = ['น้ำมัน (%)', 'องศาจุด (°)', 'AFR'];
+const EcuModeNames = ['น้ำมัน (ms)', 'องศาจุด (°)', 'AFR'];
 const isEcuTab = () => GarageTabs[gTab][0] === 'จูนกล่อง';
 const mixC = (a, b, t) => { t = clamp(t, 0, 1); return `rgb(${Math.round(a[0] + (b[0] - a[0]) * t)},${Math.round(a[1] + (b[1] - a[1]) * t)},${Math.round(a[2] + (b[2] - a[2]) * t)})`; };
 const ecuRange = () => ({ c0: Math.min(ecuC0, ecuC1), c1: Math.max(ecuC0, ecuC1), r0: Math.min(ecuR0, ecuR1), r1: Math.max(ecuR0, ecuR1) });
 // ตารางเป็นแบบ copy-on-write เสมอ (ไม่ให้ไปแก้ตารางของเครื่องที่ติดตั้งแล้ว)
-const ecuFuelW = () => (draft.EcuFuel = (draft.EcuFuel || new Array(EcuN * EcuN).fill(100)).slice());
+const ecuFuelW = () => (draft.EcuMs = (draft.EcuMs || preview.FactoryMsTable()).slice());
 const ecuIgnW = () => (draft.EcuIgn = (draft.EcuIgn || preview.FactoryIgnTable()).slice());
 function ecuAdjust(dir, coarse) {
   const { c0, c1, r0, r1 } = ecuRange(), m = preview;
@@ -594,10 +594,10 @@ function ecuAdjust(dir, coarse) {
     const t = ecuFuelW();
     for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
       const i = r * EcuN + c;
-      if (ecuMode === 0) t[i] = clamp(t[i] + (coarse ? 5 : 1) * dir, 50, 160);
-      else {
-        const baseAfr = m.Stoich * m.LambdaBase(m.EcuRpmAt(c), ecuLoadAt(r)), afr = baseAfr * 100 / t[i] + (coarse ? 0.5 : 0.1) * dir;
-        t[i] = clamp(Math.round(baseAfr * 100 / Math.max(afr, 1) * 10) / 10, 50, 160);
+      if (ecuMode === 0) t[i] = clamp(Math.round((t[i] + (coarse ? 0.5 : 0.1) * dir) * 100) / 100, 0.3, 40);
+      else {      // โหมด AFR: ตั้ง AFR เป้าหมายของช่อง แล้วแปลงเป็นเวลาฉีด (ms)
+        const rpmC = m.EcuRpmAt(c), loadR = ecuLoadAt(r), cur = m.EcuAt(rpmC, loadR, {}).Afr;
+        t[i] = clamp(Math.round(m.MsForAfr(rpmC, loadR, cur + (coarse ? 0.5 : 0.1) * dir) * 100) / 100, 0.3, 40);
       }
     }
   }
@@ -620,10 +620,10 @@ function ecuSmooth() {
 }
 function ecuEqualize() { ecuEdit((t, c0, c1, r0, r1) => { const v = t[ecuR0 * EcuN + ecuC0]; for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) t[r * EcuN + c] = v; }); }
 function ecuFactorySel() {
-  const fac = preview.FactoryIgnTable();
-  ecuEdit((t, c0, c1, r0, r1, ign) => { for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) t[r * EcuN + c] = ign ? fac[r * EcuN + c] : 100; });
+  const fac = preview.FactoryIgnTable(), facMs = preview.FactoryMsTable();
+  ecuEdit((t, c0, c1, r0, r1, ign) => { for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) t[r * EcuN + c] = ign ? fac[r * EcuN + c] : facMs[r * EcuN + c]; });
 }
-function ecuFactoryAll() { if (ecuMode === 1) draft.EcuIgn = null; else draft.EcuFuel = null; draftChanged(); toast('คืนตารางเป็นค่าโรงงานแล้ว'); }
+function ecuFactoryAll() { if (ecuMode === 1) draft.EcuIgn = null; else draft.EcuMs = null; draftChanged(); toast('คืนตารางเป็นค่าโรงงานแล้ว'); }
 function ecuNearMbt() {
   const m = preview;
   ecuEdit((t, c0, c1, r0, r1) => { for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) t[r * EcuN + c] = Math.round((m.EcuAt(m.EcuRpmAt(c), ecuLoadAt(r)).Mbt - 1) * 2) / 2; });
@@ -676,6 +676,8 @@ function drawEcu() {
   const { c0: sc0, c1: sc1, r0: sr0, r1: sr1 } = ecuRange();
   ui.txt('x1000', F.cap, C.Dim, LX + 4, hdrY + 2);
   for (let c = 0; c < EcuN; c++) ui.txtC((m.EcuRpmAt(c) / 1000).toFixed(1), F.cap, c >= sc0 && c <= sc1 ? C.Accent : C.Dim, gx + (c + 0.5) * cw, hdrY + 10);
+  let fMin = 1e9, fMax = -1e9;      // ช่วงเวลาฉีดของตาราง ใช้ไล่สี
+  if (ecuMode === 0) for (let r = 0; r < EcuN; r++) for (let c = 0; c < EcuN; c++) { const v = m.CellMs(c, r); fMin = Math.min(fMin, v); fMax = Math.max(fMax, v); }
   const e = {};
   for (let dr = 0; dr < EcuN; dr++) {
     const r = EcuN - 1 - dr, y = gridY + dr * cellH;
@@ -683,7 +685,7 @@ function drawEcu() {
     for (let c = 0; c < EcuN; c++) {
       m.EcuAt(m.EcuRpmAt(c), ecuLoadAt(r), e);
       let col, txt, dMbt = 0;
-      if (ecuMode === 0) { const v = m.CellFuel(c, r); col = heat((v - 70) / 60); txt = v.toFixed(0); }
+      if (ecuMode === 0) { const v = m.CellMs(c, r); col = heat((v - fMin) / Math.max(0.01, fMax - fMin)); txt = v >= 10 ? v.toFixed(1) : v.toFixed(2); }
       else if (ecuMode === 1) { const v = m.CellAdv(c, r); dMbt = v - e.Mbt; col = heat(v / 45); txt = v.toFixed(1); }
       else { col = heat((e.Lambda - 0.7) / 0.6); txt = e.Afr.toFixed(1); }
       ui.rect(gx + c * cw, y, cw - 1, cellH - 1, col[0]);
@@ -712,11 +714,11 @@ function drawEcu() {
     p => { const [c, r] = cellAt(p); ecuC1 = c; ecuR1 = r; }, () => { }, dir => ecuAdjust(dir, keys.has('shift')));
   const ly = gridY + EcuN * cellH + 6;
   for (let i = 0; i < 240; i++) ui.rect(gx + i * 1.25, ly + 3, 1.3, 14, heat(i / 239)[0]);
-  ui.txtR(ecuMode === 0 ? '70%' : ecuMode === 1 ? '0°' : 'λ0.7 หนา', F.cap, C.Dim, gx - 6, ly);
-  ui.txt(ecuMode === 0 ? '130%' : ecuMode === 1 ? '45°' : 'λ1.3 บาง', F.cap, C.Dim, gx + 306, ly);
-  ui.txt(ecuMode === 0 ? 'ฟ้า = ลดน้ำมัน  เขียว = 100  ส้ม/แดง = เพิ่ม  จุดขาว = ไดโน'
+  ui.txtR(ecuMode === 0 ? `${fMin.toFixed(1)} ms` : ecuMode === 1 ? '0°' : 'λ0.7 หนา', F.cap, C.Dim, gx - 6, ly);
+  ui.txt(ecuMode === 0 ? `${fMax.toFixed(1)} ms` : ecuMode === 1 ? '45°' : 'λ1.3 บาง', F.cap, C.Dim, gx + 306, ly);
+  ui.txt(ecuMode === 0 ? 'ฟ้า = ฉีดน้อย (โหลดเบา)  แดง = ฉีดมาก (โหลดหนัก)  จุดขาว = ไดโน'
     : ecuMode === 1 ? 'มุมขวาบน: แดง = แก่เกิน MBT  ขาว = ใกล้  ดำ = ไฟอ่อน'
-      : 'ฟ้า = หนา  เขียว = แรงสุด  เหลือง = บาง  แดง = บางเกิน', F.cap, C.Dim, gx + 372, ly);
+      : 'ฟ้า = หนา  เขียว = แรงสุด  เหลือง = บาง  แดง = บางเกิน', F.cap, C.Dim, gx + 400, ly);
 
   let bx = LX; const by = 884;
   const B = (t, w, fn, col = C.Accent) => { ui.btn(R(bx, by, w, 40), t, false, col, fn, F.xs); bx += w + 8; };
@@ -763,7 +765,7 @@ function drawEcu() {
 
   const prpm = m.EcuRpmAt(ecuC1), pload = ecuLoadAt(ecuR1), s = m.EcuAt(prpm, pload, {});
   ui.panelBox(R(RX, 672, RW, 134), `ช่องที่เลือก  ${fmtN(prpm)} rpm  โหลด ${f0(pload * 100)}%`);
-  ui.txt(`AFR ${f1(s.Afr)} (λ ${f2(s.Lambda)})  •  น้ำมัน ${f0(s.FuelPct)}%  •  หัวฉีด ${f0(s.Duty * 100)}%`, F.xs, s.Lambda > 1.12 ? C.Red : s.Lambda < 0.7 ? C.Blue : s.Lambda > 0.97 ? C.Yellow : C.Green, RX + 24, 706);
+  ui.txt(`AFR ${f1(s.Afr)} (λ ${f2(s.Lambda)})  •  ฉีด ${s.PulseMs.toFixed(2)} ms  •  หัวฉีด ${f0(s.Duty * 100)}%`, F.xs, s.Lambda > 1.12 ? C.Red : s.Lambda < 0.7 ? C.Blue : s.Lambda > 0.97 ? C.Yellow : C.Green, RX + 24, 706);
   const dl2 = s.Adv - s.Mbt;
   ui.txt(`จุด ${f1(s.Adv)}°  MBT ${f1(s.Mbt)}°  (${dl2 >= 0 ? 'แก่' : 'อ่อน'} ${f1(Math.abs(dl2))}°)  •  แรงบิด x${s.Mult.toFixed(3)}`, F.xs, dl2 > 1.5 ? C.Red : dl2 < -8 ? C.Blue : C.Green, RX + 24, 730);
   const warn = s.Egt > 1050 ? 'ไอเสียร้อนจัด! เสี่ยงลูกสูบพัง' : m.KnockWot(prpm) > 0.02 && pload > 0.7 ? 'น็อกที่ช่องนี้: ลดองศา/เติมน้ำมัน' : dl2 < -10 ? 'ไฟอ่อนมาก: แรงตก ไอเสียร้อน' : s.Lambda > 1.35 || s.Lambda < 0.6 ? 'ส่วนผสมนอกช่วงจุดติด' : '';

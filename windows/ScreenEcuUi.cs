@@ -83,6 +83,8 @@ public sealed partial class MainForm
 
         // ---------- ตาราง ----------
         EcuRange(out int sc0, out int sc1, out int sr0, out int sr1);
+        float fMin = float.MaxValue, fMax = float.MinValue;      // ช่วงเวลาฉีดของตาราง ใช้ไล่สี
+        if (_ecuMode == 0) for (int rr0 = 0; rr0 < EN; rr0++) for (int cc0 = 0; cc0 < EN; cc0++) { float vv = m.CellMs(cc0, rr0); fMin = MathF.Min(fMin, vv); fMax = MathF.Max(fMax, vv); }
         Txt(g, "x1000", _fCap, Palette.Dim, LX + 4, hdrY + 2);
         for (int c = 0; c < EN; c++)
             TxtC(g, (m.EcuRpmAt(c) / 1000f).ToString("0.0"), _fCap, c >= sc0 && c <= sc1 ? Palette.Accent : Palette.Dim, gx + (c + 0.5f) * cw, hdrY + 10);
@@ -97,8 +99,8 @@ public sealed partial class MainForm
                 Color col; string txt; float dMbt = 0f;
                 if (_ecuMode == 0)
                 {
-                    float v = m.CellFuel(c, r);
-                    col = Heat((v - 70f) / 60f); txt = v.ToString("0");
+                    float v = m.CellMs(c, r);
+                    col = Heat((v - fMin) / MathF.Max(0.01f, fMax - fMin)); txt = v >= 10f ? v.ToString("0.0") : v.ToString("0.00");
                 }
                 else if (_ecuMode == 1)
                 {
@@ -153,13 +155,13 @@ public sealed partial class MainForm
         // คำอธิบายสี (แถบไล่สี)
         float ly = gridY + EN * cellH + 6;
         for (int i = 0; i < 240; i++) g.FillRectangle(Br(Heat(i / 239f)), gx + i * 1.25f, ly + 3, 1.3f, 14);
-        string lo = _ecuMode == 0 ? "70%" : _ecuMode == 1 ? "0°" : "λ0.7 หนา", hi = _ecuMode == 0 ? "130%" : _ecuMode == 1 ? "45°" : "λ1.3 บาง";
+        string lo = _ecuMode == 0 ? $"{fMin:0.0} ms" : _ecuMode == 1 ? "0°" : "λ0.7 หนา", hi = _ecuMode == 0 ? $"{fMax:0.0} ms" : _ecuMode == 1 ? "45°" : "λ1.3 บาง";
         TxtR(g, lo, _fCap, Palette.Dim, gx - 6, ly);
         Txt(g, hi, _fCap, Palette.Dim, gx + 306, ly);
-        string legend = _ecuMode == 0 ? "ฟ้า = ลดน้ำมัน  เขียว = 100  ส้ม/แดง = เพิ่ม  จุดขาว = ไดโน"
+        string legend = _ecuMode == 0 ? "ฟ้า = ฉีดน้อย (โหลดเบา)  แดง = ฉีดมาก (โหลดหนัก)  จุดขาว = ไดโน"
             : _ecuMode == 1 ? "มุมขวาบน: แดง = แก่เกิน MBT  ขาว = ใกล้  ดำ = ไฟอ่อน"
             : "ฟ้า = หนา  เขียว = แรงสุด  เหลือง = บาง  แดง = บางเกิน";
-        Txt(g, legend, _fCap, Palette.Dim, gx + 372, ly);
+        Txt(g, legend, _fCap, Palette.Dim, gx + 400, ly);
 
         // ---------- แถบเครื่องมือ ----------
         float by = 884f, bx = LX;
@@ -235,7 +237,7 @@ public sealed partial class MainForm
         var s = m.EcuAt(prpm, pload);
         PanelBox(g, new RectangleF(RX, 672, RW, 134), $"ช่องที่เลือก  {prpm:N0} rpm  โหลด {pload * 100f:0}%");
         Color afrC2 = s.Lambda > 1.12f ? Palette.Red : s.Lambda < 0.7f ? Palette.Blue : s.Lambda > 0.97f ? Palette.Yellow : Palette.Green;
-        Txt(g, $"AFR {s.Afr:0.0} (λ {s.Lambda:0.00})  •  น้ำมัน {s.FuelPct:0}%  •  หัวฉีด {s.Duty * 100f:0}%", _fXs, afrC2, RX + 24, 706);
+        Txt(g, $"AFR {s.Afr:0.0} (λ {s.Lambda:0.00})  •  ฉีด {s.PulseMs:0.00} ms  •  หัวฉีด {s.Duty * 100f:0}%", _fXs, afrC2, RX + 24, 706);
         float dl2 = s.Adv - s.Mbt;
         Txt(g, $"จุด {s.Adv:0.0}°  MBT {s.Mbt:0.0}°  ({(dl2 >= 0 ? "แก่" : "อ่อน")} {Math.Abs(dl2):0.0}°)  •  แรงบิด x{s.Mult:0.000}", _fXs, dl2 > 1.5f ? Palette.Red : dl2 < -8f ? Palette.Blue : Palette.Green, RX + 24, 730);
         string warn = s.Egt > 1050f ? "ไอเสียร้อนจัด! เสี่ยงลูกสูบพัง" : m.KnockWot(prpm) > 0.02f && pload > 0.7f ? "น็อกที่ช่องนี้: ลดองศา/เติมน้ำมัน" : dl2 < -10f ? "ไฟอ่อนมาก: แรงตก ไอเสียร้อน" : s.Lambda > 1.35f || s.Lambda < 0.6f ? "ส่วนผสมนอกช่วงจุดติด" : "";
