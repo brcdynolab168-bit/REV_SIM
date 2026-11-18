@@ -54,6 +54,17 @@ public sealed class EngineDesign
     public float Gear2 = 1.550f;
     public float Gear3 = 1.150f;
     public float Gear4 = 0.923f;
+    public int Gears = 4;           // จำนวนเกียร์ของรถเกียร์ธรรมดา 4 / 5 / 6 สปีด (ตามรุ่นรถจริง)
+    public float Gear5 = 0.80f;     // อัตราทดเกียร์ 5-6 (ใช้เมื่อ Gears >= 5 / 6)
+    public float Gear6 = 0.72f;
+    /// <summary>อัตราทดเกียร์ที่ g (1..Gears)</summary>
+    public float GearAt(int g) => Math.Clamp(g, 1, Math.Clamp(Gears, 4, 6)) switch { 1 => Gear1, 2 => Gear2, 3 => Gear3, 4 => Gear4, 5 => Gear5, _ => Gear6 };
+    /// <summary>อัตราทดเกียร์สูงสุด (เกียร์ท้ายสุด) ใช้ในที่ปรึกษา</summary>
+    public float TopGearRatio
+    {
+        get => GearAt(Gears);
+        set { switch (Math.Clamp(Gears, 4, 6)) { case 4: Gear4 = value; break; case 5: Gear5 = value; break; default: Gear6 = value; break; } }
+    }
     public int Pipe = 0;            // ท่อไอเสีย: 0 เดิม, 1 ผ่าหมก, 2 ผ่าเปิด, 3 ท่อสูตร
     public static readonly string[] PipeNames = { "ท่อเดิม", "ท่อผ่าหมก", "ท่อผ่าเปิด", "ท่อสูตร" };
     public int Fuel = 1;            // ชนิดน้ำมัน (ดู Fuels)
@@ -137,13 +148,13 @@ public sealed class EngineDesign
             GearF = 13, GearR = 40, FirstRed = 3.0f, BikeKg = 116f, RimInch = 12f, RimW = 2.50f, TireW = 100f, TireAsp = 90f, RiderKg = 65f, CdA = 0.40f,
             RealHp = 11.4f, RealHpRpm = 8750f, RealTq = 11.6f, RealTqRpm = 5250f, CalK = 0.975f,
         }),
-        // Yamaha MX King 155 (VVA): 155cc 58.0x58.7 4V เกียร์ 6 สปีด (เกมมี 4 สปีด จึงเลือกอัตราทดห่างสุดโต่ง) หนัก 119 กก. ยาง 90/80-17  ~16 PS/9,000  14.2 N·m/6,500
+        // Yamaha MX King 155 (VVA): 155cc 58.0x58.7 4V เกียร์ 6 สปีด (อัตราทดเป็นค่าประมาณระดับ R15) หนัก 119 กก. ยาง 90/80-17  ~16 PS/9,000  14.2 N·m/6,500
         // CR 11.6, แคม/ก้านสูบ/ข้อเหวี่ยง/สเตอร์/อัตราทดเป็นค่าประมาณ (ไม่ได้ประกาศ)
         ("MX King 155 เดิม", new EngineDesign
         {
             Bore = 58f, Stroke = 58.7f, Rod = 105f, CrankKg = 2.5f, FlywheelKg = 0.55f, Valves = 4, Throttle = 28f,
             Lsa = 110f, Duration = 244f, DurationEx = 244f, Lift = 7.8f, LiftEx = 7.8f, Cr = 11.6f, Limiter = 10800f,
-            SprocketF = 15f, SprocketR = 42f, Primary = 3.05f, Gear1 = 2.833f, Gear2 = 1.875f, Gear3 = 1.364f, Gear4 = 0.95f,
+            SprocketF = 15f, SprocketR = 42f, Primary = 3.05f, Gears = 6, Gear1 = 2.833f, Gear2 = 1.875f, Gear3 = 1.364f, Gear4 = 1.087f, Gear5 = 0.920f, Gear6 = 0.815f,
             BikeKg = 119f, RiderKg = 65f, CdA = 0.40f, RimInch = 17f, RimW = 1.6f, TireW = 90f, TireAsp = 80f,
             RealHp = 15.9f, RealHpRpm = 9000f, RealTq = 14.2f, RealTqRpm = 6500f, CalK = 0.842f,
         }),
@@ -152,7 +163,7 @@ public sealed class EngineDesign
         {
             Bore = 65f, Stroke = 63.7f, Rod = 110f, CrankKg = 2.8f, FlywheelKg = 0.45f, Valves = 4, Throttle = 30f,
             Lsa = 110f, Duration = 256f, DurationEx = 256f, Lift = 8.8f, LiftEx = 8.8f, Cr = 12.0f, Limiter = 11500f, Fuel = 3,
-            SprocketF = 15f, SprocketR = 42f, Primary = 3.05f, Gear1 = 2.833f, Gear2 = 1.875f, Gear3 = 1.364f, Gear4 = 0.95f,
+            SprocketF = 15f, SprocketR = 42f, Primary = 3.05f, Gears = 6, Gear1 = 2.833f, Gear2 = 1.875f, Gear3 = 1.364f, Gear4 = 1.087f, Gear5 = 0.920f, Gear6 = 0.815f,
             BikeKg = 119f, RiderKg = 65f, CdA = 0.40f, RimInch = 17f, RimW = 1.6f, TireW = 90f, TireAsp = 80f,
             RealHp = 15.9f, RealHpRpm = 9000f, RealTq = 14.2f, RealTqRpm = 6500f, CalK = 0.842f,
         }),
@@ -260,6 +271,14 @@ public sealed class EngineDesign
             "เกียร์ชิด (ช่วงห่างน้อย) ไล่เกียร์ต่อเนื่อง แต่ท็อปสปีดไม่ไกลเท่าเกียร์ห่าง (Wave 1.150)", d => d.Auto == 0),
         new("g4", "อัตราทดเกียร์ 4", ":1", 0.6f, 1.5f, 0.01f, "0.000", d => d.Gear4, (d, v) => d.Gear4 = v,
             "ต่ำกว่า 1 = โอเวอร์ไดรฟ์ ปลายยาว (Wave 0.923) ถ้ายาวเกินกำลังไม่พอลากถึงรอบ", d => d.Auto == 0),
+        new("gears", "จำนวนเกียร์", "สปีด", 4f, 6f, 1f, "0", d => d.Gears, (d, v) => d.Gears = (int)v,
+            "รถเกียร์ธรรมดามี 4 / 5 / 6 สปีด ตามรุ่นรถจริง (Wave 4 สปีด, Sonic/CBR150 5 สปีด, MX King/R15 6 สปีด)  เกียร์มากขึ้น = ช่วงห่างแคบลง รอบตกน้อยตอนเปลี่ยน", d => d.Auto == 0),
+        new("g5", "อัตราทดเกียร์ 5", ":1", 0.55f, 1.4f, 0.01f, "0.000", d => d.Gear5, (d, v) => d.Gear5 = v,
+            "เกียร์ 5 ต้องทดน้อยกว่าเกียร์ 4 (ถ้าเป็นเกียร์ท้ายสุดของรถ 5 สปีด = เกียร์โอเวอร์ไดรฟ์)", d => d.Auto == 0 && d.Gears >= 5),
+        new("g6", "อัตราทดเกียร์ 6", ":1", 0.5f, 1.3f, 0.01f, "0.000", d => d.Gear6, (d, v) => d.Gear6 = v,
+            "เกียร์ 6 โอเวอร์ไดรฟ์ ปลายยาวสุด ถ้ายาวเกินกำลังไม่พอลากถึงรอบ", d => d.Auto == 0 && d.Gears >= 6),
+        new("gtop", "อัตราทดเกียร์ท้ายสุด", ":1", 0.5f, 1.5f, 0.01f, "0.000", d => d.TopGearRatio, (d, v) => d.TopGearRatio = v,
+            "เกียร์ท้ายสุดของรถ (ใช้ที่ปรึกษาจูน)", d => false, persist: false),
         new("sprf", "สเตอร์หน้า", "ฟัน", 11f, 18f, 1f, "0", d => d.SprocketF, (d, v) => d.SprocketF = v,
             "เล็กลง = ออกตัวดี/ไล่เกียร์ตึง แต่ปลายสั้น (ท็อปสปีดต่ำ)", d => d.Auto == 0),
         new("sprr", "สเตอร์หลัง", "ฟัน", 28f, 46f, 1f, "0", d => d.SprocketR, (d, v) => d.SprocketR = v,

@@ -1,9 +1,9 @@
 // ผู้ช่วยจูน: จำลองวิ่ง + ลองปรับทีละค่า + วิเคราะห์ผลทดสอบจริง (พอร์ตจากเวอร์ชัน C#)
-import { EngineModel, Veh, Cvt, Params, paramDisplay, clamp, PsToHp } from './engine.js';
+import { EngineModel, Veh, Cvt, Params, paramDisplay, clamp, PsToHp, gearAt } from './engine.js';
 
 export const GoalNames = ['402 ม. (เร่งไว)', 'ท็อปสปีด', '0–60 (ออกตัว)'];
 export const Groups = [
-  ['สเตอร์/เกียร์', ['sprr', 'sprf', 'g1', 'g4']],
+  ['สเตอร์/เกียร์', ['sprr', 'sprf', 'g1', 'gtop']],
   ['เฟืองท้าย/CVT', ['fdr', 'fdf', 'ramp', 'rampout', 'rollerg', 'spring']],
   ['เรือนลิ้น', ['throttle']],
   ['แคม', ['lsa', 'duration', 'durationex', 'lift', 'liftex']],
@@ -48,13 +48,13 @@ export function predict(m) {
     if (t100 < 0 && x >= 100) t100 = t;
     if (x >= 402.3) { t402 = t; trap = kmh; }
   }
-  const top = auto ? Veh.topSpeedAuto(m) : Veh.topSpeed(m, 4);
+  const top = auto ? Veh.topSpeedAuto(m) : Veh.topSpeed(m, m.D.Gears);
   return { t060: t060 < 0 ? 99 : t060, t100: t100 < 0 ? 99 : t100, t402: t402 < 0 ? 99 : t402, trap, top: top.kmh, topRpm: top.rpm };
 }
 
 const knocks = m => m.Knock(3500, m.Load(1, 3500)) > 0.02;
 const TWEAKS = [
-  ['sprr', [-2, -1, 1, 2], 0, 1], ['sprf', [-1, 1], 0, 1], ['g4', [-0.06, 0.06], 0, 1], ['g1', [-0.2, 0.2], 0, 1],
+  ['sprr', [-2, -1, 1, 2], 0, 1], ['sprf', [-1, 1], 0, 1], ['gtop', [-0.06, 0.06], 0, 1], ['g1', [-0.2, 0.2], 0, 1],
   ['fdr', [-2, -1, 1, 2], 1, 0], ['fdf', [-1, 1], 1, 0], ['ramp', [-1, -0.5, 0.5, 1], 1, 0], ['rampout', [-2, -1, 1, 2], 1, 0], ['rollerg', [-2, -1, 1, 2], 1, 0], ['spring', [-4, -2, 2, 4], 1, 0],
   ['throttle', [2, 4, -2], 1, 1], ['lsa', [-4, -2, 2, 4], 1, 1], ['duration', [-10, -6, 6, 10], 1, 1], ['durationex', [-10, -6, 6, 10], 1, 1],
   ['lift', [-0.5, 0.5, 1], 1, 1], ['liftex', [-0.5, 0.5, 1], 1, 1], ['cr', [-0.5, 0.5, 1], 1, 1], ['pipe', [1, 2, 3, -1], 1, 1],
@@ -150,8 +150,8 @@ export function observe(m, t) {
     if (dy.tqRpm > dy.psRpm * 0.85) tips.push([0, `แรงบิดพีค ${dy.tq.toFixed(1)} N·m @ ${dy.tqRpm.toLocaleString()} ใกล้พีคกำลัง: ช่วงกำลังแคบ ต้องไล่เกียร์/CVT ให้อยู่รอบสูงตลอด`]);
   }
   if (d.Auto === 0) {
-    const sr = Math.min(lim - 100, m.PeakPsRpm * 1.07), g = [d.Gear1, d.Gear2, d.Gear3, d.Gear4];
-    for (let i = 0; i < 3; i++) {
+    const sr = Math.min(lim - 100, m.PeakPsRpm * 1.07), g = Array.from({ length: d.Gears }, (_, i) => gearAt(d, i + 1));
+    for (let i = 0; i < d.Gears - 1; i++) {
       const after = sr * g[i + 1] / g[i];
       if (after < m.PeakTqRpm * 0.85) tips.push([2, `เปลี่ยนเกียร์ ${i + 1}→${i + 2} รอบตกเหลือ ~${Math.round(after).toLocaleString()} ต่ำกว่าพีคแรงบิด (${m.PeakTqRpm.toLocaleString()}) ห่างเกียร์ไป  → ปรับเกียร์ ${i + 2} ให้ทดจัดขึ้น`]);
     }

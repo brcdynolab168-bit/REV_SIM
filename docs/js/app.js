@@ -116,7 +116,7 @@ function selectGear(gi) {
   }
   gearSel = gi;
 }
-const shiftGear = d => selectGear(clamp(gearSel + d, 0, 4));
+const shiftGear = d => selectGear(clamp(gearSel + d, 0, installed.D.Gears));
 const changeSlope = d => { slope = clamp(slope + d, -6, 20); };
 function setSurface(i) {
   save.surface = i; Veh.setSurface(i); send('surface', i); persist(); advKey = '';
@@ -185,7 +185,7 @@ function autopilotStep(t) {
     case 'run': {
       o.thr = 1;
       const shiftRpm = Math.min(S.limiter - 250, m.PeakPsRpm * 1.05);
-      if (!S.isAuto && gearSel < 4 && apGearPending < 0 && t - apShiftAt > 0.7 && S.rpm >= shiftRpm) { apShiftTo(gearSel + 1, t); apShiftAt = t; }
+      if (!S.isAuto && gearSel < m.D.Gears && apGearPending < 0 && t - apShiftAt > 0.7 && S.rpm >= shiftRpm) { apShiftTo(gearSel + 1, t); apShiftAt = t; }
       if (S.dist - apDist0 >= 520 || t - apT > 40) { apState = 'brake'; apT = t; }
       break;
     }
@@ -378,7 +378,8 @@ function drawDrive() {
     const kb = R(px + 20, 424, pw - 40, 44);
     ui.bar(kb, S.clutchLock, C.Green); ui.txtC(`คลัตช์จับ ${f0(S.clutchLock * 100)}%`, F.sm, C.Text, kb.x + kb.w / 2, kb.y + kb.h / 2);
   } else {
-    ['N', '1', '2', '3', '4'].forEach((n, i) => ui.btn(R(px + 20 + i * 136, 412, 120, 52), n, gearSel === i, C.Accent, () => selectGear(i), F.lg));
+    const ng = d.Gears, gsp = (pw - 40) / (ng + 1);
+    for (let i = 0; i <= ng; i++) ui.btn(R(px + 20 + i * gsp, 412, gsp - 12, 52), i === 0 ? 'N' : String(i), gearSel === i, C.Accent, () => selectGear(i), F.lg);
     if (save.clutchSys) {
       ui.bar(R(px + 20, 482, pw - 160, 14), S.lever, S.lever > 0.6 ? C.Blue : C.Accent);
       ui.hit(R(px + 20, 476, pw - 160, 26), () => { mouseClutch = true; }, null, () => { mouseClutch = false; });
@@ -726,10 +727,10 @@ function drawGarageStats() {
     const v = hold < m.PeakPsRpm * 0.93 ? 'ถือรอบต่ำกว่าพีค' : hold > m.PeakPsRpm * 1.08 ? 'ถือรอบเกินพีค' : 'ใกล้รอบพีค (ดี)';
     line(`CVT ถือ ~${fmtN(hold)} rpm: ${v}  •  ท็อป ${f0(Veh.topSpeedAuto(m).kmh)} กม./ชม.`, ok ? 1 : 2);
   } else {
-    const sp = [1, 2, 3, 4].map(g => d.Limiter * 2 * Math.PI / 60 * Veh.wheelRadius(d) / Veh.total(d, g) * 3.6);
-    line(`ความเร็วที่รอบตัด: เกียร์ 1 ${f0(sp[0])}  •  2 ${f0(sp[1])}  •  3 ${f0(sp[2])}  •  4 ${f0(sp[3])} กม./ชม.`, 0);
-    const top = Veh.topSpeed(m, 4), v = top.rpm >= d.Limiter - 150 ? '  รอบตัดมาก่อน ปลายสั้น' : top.rpm < m.PeakPsRpm * 0.88 ? '  ปลายยาว ลากไม่ถึงพีค' : '';
-    line(`ท็อปเกียร์ 4: ${f0(top.kmh)} กม./ชม. @ ${fmtN(top.rpm)} rpm${v}`, v ? 2 : 1);
+    const sp = Array.from({ length: d.Gears }, (_, i) => (i === 0 ? 'เกียร์ 1 ' : `${i + 1} `) + f0(d.Limiter * 2 * Math.PI / 60 * Veh.wheelRadius(d) / Veh.total(d, i + 1) * 3.6));
+    line(`ความเร็วที่รอบตัด: ${sp.join('  •  ')} กม./ชม.`, 0);
+    const top = Veh.topSpeed(m, d.Gears), v = top.rpm >= d.Limiter - 150 ? '  รอบตัดมาก่อน ปลายสั้น' : top.rpm < m.PeakPsRpm * 0.88 ? '  ปลายยาว ลากไม่ถึงพีค' : '';
+    line(`ท็อปเกียร์ ${d.Gears}: ${f0(top.kmh)} กม./ชม. @ ${fmtN(top.rpm)} rpm${v}`, v ? 2 : 1);
   }
   const same = JSON.stringify(design) === JSON.stringify(d);
   if (d.Auto === 1) {

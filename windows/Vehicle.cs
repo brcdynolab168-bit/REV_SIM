@@ -75,7 +75,7 @@ public static class Vehicle
     public static float Total(EngineDesign d, int gear) =>
         gear <= 0 ? 0f : d.Primary * GearOf(d, gear) * Final(d);
 
-    public static float GearOf(EngineDesign d, int gear) => Math.Clamp(gear, 1, 4) switch { 1 => d.Gear1, 2 => d.Gear2, 3 => d.Gear3, _ => d.Gear4 };
+    public static float GearOf(EngineDesign d, int gear) => d.GearAt(gear);
 
     public static float Mass(EngineDesign d) => BikeKg(d) + d.RiderKg;
 

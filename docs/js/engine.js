@@ -25,9 +25,10 @@ export function newDesign(o = {}) {
     SprocketF: 14, SprocketR: 36, RiderKg: 65, Auto: 0,
     RampDeg: 13.5, RampOutDeg: 13.5, Rollers: 6, RollerG: 8.5, RollerG2: 8.5, GearF: 13, GearR: 40, FirstRed: 3.0,
     BikeKg: 107, CdA: 0.415, RimInch: 17, RimW: 1.4, TireW: 80, TireAsp: 90,
-    SpringK: 20, Primary: 3.35, Gear1: 2.5, Gear2: 1.55, Gear3: 1.15, Gear4: 0.923, Pipe: 0, Fuel: 1,
+    SpringK: 20, Primary: 3.35, Gear1: 2.5, Gear2: 1.55, Gear3: 1.15, Gear4: 0.923, Gears: 4, Gear5: 0.8, Gear6: 0.72, Pipe: 0, Fuel: 1,
   }, o);
 }
+export const gearAt = (d, g) => d['Gear' + clamp(Math.round(g), 1, clamp(d.Gears, 4, 6))];
 export const crankPsi = cr => 14.7 * Math.pow(cr, 1.15);
 export const crFromPsi = psi => Math.pow(psi / 14.7, 1 / 1.15);
 export const camLoss = d => 1 - 0.002 * Math.max(0, d.Duration - 220);
@@ -58,11 +59,11 @@ export const Presets = [
   // Yamaha MX King 155 (VVA): 155cc 58.0x58.7 4V เกียร์ 6 สปีด (เกมมี 4 สปีด จึงเลือกอัตราทดห่างสุดโต่ง) หนัก 119 กก. ยาง 90/80-17  ~16 PS/9,000  14.2 N·m/6,500
   // CR 11.6, แคม/ก้านสูบ/ข้อเหวี่ยง/สเตอร์/อัตราทดเป็นค่าประมาณ (ไม่ได้ประกาศ)
   ['MX King 155 เดิม', newDesign({ Bore: 58, Stroke: 58.7, Rod: 105, CrankKg: 2.5, FlywheelKg: 0.55, Valves: 4, Throttle: 28, Lsa: 110, Duration: 244, DurationEx: 244, Lift: 7.8, LiftEx: 7.8, Cr: 11.6, Limiter: 10800,
-    SprocketF: 15, SprocketR: 42, Primary: 3.05, Gear1: 2.833, Gear2: 1.875, Gear3: 1.364, Gear4: 0.95, BikeKg: 119, RiderKg: 65, CdA: 0.40, RimInch: 17, RimW: 1.6, TireW: 90, TireAsp: 80,
+    SprocketF: 15, SprocketR: 42, Primary: 3.05, Gear1: 2.833, Gear2: 1.875, Gears: 6, Gear3: 1.364, Gear4: 1.087, Gear5: 0.92, Gear6: 0.815, BikeKg: 119, RiderKg: 65, CdA: 0.40, RimInch: 17, RimW: 1.6, TireW: 90, TireAsp: 80,
     RealHp: 15.9, RealHpRpm: 9000, RealTq: 14.2, RealTqRpm: 6500, CalK: 0.842 })],
   // สเต็ป: ลูก 65 มม. ชัก +5 มม. (58.7 -> 63.7) = 211cc  แคม/กำลังอัด/รอบตัด แต่งเพิ่ม  ชุดเดียวกับเดิม ค่า CalK เดิม
   ['MX King สเต็ป ลูก 65 ชัก+5*', newDesign({ Bore: 65, Stroke: 63.7, Rod: 110, CrankKg: 2.8, FlywheelKg: 0.45, Valves: 4, Throttle: 30, Lsa: 110, Duration: 256, DurationEx: 256, Lift: 8.8, LiftEx: 8.8, Cr: 12.0, Limiter: 11500, Fuel: 3,
-    SprocketF: 15, SprocketR: 42, Primary: 3.05, Gear1: 2.833, Gear2: 1.875, Gear3: 1.364, Gear4: 0.95, BikeKg: 119, RiderKg: 65, CdA: 0.40, RimInch: 17, RimW: 1.6, TireW: 90, TireAsp: 80,
+    SprocketF: 15, SprocketR: 42, Primary: 3.05, Gear1: 2.833, Gear2: 1.875, Gears: 6, Gear3: 1.364, Gear4: 1.087, Gear5: 0.92, Gear6: 0.815, BikeKg: 119, RiderKg: 65, CdA: 0.40, RimInch: 17, RimW: 1.6, TireW: 90, TireAsp: 80,
     RealHp: 15.9, RealHpRpm: 9000, RealTq: 14.2, RealTqRpm: 6500, CalK: 0.842 })],
   ['สตรีท 150 ลูก 58*', newDesign({ Bore: 58, Stroke: 57.9, Rod: 90, CrankKg: 2.5, FlywheelKg: 0.5, Throttle: 28, Lsa: 110, Duration: 240, DurationEx: 240, Lift: 8, LiftEx: 8, Cr: 10.5, Limiter: 10500, Fuel: 2 })],
   ['เดี่ยว 300 ลูก 80*', newDesign({ Bore: 80, Stroke: 60, Rod: 100, CrankKg: 4.8, FlywheelKg: 0.7, Valves: 4, Throttle: 38, Lsa: 108, Duration: 255, DurationEx: 255, Lift: 9.5, LiftEx: 9.5, Cr: 11.5, Limiter: 11000, Fuel: 3, BikeKg: 120 })],
@@ -110,6 +111,10 @@ export const Params = [
   num('g2', 'อัตราทดเกียร์ 2', ':1', 1.1, 2.8, 0.01, '0.000', 'Gear2', 'ช่วงห่างเกียร์ 1-2 กว้าง = รอบตกมากตอนเปลี่ยน (Wave 1.550)', { visible: manual }),
   num('g3', 'อัตราทดเกียร์ 3', ':1', 0.8, 2, 0.01, '0.000', 'Gear3', 'เกียร์ชิดไล่ต่อเนื่อง แต่ท็อปสปีดไม่ไกล (Wave 1.150)', { visible: manual }),
   num('g4', 'อัตราทดเกียร์ 4', ':1', 0.6, 1.5, 0.01, '0.000', 'Gear4', 'ต่ำกว่า 1 = โอเวอร์ไดรฟ์ ปลายยาว (Wave 0.923)', { visible: manual }),
+  num('gears', 'จำนวนเกียร์', 'สปีด', 4, 6, 1, '0', 'Gears', 'รถเกียร์ธรรมดามี 4 / 5 / 6 สปีด ตามรุ่นรถจริง (Wave 4 สปีด, Sonic/CBR150 5 สปีด, MX King/R15 6 สปีด)  เกียร์มากขึ้น = ช่วงห่างแคบลง รอบตกน้อยตอนเปลี่ยน', { visible: manual }),
+  num('g5', 'อัตราทดเกียร์ 5', ':1', 0.55, 1.4, 0.01, '0.000', 'Gear5', 'เกียร์ 5 ต้องทดน้อยกว่าเกียร์ 4 (ถ้าเป็นเกียร์ท้ายสุดของรถ 5 สปีด = เกียร์โอเวอร์ไดรฟ์)', { visible: d => d.Auto === 0 && d.Gears >= 5 }),
+  num('g6', 'อัตราทดเกียร์ 6', ':1', 0.5, 1.3, 0.01, '0.000', 'Gear6', 'เกียร์ 6 โอเวอร์ไดรฟ์ ปลายยาวสุด ถ้ายาวเกินกำลังไม่พอลากถึงรอบ', { visible: d => d.Auto === 0 && d.Gears >= 6 }),
+  P('gtop', 'อัตราทดเกียร์ท้ายสุด', ':1', 0.5, 1.5, 0.01, '0.000', d => gearAt(d, d.Gears), (d, v) => { d['Gear' + clamp(d.Gears, 4, 6)] = v; }, 'เกียร์ท้ายสุดของรถ (ใช้ที่ปรึกษาจูน)', { visible: () => false, hidden: true }),
   num('sprf', 'สเตอร์หน้า', 'ฟัน', 11, 18, 1, '0', 'SprocketF', 'เล็กลง = ออกตัวดี แต่ปลายสั้น', { visible: manual }),
   num('sprr', 'สเตอร์หลัง', 'ฟัน', 28, 46, 1, '0', 'SprocketR', 'ใหญ่ขึ้น = ทดจัด ออกตัวแรง ท็อปสปีดต่ำ  เล็กลง = ปลายยาว', { visible: manual }),
   num('rider', 'น้ำหนักคนขี่', 'กก.', 40, 110, 1, '0', 'RiderKg', 'น้ำหนักรวมมาก = ออกตัวช้า ไต่เนินช้า'),
@@ -155,7 +160,7 @@ export const GarageTabs = [
   ['เครื่องยนต์', ['bore', 'stroke', 'rod', 'crank', 'fly', 'valves']],
   ['ไอดี·แคม·ท่อ', ['throttle', 'lsa', 'duration', 'durationex', 'lift', 'liftex', 'pipe']],
   ['อัด·น้ำมัน', ['cr', 'psi', 'fuel', 'limiter', 'resume', 'softcut']],
-  ['ส่งกำลัง', ['auto', 'prim', 'g1', 'g2', 'g3', 'g4', 'sprf', 'sprr', 'ramp', 'rampout', 'rollers', 'rollerg', 'rollerg2', 'fdf', 'fdr', 'firstred', 'spring']],
+  ['ส่งกำลัง', ['auto', 'prim', 'gears', 'g1', 'g2', 'g3', 'g4', 'g5', 'g6', 'sprf', 'sprr', 'ramp', 'rampout', 'rollers', 'rollerg', 'rollerg2', 'fdf', 'fdr', 'firstred', 'spring']],
   ['ตัวรถ', ['rider', 'bikekg', 'rim', 'rimw', 'tirew', 'tireasp', 'cda']],
   ['รถจริง', ['realhp', 'realhprpm', 'realtq', 'realtqrpm', 'calk']],
 ];
@@ -193,10 +198,12 @@ export const PartCats = [
         d => near(d.RimInch, r, 0.1) && near(d.RimW, w, 0.03) && near(d.TireW, t, 2) && near(d.TireAsp, a, 2))) },
   { name: 'ชนิดน้ำมัน', hint: 'ออกเทนสูง = ทนกำลังอัดสูงก่อนน็อก',
     items: Fuels.map((f, i) => item(`${f.name}  RON ${f.ron}`, d => { d.Fuel = i; }, d => d.Fuel === i)) },
-  { name: 'ชุดเกียร์ (4 สปีด)', hint: 'ชิด = ไล่เกียร์ต่อเนื่อง  ห่าง = ออกตัวแรงแต่รอบตกมาก',
-    items: [['เดิม Wave 125i', 3.35, 2.5, 1.55, 1.15, 0.923], ['เกียร์ชิด', 3.35, 2.4, 1.7, 1.3, 1.05], ['ออกตัวจัด', 3.35, 2.9, 1.8, 1.3, 1.0], ['ปลายยาว', 3.35, 2.5, 1.55, 1.15, 0.85], ['ดรัก (ชิดจัด)', 3.6, 2.7, 1.9, 1.45, 1.15]]
-      .map(([n, p, a, b, c, dd]) => item(`${n}  ${a}/${b}/${c}/${dd}`, d => { d.Primary = p; d.Gear1 = a; d.Gear2 = b; d.Gear3 = c; d.Gear4 = dd; },
-        d => near(d.Primary, p, 0.006) && near(d.Gear1, a, 0.006) && near(d.Gear2, b, 0.006) && near(d.Gear3, c, 0.006) && near(d.Gear4, dd, 0.006))) },
+  { name: 'ชุดเกียร์ (4 / 5 / 6 สปีด)', hint: 'เลือกชุดเกียร์ทั้งชุด รวมจำนวนสปีด  ชิด = ไล่เกียร์ต่อเนื่อง  ห่าง = ออกตัวแรงแต่รอบตกมาก (ชุด 5-6 สปีดเป็นค่าประมาณตามรถประเภทเดียวกัน)',
+    items: [['4 สปีด เดิม Wave 125i', 3.35, [2.5, 1.55, 1.15, 0.923]], ['4 สปีด ชิด', 3.35, [2.4, 1.7, 1.3, 1.05]], ['4 สปีด ออกตัวจัด', 3.35, [2.9, 1.8, 1.3, 1.0]], ['4 สปีด ปลายยาว', 3.35, [2.5, 1.55, 1.15, 0.85]], ['4 สปีด ดรัก (ชิดจัด)', 3.6, [2.7, 1.9, 1.45, 1.15]],
+      ['5 สปีด มาตรฐาน', 3.2, [2.833, 1.882, 1.409, 1.13, 0.958]], ['5 สปีด ชิด', 3.2, [2.6, 1.85, 1.45, 1.2, 1.02]],
+      ['6 สปีด MX King/R15', 3.05, [2.833, 1.875, 1.364, 1.087, 0.92, 0.815]], ['6 สปีด ชิด', 3.05, [2.7, 1.9, 1.5, 1.25, 1.08, 0.95]], ['6 สปีด ออกตัวจัด', 3.05, [3.1, 2.0, 1.45, 1.15, 0.95, 0.82]]]
+      .map(([n, p, gs]) => item(`${n}  ${gs.map(x => x.toFixed(2)).join('/')}`, d => { d.Primary = p; d.Gears = gs.length; gs.forEach((x, i) => { d['Gear' + (i + 1)] = x; }); },
+        d => d.Gears === gs.length && near(d.Primary, p, 0.006) && gs.every((x, i) => near(d['Gear' + (i + 1)], x, 0.006)))) },
   { name: 'ชามเม็ด (องศาใน/นอก)', hint: 'ชามแต่งมี 2 องศา: ใบใน (ออกตัว) / ใบนอก (ปลายทาง)  ใบนอกน้อยกว่า = ปลายไล่ไว  ใบนอกมากกว่า = ปลายถือรอบสูง (ใช้กับรถออโต้)',
     items: [[13.5, 13.5], [13, 12], [14, 12], [12, 14], [15, 11], [12, 12], [14, 14], [11, 13], [16, 12]].map(([i, o]) => item(`ชาม ${i}° / ${o}°`, d => { d.RampDeg = i; d.RampOutDeg = o; }, d => near(d.RampDeg, i, 0.05) && near(d.RampOutDeg, o, 0.05))) },
   { name: 'ท่อไอเสีย', hint: 'เดิม = เงียบ / ผ่าหมก / ผ่าเปิด / ท่อสูตร = พีคแรงเฉพาะรอบ',
@@ -366,7 +373,7 @@ export const Veh = {
   effMass(d) { const r = Veh.wheelRadius(d); return Veh.mass(d) + Veh.wheelInertiaFor(d) / (r * r); },
   tractionMax(d) { const mu = Veh.muFor(d); return mu * Veh.mass(d) * Veh.G * Veh.CgRear / (1 - mu * Veh.CgHeight); },
   final: d => d.SprocketR / d.SprocketF,
-  gearOf: (d, g) => [d.Gear1, d.Gear2, d.Gear3, d.Gear4][clamp(g, 1, 4) - 1],
+  gearOf: (d, g) => gearAt(d, g),
   total: (d, g) => (g <= 0 ? 0 : d.Primary * Veh.gearOf(d, g) * Veh.final(d)),
   resist(d, v, slopePct) {
     const m = Veh.mass(d), s = slopePct / 100, sin = s / Math.sqrt(1 + s * s), cos = 1 / Math.sqrt(1 + s * s);

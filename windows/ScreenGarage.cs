@@ -68,7 +68,7 @@ public sealed partial class MainForm
         ("เครื่องยนต์", new[] { "bore", "stroke", "rod", "crank", "fly", "valves" }),
         ("ไอดี·แคม·ท่อ", new[] { "throttle", "lsa", "duration", "durationex", "lift", "liftex", "pipe" }),
         ("อัด·น้ำมัน", new[] { "cr", "psi", "fuel", "limiter", "resume", "softcut" }),
-        ("ส่งกำลัง", new[] { "auto", "prim", "g1", "g2", "g3", "g4", "sprf", "sprr", "ramp", "rampout", "rollers", "rollerg", "rollerg2", "fdf", "fdr", "firstred", "spring" }),
+        ("ส่งกำลัง", new[] { "auto", "prim", "gears", "g1", "g2", "g3", "g4", "g5", "g6", "sprf", "sprr", "ramp", "rampout", "rollers", "rollerg", "rollerg2", "fdf", "fdr", "firstred", "spring" }),
         ("ตัวรถ", new[] { "rider", "bikekg", "rim", "rimw", "tirew", "tireasp", "cda" }),
         ("รถจริง", new[] { "realhp", "realhprpm", "realtq", "realtqrpm", "calk" }),
     };
@@ -486,12 +486,12 @@ public sealed partial class MainForm
         }
         else
         {
-            var sp = new float[4];
-            for (int gi = 1; gi <= 4; gi++) sp[gi - 1] = d.Limiter * 2f * MathF.PI / 60f * Vehicle.WheelRadius(d) / Vehicle.Total(d, gi) * 3.6f;
-            Line($"ความเร็วที่รอบตัด: เกียร์ 1 {sp[0]:0}  •  2 {sp[1]:0}  •  3 {sp[2]:0}  •  4 {sp[3]:0} กม./ชม.", 0);
-            var top = Vehicle.TopSpeed(m, 4);
+            var spl = new List<string>();
+            for (int gi = 1; gi <= d.Gears; gi++) spl.Add((gi == 1 ? "เกียร์ 1 " : $"{gi} ") + $"{d.Limiter * 2f * MathF.PI / 60f * Vehicle.WheelRadius(d) / Vehicle.Total(d, gi) * 3.6f:0}");
+            Line("ความเร็วที่รอบตัด: " + string.Join("  •  ", spl) + " กม./ชม.", 0);
+            var top = Vehicle.TopSpeed(m, d.Gears);
             string v = top.Rpm >= d.Limiter - 150f ? "  รอบตัดมาก่อน ปลายสั้น" : top.Rpm < m.PeakPsRpm * 0.88f ? "  ปลายยาว ลากไม่ถึงพีค" : "";
-            Line($"ท็อปเกียร์ 4: {top.Kmh:0} กม./ชม. @ {top.Rpm:N0} rpm{v}", v.Length > 0 ? 2 : 1);
+            Line($"ท็อปเกียร์ {d.Gears}: {top.Kmh:0} กม./ชม. @ {top.Rpm:N0} rpm{v}", v.Length > 0 ? 2 : 1);
         }
 
         // ปุ่ม

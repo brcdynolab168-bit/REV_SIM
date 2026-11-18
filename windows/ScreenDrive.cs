@@ -78,11 +78,12 @@ public sealed partial class MainForm
         }
         else
         {
-            string[] names = { "N", "1", "2", "3", "4" };
-            for (int i = 0; i < 5; i++)
+            int ng = m.D.Gears;
+            float gsp = (pw - 40f) / (ng + 1);
+            for (int i = 0; i <= ng; i++)
             {
                 int gi = i;
-                Btn(g, new RectangleF(px + 20 + i * 136, 412, 120, 52), names[i], _gearSel == i, Palette.Accent, () => SelectGear(gi), _fLg);
+                Btn(g, new RectangleF(px + 20 + i * gsp, 412, gsp - 12, 52), i == 0 ? "N" : i.ToString(), _gearSel == i, Palette.Accent, () => SelectGear(gi), _fLg);
             }
             if (_eng.ClutchEnabled)
             {

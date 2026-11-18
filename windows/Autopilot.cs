@@ -60,7 +60,7 @@ public sealed partial class MainForm
             {
                 thr = 1f;
                 float shiftRpm = MathF.Min(_eng.LimiterRpm - 250f, m.PeakPsRpm * 1.05f);
-                if (!_eng.IsAuto && _gearSel < 4 && _apGearPending < 0 && now - _apShiftAt > 0.7 && _eng.Rpm >= shiftRpm)
+                if (!_eng.IsAuto && _gearSel < m.D.Gears && _apGearPending < 0 && now - _apShiftAt > 0.7 && _eng.Rpm >= shiftRpm)
                 {
                     ApShiftTo(_gearSel + 1, now); _apShiftAt = now;
                 }

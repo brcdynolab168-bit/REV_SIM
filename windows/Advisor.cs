@@ -42,7 +42,7 @@ public static class Advisor
     /// <summary>กลุ่มที่ล็อกได้ในโจทย์ (ชื่อ, คีย์พารามิเตอร์)</summary>
     public static readonly (string Name, string[] Keys)[] Groups =
     {
-        ("สเตอร์/เกียร์", new[] { "sprr", "sprf", "g1", "g4" }),
+        ("สเตอร์/เกียร์", new[] { "sprr", "sprf", "g1", "gtop" }),
         ("เฟืองท้าย/CVT", new[] { "fdr", "fdf", "ramp", "rampout", "rollerg", "spring" }),
         ("เรือนลิ้น", new[] { "throttle" }),
         ("แคม", new[] { "lsa", "duration", "durationex", "lift", "liftex" }),
@@ -104,7 +104,7 @@ public static class Advisor
             if (t100 < 0f && x >= 100f) t100 = t;
             if (x >= 402.3f) { t402 = t; trap = kmh; }
         }
-        var top = auto ? Vehicle.TopSpeedAuto(m) : Vehicle.TopSpeed(m, 4);
+        var top = auto ? Vehicle.TopSpeedAuto(m) : Vehicle.TopSpeed(m, m.D.Gears);
         return new Perf(t060 < 0f ? 99f : t060, t100 < 0f ? 99f : t100, t402 < 0f ? 99f : t402, trap, top.Kmh, top.Rpm);
     }
 
@@ -115,7 +115,7 @@ public static class Advisor
     {
         ("sprr", new[] { -2f, -1f, 1f, 2f }, false, true),
         ("sprf", new[] { -1f, 1f }, false, true),
-        ("g4", new[] { -0.06f, 0.06f }, false, true),
+        ("gtop", new[] { -0.06f, 0.06f }, false, true),
         ("g1", new[] { -0.2f, 0.2f }, false, true),
         ("fdr", new[] { -2f, -1f, 1f, 2f }, true, false),
         ("fdf", new[] { -1f, 1f }, true, false),
@@ -292,8 +292,8 @@ public static class Advisor
         if (d.Auto == 0)
         {
             float sr = MathF.Min(lim - 100f, m.PeakPsRpm * 1.07f);
-            float[] g = { d.Gear1, d.Gear2, d.Gear3, d.Gear4 };
-            for (int i = 0; i < 3; i++)
+            float[] g = Enumerable.Range(1, d.Gears).Select(d.GearAt).ToArray();
+            for (int i = 0; i < d.Gears - 1; i++)
             {
                 float after = sr * g[i + 1] / g[i];
                 if (after < m.PeakTqRpm * 0.85f)

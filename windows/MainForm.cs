@@ -254,7 +254,7 @@ public sealed partial class MainForm : Form
         Toast(_eng.ClutchEnabled ? "ระบบครัตช์มือ: เปิด (ค้าง Shift = กำครัตช์)" : "ระบบครัตช์มือ: ปิด (เปลี่ยนเกียร์ได้ทันที คลัตช์แรงเหวี่ยงจับเอง)");
     }
 
-    private void Shift(int dir) => SelectGear(Math.Clamp(_gearSel + dir, 0, 4));
+    private void Shift(int dir) => SelectGear(Math.Clamp(_gearSel + dir, 0, _eng.Model.D.Gears));
 
     /// <summary>เปลี่ยนเกียร์: ต้องกำคันครัตช์ (ค้าง Shift) ก่อน ถ้าคลัตช์แรงเหวี่ยงกำลังจับอยู่ (ต่ำกว่ารอบจับเปลี่ยนได้เลย)</summary>
     private void SelectGear(int gi)
