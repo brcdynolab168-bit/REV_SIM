@@ -377,7 +377,7 @@ export const Veh = {
 };
 
 export const Cvt = {
-  RLow: 2.5, RHigh: 0.77, R0: 0.032, R1: 0.05, FBase: 1000, SpringPreloadMm: 25, SpringTravelMm: 35, KCam: 250, FScale: 1500, Rate: 1.5,
+  RLow: 2.5, RHigh: 0.77, R0: 0.038, R1: 0.044, FBase: 1000, SpringPreloadMm: 25, SpringTravelMm: 35, KCam: 250, FScale: 1500, Rate: 1.5,
   ratio: s => Cvt.RLow * Math.pow(Cvt.RHigh / Cvt.RLow, clamp(s, 0, 1)),
   mass(d) { const n = d.Rollers, a = Math.floor((n + 1) / 2), b = Math.floor(n / 2); return (a * d.RollerG + b * d.RollerG2) / 1000; },
   ff(d, omega, s) { const tanA = Math.tan(d.RampDeg * PI / 180); return Cvt.mass(d) * omega * omega * (Cvt.R0 + (Cvt.R1 - Cvt.R0) * s) / tanA; },

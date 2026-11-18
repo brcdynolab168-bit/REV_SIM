@@ -148,7 +148,7 @@ public static class Vehicle
 public static class Cvt
 {
     public const float RLow = 2.50f, RHigh = 0.77f;       // อัตราทดสายพาน
-    public const float R0 = 0.032f, R1 = 0.050f;          // รัศมีเม็ดที่ตำแหน่ง s = 0, 1 (m)
+    public const float R0 = 0.038f, R1 = 0.044f;          // รัศมีเม็ดที่ตำแหน่ง s = 0, 1 (m) ช่วงแคบ = รอบนิ่งตลอดการไล่ ไม่ตกหลังพุ่งตอนออกตัว (ค่าเฉลี่ย 0.041 เท่าเดิม)
     public const float FBase = 1000f;                     // แรงหนีบพื้นฐานของชุดขับหลังที่ไม่ขึ้นกับสปริงทอค (N)
     public const float SpringPreloadMm = 25f;             // สปริงทอคถูกบีบไว้ก่อน (มม.)
     public const float SpringTravelMm = 35f;              // ระยะบีบเพิ่มตอนอัตราทดไล่ถึงสูงสุด (มม.)
