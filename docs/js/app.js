@@ -590,6 +590,40 @@ const ecuFactory = mode => [preview.FactoryMsTable(), preview.FactoryEoiTable(),
 const ecuTableW = mode => { const p = ECU_PROP[mode]; draft.EcuAx = 2; return (draft[p] = (draft[p] || ecuFactory(mode)).slice()); };
 const editMode = () => (ecuMode === 4 ? 0 : ecuMode);
 const ecuReadOnly = () => false;
+function ecuAdjust(dir, coarse) {
+  if (ecuReadOnly()) return;
+  const { c0, c1, r0, r1 } = ecuRange(), m = preview;
+  if (ecuMode === 4) {
+    const t = ecuTableW(0);
+    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {      // โหมด AFR: ตั้ง AFR เป้าหมายของช่อง แล้วแปลงเป็นเวลาฉีด (ms)
+      const rpmC = m.EcuRpmAt(c), tpsR = EngineModel.TpsAxis(r), loadR = m._loadOf(tpsR, rpmC), cur = m.EcuAt(rpmC, tpsR, {}).Afr;
+      t[r * EcuN + c] = clamp(Math.round(m.MsForAfr(rpmC, loadR, cur + (coarse ? 0.5 : 0.1) * dir) * 100) / 100, 0, 40);
+    }
+  } else {
+    const [fine, crs, lo, hi, rnd] = ECU_SPEC[ecuMode], t = ecuTableW(ecuMode), st = (coarse ? crs : fine) * dir;
+    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) t[r * EcuN + c] = clamp(Math.round((t[r * EcuN + c] + st) / rnd) * rnd, lo, hi);
+  }
+  draftChanged();
+}
+function ecuEdit(fn) {
+  if (ecuReadOnly()) return;
+  const { c0, c1, r0, r1 } = ecuRange(), t = ecuTableW(editMode());
+  fn(t, c0, c1, r0, r1); draftChanged();
+}
+function ecuSmooth() {
+  const rnd = ECU_SPEC[editMode()][4];
+  ecuEdit((t, c0, c1, r0, r1) => {
+    const src = t.slice();
+    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
+      let s = 0, n = 0;
+      for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) { const rr = r + dr, cc = c + dc; if (rr < 0 || cc < 0 || rr >= EcuN || cc >= EcuN) continue; s += src[rr * EcuN + cc]; n++; }
+      t[r * EcuN + c] = Math.round(s / n / rnd) * rnd;
+    }
+  });
+  if (ecuMode !== 5) toast('เกลี่ยค่าที่เลือกแล้ว');
+}
+function ecuEqualize() { ecuEdit((t, c0, c1, r0, r1) => { const v = t[ecuR0 * EcuN + ecuC0]; for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) t[r * EcuN + c] = v; }); }
+function ecuFactorySel() { if (ecuReadOnly()) return; const fac = ecuFactory(editMode()); ecuEdit((t, c0, c1, r0, r1) => { for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) t[r * EcuN + c] = fac[r * EcuN + c]; }); }
 function ecuFactoryAll() { if (ecuReadOnly()) return; draft[ECU_PROP[editMode()]] = null; draftChanged(); toast('คืนตารางเป็นค่าโรงงานแล้ว'); }
 function ecuNearMbt() {
   if (ecuReadOnly()) return;
@@ -756,10 +790,11 @@ function drawEcu() {
     if (liveTab === 1) {
       drawCompareChart(R(RX + 16, 520, RW - 32, 504), m, draft.Limiter);
     } else {
-      const afrCol = lam > 1.12 ? C.Red : lam < 0.7 ? C.Blue : lam > 0.97 ? C.Yellow : C.Green, advCol = dlt > 1.5 ? C.Red : dlt < -8 ? C.Blue : C.Green;
-      liveBar(ix, 518, iw, 'AFR (อากาศ:น้ำมัน)', `${afr >= 90 ? '∞ ตัดน้ำมัน' : f1(afr)}  (λ ${f2(lam)})`, (lam - 0.6) / 0.9, afrCol, (0.89 - 0.6) / 0.9);
-      liveBar(ix, 560, iw, 'จุดระเบิด (ขีดขาว = MBT)', `${f1(adv)}°  (${dlt >= 0 ? 'แก่' : 'อ่อน'} ${f1(Math.abs(dlt))}° จาก MBT)`, adv / 50, advCol, mbt / 50);
-      liveBar(ix, 602, iw, 'EGT (ก๊าซไอเสีย)', `${f0(egt)} °C`, (egt - 400) / 800, egt > 1050 ? C.Red : egt > 950 ? C.Yellow : C.Green, 500 / 800);
+      const afrCol = lam > 1.12 ? C.Red : lam < 0.7 ? C.Blue : lam > 0.97 ? C.Yellow : C.Green, advCol = dlt > 1.5 ? C.Red : dlt < -8 ? C.Blue : C.Green, egtCol = egt > 1050 ? C.Red : egt > 950 ? C.Yellow : C.Green, kw3 = iw / 3;
+      ui.txt('AFR (อากาศ:น้ำมัน)', F.cap, C.Dim, ix, 520); ui.txt(afr >= 90 ? '∞' : f1(afr), F.md, afrCol, ix, 540); ui.txt(afr >= 90 ? 'ตัดน้ำมัน' : `λ ${f2(lam)}`, F.xs, C.Dim, ix, 574);
+      ui.txt('จุดระเบิด', F.cap, C.Dim, ix + kw3, 520); ui.txt(`${f1(adv)} °`, F.md, advCol, ix + kw3, 540); ui.txt(`${dlt >= 0 ? 'แก่' : 'อ่อน'} ${f1(Math.abs(dlt))}° (MBT ${f1(mbt)})`, F.cap, C.Dim, ix + kw3, 576);
+      ui.txt('EGT (ก๊าซไอเสีย)', F.cap, C.Dim, ix + 2 * kw3, 520); ui.txt(`${f0(egt)} °C`, F.md, egtCol, ix + 2 * kw3, 540); ui.txt(egt > 1050 ? 'ร้อนจัด!' : egt > 950 ? 'ร้อน' : 'ปกติ', F.xs, C.Dim, ix + 2 * kw3, 574);
+      ui.line(ix, 610, ix + iw, 610, C.Border, 1);
       const cyc = 120000 / Math.max(rpmNow, 200), airCyc = m.AirPerCycleG(rpmNow, loadNow), fuelCyc = Math.max(0, Math.min(pw, cyc) - InjDeadMs) * m.InjFlowGpMs;
       const airGs = airCyc * rpmNow / 120, fuelGs = fuelCyc * rpmNow / 120;
       const tq = S.running ? m.TorqueInd(rpmNow) * loadNow * mult * (1 - 0.5 * kn) - m.Friction(rpmNow) : 0, kw = tq * rpmNow * 2 * Math.PI / 60000;
@@ -773,7 +808,7 @@ function drawEcu() {
         ['ประกายไฟ', `${f0(spark * 100)} %`, spark < 0.95 ? C.Red : C.Green], ['ความเร็วลูกสูบ', `${f1(pv)} ม./วิ`, pv > 22 ? C.Yellow : C.Text], ['น็อก', `${f0(kn * 100)} %`, kn > 0.05 ? C.Red : C.Green],
       ];
       const cwid = iw / 3;
-      cells.forEach(([l, v, c], i) => { const cx = ix + (i % 3) * cwid, cy = 662 + Math.floor(i / 3) * 56; ui.txt(l, F.cap, C.Dim, cx, cy); ui.txt(v, F.sm, c, cx, cy + 20); });
+      cells.forEach(([l, v, c], i) => { const cx = ix + (i % 3) * cwid, cy = 624 + Math.floor(i / 3) * 58; ui.txt(l, F.cap, C.Dim, cx, cy); ui.txt(v, F.sm, c, cx, cy + 20); });
     }
   }
   if (showEcuHelp) drawEcuHelp();

@@ -288,13 +288,22 @@ public sealed partial class MainForm
             }
             else
             {
-                // ----- แถบค่าสำคัญ -----
+                // ----- ค่าสำคัญ (ตัวเลขใหญ่) -----
                 float lam = ec.Lambda, dlt = ec.Adv - ec.Mbt;
                 Color afrCol = lam > 1.12f ? Palette.Red : lam < 0.7f ? Palette.Blue : lam > 0.97f ? Palette.Yellow : Palette.Green;
                 Color advCol = dlt > 1.5f ? Palette.Red : dlt < -8f ? Palette.Blue : Palette.Green;
-                DrawLiveBar(g, ix, 518, iw, "AFR (อากาศ:น้ำมัน)", $"{(ec.Afr >= 90f ? "∞ ตัดน้ำมัน" : ec.Afr.ToString("0.0"))}  (λ {lam:0.00})", (lam - 0.6f) / 0.9f, afrCol, (0.89f - 0.6f) / 0.9f);
-                DrawLiveBar(g, ix, 560, iw, "จุดระเบิด (ขีดขาว = MBT)", $"{ec.Adv:0.0}°  ({(dlt >= 0 ? "แก่" : "อ่อน")} {Math.Abs(dlt):0.0}° จาก MBT)", ec.Adv / 50f, advCol, ec.Mbt / 50f);
-                DrawLiveBar(g, ix, 602, iw, "EGT (ก๊าซไอเสีย)", $"{ec.Egt:0} °C", (ec.Egt - 400f) / 800f, ec.Egt > 1050f ? Palette.Red : ec.Egt > 950f ? Palette.Yellow : Palette.Green, (900f - 400f) / 800f);
+                Color egtCol = ec.Egt > 1050f ? Palette.Red : ec.Egt > 950f ? Palette.Yellow : Palette.Green;
+                float kw3 = iw / 3f;
+                Txt(g, "AFR (อากาศ:น้ำมัน)", _fCap, Palette.Dim, ix, 520);
+                Txt(g, ec.Afr >= 90f ? "∞" : ec.Afr.ToString("0.0"), _fMd, afrCol, ix, 540);
+                Txt(g, ec.Afr >= 90f ? "ตัดน้ำมัน" : $"λ {lam:0.00}", _fXs, Palette.Dim, ix, 574);
+                Txt(g, "จุดระเบิด", _fCap, Palette.Dim, ix + kw3, 520);
+                Txt(g, $"{ec.Adv:0.0} °", _fMd, advCol, ix + kw3, 540);
+                Txt(g, $"{(dlt >= 0 ? "แก่" : "อ่อน")} {Math.Abs(dlt):0.0}° (MBT {ec.Mbt:0.0})", _fCap, Palette.Dim, ix + kw3, 576);
+                Txt(g, "EGT (ก๊าซไอเสีย)", _fCap, Palette.Dim, ix + 2 * kw3, 520);
+                Txt(g, $"{ec.Egt:0} °C", _fMd, egtCol, ix + 2 * kw3, 540);
+                Txt(g, ec.Egt > 1050f ? "ร้อนจัด!" : ec.Egt > 950f ? "ร้อน" : "ปกติ", _fXs, Palette.Dim, ix + 2 * kw3, 574);
+                g.DrawLine(Pn(Palette.Border, 1f), ix, 610, ix + iw, 610);
 
                 // ----- ค่าสดอื่น ๆ (ตาราง 3 คอลัมน์) -----
                 float cyc = 120000f / MathF.Max(rpmNow, 200f);
@@ -326,7 +335,7 @@ public sealed partial class MainForm
                     ("ความเร็วลูกสูบ", $"{em.PistonSpeed(rpmNow):0.0} ม./วิ", em.PistonSpeed(rpmNow) > 22f ? Palette.Yellow : Palette.Text),
                     ("น็อก", $"{_eng.KnockNow * 100f:0} %", _eng.KnockNow > 0.05f ? Palette.Red : Palette.Green),
                 };
-                float gx0 = ix, gy0 = 662f, cwid = iw / 3f, rh = 56f;
+                float gx0 = ix, gy0 = 624f, cwid = iw / 3f, rh = 58f;
                 for (int i = 0; i < cells.Length; i++)
                 {
                     float cx = gx0 + (i % 3) * cwid, cy = gy0 + (i / 3) * rh;
