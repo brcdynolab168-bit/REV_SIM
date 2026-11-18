@@ -168,6 +168,10 @@ public sealed partial class MainForm : Form
             {
                 if (e.KeyCode == Keys.Enter || e.KeyCode == Keys.Escape) _showDyno = false;
             }
+            else if (_showEcuHelp)
+            {
+                if (e.KeyCode == Keys.Enter || e.KeyCode == Keys.Escape || e.KeyCode == Keys.F1 || e.KeyCode == Keys.Oem2) _showEcuHelp = false;
+            }
             else switch (_page)
             {
                 case Page.Menu: MenuKey(e.KeyCode); break;
@@ -318,7 +322,11 @@ public sealed partial class MainForm : Form
         float thr = 0f;
         float brake = 0f;
         bool starter = false;
-        if (_page == Page.Drive && !_showDyno)
+        // เครื่องจูนสด: ติดเครื่องที่กำลังออกแบบ (แบบร่าง) บนแท่น เกียร์ว่าง ในแท็บจูนกล่อง
+        bool bench = _benchOn && _page == Page.Garage && IsEcuTab && !_advisor;
+        if (bench && (!_benchApplied || _benchDirty)) { _eng.Assemble(_draft); _benchApplied = true; _benchDirty = false; }
+        else if (!bench && _benchApplied) { _eng.Assemble(_save.Design); _benchApplied = false; }
+        if ((_page == Page.Drive && !_showDyno) || bench)
         {
             // X/Z = ค่อย ๆ บิดคันเร่ง (ไม่ใช่ระดับตายตัว): X หยุดที่ต่ำกว่ารอบตัดไม่ตัด, Z ไปจนเกือบ/แตะรอบตัดเบา ๆ, W = เต็ม
             bool zKey = Down(Keys.Z), xKey = Down(Keys.X);
@@ -336,15 +344,16 @@ public sealed partial class MainForm : Form
             if (Down(Keys.Space) || Down(Keys.B)) brake = 1f;
             starter = Down(Keys.S) || _mouseStarter;
             if (starter && Down(Keys.S)) _eng.Ignition = true;
-            if (_autoDrive) AutopilotStep(dt, ref thr, ref brake, ref starter);
+            if (_autoDrive && _page == Page.Drive) AutopilotStep(dt, ref thr, ref brake, ref starter);
+            if (bench) brake = 0f;
         }
         else if (_autoDrive) { _autoDrive = false; }
         _eng.ThrottleInput = thr;
         _eng.BrakeInput = brake;
         _eng.StarterHeld = starter;
         bool shiftHeld = Down(Keys.ShiftKey) || Down(Keys.LShiftKey) || Down(Keys.RShiftKey);
-        _eng.ClutchInput = _page == Page.Drive && !_showDyno && (shiftHeld || _mouseClutch || _clock.Elapsed.TotalSeconds < _apClutchUntil) ? 1f : 0f;
-        _eng.GearInput = _gearSel;
+        _eng.ClutchInput = !bench && _page == Page.Drive && !_showDyno && (shiftHeld || _mouseClutch || _clock.Elapsed.TotalSeconds < _apClutchUntil) ? 1f : 0f;
+        _eng.GearInput = bench ? 0 : _gearSel;
         _eng.SlopePct = _slope;
 
         if (dt > 0f) { _rpmRate += ((_eng.Rpm - _lastRpmG) / dt - _rpmRate) * 0.3f; _lastRpmG = _eng.Rpm; }
@@ -362,7 +371,7 @@ public sealed partial class MainForm : Form
 
         RoadTests(now);
         _frame++;
-        if (_page == Page.Drive || _showDyno || _frame % 3 == 0) Invalidate();
+        if (_page == Page.Drive || _showDyno || bench || _frame % 3 == 0) Invalidate();
     }
 
     private void FinishDyno()

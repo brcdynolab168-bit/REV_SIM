@@ -98,6 +98,7 @@ public sealed partial class MainForm
     private void DraftChanged()
     {
         _preview = new EngineModel(_draft);
+        if (_benchApplied) _benchDirty = true;
         RefreshVisible();
     }
 
@@ -243,7 +244,7 @@ public sealed partial class MainForm
             if (Array.IndexOf(GarageTabs[_tab].Keys, "realhp") >= 0) DrawCalibrateButtons(g);
         }
 
-        DrawGarageStats(g);
+        if (!IsEcuTab || _advisor) DrawGarageStats(g);
     }
 
     private int _specScroll, _partScroll;       // แถวแรกที่เห็นในรายการ (เลื่อนเมื่อมีแถวเกินจอ จะได้ไม่เบียดกัน)

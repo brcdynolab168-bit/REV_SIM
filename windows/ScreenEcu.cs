@@ -139,113 +139,13 @@ public sealed partial class MainForm
                 if (!shift) { _ecuC0 = _ecuC1; _ecuR0 = _ecuR1; }
                 return true;
             }
-            case Keys.Add: case Keys.Oemplus: case Keys.PageUp: EcuAdjust(1, shift || k == Keys.PageUp); return true;
-            case Keys.Subtract: case Keys.OemMinus: case Keys.PageDown: EcuAdjust(-1, shift || k == Keys.PageDown); return true;
+            case Keys.OemCloseBrackets: case Keys.PageUp: EcuAdjust(1, shift || k == Keys.PageUp); return true;
+            case Keys.OemOpenBrackets: case Keys.PageDown: EcuAdjust(-1, shift || k == Keys.PageDown); return true;
+            case Keys.K: _eng.Ignition = !_eng.Ignition; return true;
+            case Keys.Oem2: case Keys.F1: _showEcuHelp = true; return true;
             case Keys.D: _ecuMode = (_ecuMode + 1) % 3; return true;
         }
         return false;
     }
 
-    private void DrawEcu(Graphics g)
-    {
-        var m = _preview;
-        // โหมดตาราง
-        for (int i = 0; i < 3; i++)
-        {
-            int mi = i;
-            Btn(g, new RectangleF(GL + i * 208, 176, 200, 40), EcuModeNames[i], _ecuMode == i, i == 1 ? Palette.Red : i == 0 ? Palette.Blue : Palette.Green, () => _ecuMode = mi, _fXs);
-        }
-        string modeNote = _ecuMode == 0 ? "100 = แมพโรงงาน" : _ecuMode == 1 ? "แก่ = จุดเร็ว  อ่อน = จุดช้า" : "ตั้งเป้า AFR";
-        TxtR(g, modeNote, _fCap, Palette.Dim, GL + GW, 188);
-
-        const float labW = 58f, hdrY = 224f, gridY = 248f, cellH = 29f;
-        float gx = GL + labW, cw = (GW - labW) / EN;
-        EcuRange(out int sc0, out int sc1, out int sr0, out int sr1);
-
-        // หัวคอลัมน์ (รอบ)
-        Txt(g, "x1000", _fCap, Palette.Dim, GL + 4, hdrY + 2);
-        for (int c = 0; c < EN; c++)
-            TxtC(g, (m.EcuRpmAt(c) / 1000f).ToString("0.0"), _fCap, c >= sc0 && c <= sc1 ? Palette.Accent : Palette.Dim, gx + (c + 0.5f) * cw, hdrY + 10);
-
-        for (int dr = 0; dr < EN; dr++)
-        {
-            int r = EN - 1 - dr;
-            float y = gridY + dr * cellH;
-            TxtC(g, $"{(r + 1) * 5}%", _fCap, r >= sr0 && r <= sr1 ? Palette.Accent : Palette.Dim, GL + labW / 2 - 4, y + cellH / 2);
-            for (int c = 0; c < EN; c++)
-            {
-                float rpm = m.EcuRpmAt(c), load = EngineModel.EcuLoadAt(r);
-                var e = m.EcuAt(rpm, load);
-                Color col; string txt;
-                if (_ecuMode == 0)
-                {
-                    float v = m.CellFuel(c, r);
-                    col = v >= 100f ? Mix(Palette.Panel, Color.FromArgb(200, 120, 20), (v - 100f) / 25f) : Mix(Palette.Panel, Color.FromArgb(40, 120, 190), (100f - v) / 25f);
-                    txt = v.ToString("0");
-                }
-                else if (_ecuMode == 1)
-                {
-                    float v = m.CellAdv(c, r), d = v - e.Mbt;
-                    col = d >= -1f ? Mix(Color.FromArgb(120, 100, 30), Color.FromArgb(200, 50, 45), (d + 1f) / 6f) : Mix(Palette.Panel, Color.FromArgb(40, 110, 180), (-1f - d) / 12f);
-                    if (d >= -1f && d < 1f) col = Color.FromArgb(70, 140, 80);
-                    txt = v.ToString("0.0");
-                }
-                else
-                {
-                    float l = e.Lambda;
-                    col = l < 0.80f ? Mix(Color.FromArgb(50, 100, 170), Color.FromArgb(40, 70, 130), (0.8f - l) / 0.3f)
-                        : l < 0.95f ? Color.FromArgb(50, 130, 80)
-                        : l < 1.05f ? Color.FromArgb(150, 130, 40)
-                        : Mix(Color.FromArgb(190, 90, 40), Color.FromArgb(200, 40, 40), (l - 1.05f) / 0.3f);
-                    txt = e.Afr.ToString("0.0");
-                }
-                var cell = new RectangleF(gx + c * cw, y, cw - 1, cellH - 1);
-                g.FillRectangle(Br(col), cell);
-                TxtC(g, txt, _fCap, Palette.Text, cell.X + cell.Width / 2, cell.Y + cell.Height / 2);
-            }
-        }
-        // เส้นทางตอนเปิดคันเร่งสุด (ไดโน) = จุดขาว
-        for (int c = 0; c < EN; c++)
-        {
-            float lw = m.Load(1f, m.EcuRpmAt(c));
-            int r = Math.Clamp((int)MathF.Round(lw * EN - 1f), 0, EN - 1);
-            float y = gridY + (EN - 1 - r) * cellH;
-            g.FillEllipse(Br(Palette.Text), gx + (c + 0.5f) * cw - 3, y + cellH - 8, 6, 6);
-        }
-        // กรอบที่เลือก
-        float sx = gx + sc0 * cw, sy = gridY + (EN - 1 - sr1) * cellH;
-        g.DrawRectangle(Pn(Palette.Accent, 3f), sx, sy, (sc1 - sc0 + 1) * cw - 1, (sr1 - sr0 + 1) * cellH - 1);
-
-        // คลิก/ลากเลือก
-        var grid = new RectangleF(gx, gridY, EN * cw, EN * cellH);
-        (int, int) CellAt(PointF p) => (Math.Clamp((int)((p.X - gx) / cw), 0, EN - 1), Math.Clamp(EN - 1 - (int)((p.Y - gridY) / cellH), 0, EN - 1));
-        AddHit(grid, down: p => { var (c, r) = CellAt(p); _ecuC0 = _ecuC1 = c; _ecuR0 = _ecuR1 = r; },
-            drag: p => { var (c, r) = CellAt(p); _ecuC1 = c; _ecuR1 = r; }, up: () => { }, wheel: dir => EcuAdjust(dir, ModifierKeys.HasFlag(Keys.Shift)));
-
-        // แถบเครื่องมือ
-        float by = 848f, bx = GL;
-        void B(string t, float w, Action a, Color? col = null) { Btn(g, new RectangleF(bx, by, w, 42), t, false, col ?? Palette.Accent, a, _fXs); bx += w + 8; }
-        B("−−", 56, () => EcuAdjust(-1, true)); B("−", 56, () => EcuAdjust(-1, false)); B("+", 56, () => EcuAdjust(1, false)); B("++", 56, () => EcuAdjust(1, true));
-        B("เกลี่ย", 84, EcuSmooth, Palette.Blue); B("เท่ากัน", 90, EcuEqualize, Palette.Blue);
-        B("โรงงาน (ที่เลือก)", 150, EcuFactorySel, Palette.Green); B("โรงงาน (ทั้งตาราง)", 150, EcuFactoryAll, Palette.Red);
-        if (_ecuMode == 1) B("ใกล้ MBT", 100, EcuNearMbt, Palette.Yellow);
-
-        // ข้อมูลช่องที่เลือก
-        int cc = _ecuC1, rr = _ecuR1;
-        float prpm = m.EcuRpmAt(cc), pload = EngineModel.EcuLoadAt(rr);
-        var s = m.EcuAt(prpm, pload);
-        var box = new RectangleF(GL, 900, GW, 120);
-        FillRR(g, box, 4, Palette.Panel);
-        DrawRR(g, box, 4, Palette.Border, 1f);
-        g.FillRectangle(Br(Palette.Yellow), box.X + 14, box.Y + 12, 4, 20);
-        Txt(g, $"ช่อง: {prpm:N0} rpm  โหลด {pload * 100f:0}%", _fCap, Palette.Dim, box.X + 28, box.Y + 12);
-        string fuelNote = s.Duty > 1f ? "  หัวฉีดเต็ม! ส่วนผสมบางลง" : s.Duty > 0.85f ? "  หัวฉีดใกล้เต็ม" : "";
-        Color afrCol = s.Lambda > 1.12f ? Palette.Red : s.Lambda < 0.7f ? Palette.Blue : s.Lambda > 0.97f ? Palette.Yellow : Palette.Green;
-        Txt(g, $"AFR {s.Afr:0.0} (λ {s.Lambda:0.00})  •  น้ำมัน {s.FuelPct:0}%  •  หัวฉีด {s.Duty * 100f:0}%{fuelNote}", _fXs, afrCol, box.X + 20, box.Y + 40);
-        float dlt = s.Adv - s.Mbt;
-        Color advCol = dlt > 1.5f ? Palette.Red : dlt < -8f ? Palette.Blue : Palette.Green;
-        Txt(g, $"จุดระเบิด {s.Adv:0.0}° (MBT {s.Mbt:0.0}°  {(dlt >= 0 ? "แก่กว่า" : "อ่อนกว่า")} {Math.Abs(dlt):0.0}°)  •  แรงบิด x{s.Mult:0.000}", _fXs, advCol, box.X + 20, box.Y + 66);
-        string warn = s.Egt > 1050f ? "ไอเสียร้อนจัด! บางเกิน/จุดอ่อนเกิน เสี่ยงลูกสูบพัง" : m.KnockWot(prpm) > 0.02f && pload > 0.7f ? "น็อกที่ช่องนี้: ลดองศา/เติมน้ำมันเพิ่ม/ใช้ออกเทนสูงขึ้น" : dlt < -10f ? "จุดอ่อนมาก: แรงบิดตก ไอเสียร้อน" : s.Lambda > 1.35f || s.Lambda < 0.6f ? "ส่วนผสมนอกช่วงจุดติด: เครื่องสะดุด/ดับ" : "";
-        Txt(g, $"EGT ~{s.Egt:0}°C" + (warn.Length > 0 ? "  •  " + warn : "  •  พื้นสีเขียว = ใกล้ MBT / AFR กำลังสูงสุด  จุดขาว = เส้นไดโน (คันเร่งสุด)"), _fXs, warn.Length > 0 ? Palette.Yellow : Palette.Dim, box.X + 20, box.Y + 92);
-    }
 }

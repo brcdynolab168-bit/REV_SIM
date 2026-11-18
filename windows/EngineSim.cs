@@ -99,6 +99,7 @@ public sealed class EngineSim
     private float _idleWobble;                  // รอบเดินเบาที่เหวี่ยงขึ้นลงช้า ๆ (แคมโอเวอร์แลปมาก/กำลังอัดต่ำ)
     private float _load;                        // 0..1 ปริมาณไอดีต่อรอบ
     public float KnockNow => _knock;
+    public float LoadNow => _load;
     private float _knock;                       // 0..1 การน็อกตอนนี้
     private float _softK;                       // 0..1 ความแรงของ soft cut ตอนนี้
     private bool _fuelOn;
