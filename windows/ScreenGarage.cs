@@ -241,31 +241,53 @@ public sealed partial class MainForm
         DrawGarageStats(g);
     }
 
+    private int _specScroll, _partScroll;       // แถวแรกที่เห็นในรายการ (เลื่อนเมื่อมีแถวเกินจอ จะได้ไม่เบียดกัน)
+
+    /// <summary>แถบเลื่อนบาง ๆ ขวาสุดของรายการ + ข้อความ "แสดง x–y จาก n"</summary>
+    private void DrawListScroll(Graphics g, float y0, float height, int first, int shown, int total)
+    {
+        if (total <= shown) return;
+        float th = Math.Max(30f, height * shown / total);
+        float ty = y0 + (height - th) * first / Math.Max(1, total - shown);
+        g.FillRectangle(Br(Color.FromArgb(40, 46, 56)), GL + GW + 6, y0, 5, height);
+        g.FillRectangle(Br(Palette.Accent), GL + GW + 6, ty, 5, th);
+        TxtR(g, $"แสดง {first + 1}–{first + shown} จาก {total}  (เลื่อนลูกกลิ้ง / ↑ ↓)", _fXs, Palette.Dim, GL + GW, y0 + height + 8);
+    }
+
     private void DrawSpecRows(Graphics g)
     {
-        const float y0 = 184;
+        const float y0 = 184, rowH = 84, listH = 672;
+        const int visible = 8;
         var ps = EngineDesign.Params;
-        float rowH = Math.Min(88f, 700f / Math.Max(1, _vis.Count));
-        for (int i = 0; i < _vis.Count; i++)
+        int total = _vis.Count;
+        _specScroll = Math.Clamp(_specScroll, 0, Math.Max(0, total - visible));
+        if (_sel < _specScroll) _specScroll = _sel;
+        if (_sel >= _specScroll + visible) _specScroll = _sel - visible + 1;
+        int shown = Math.Min(visible, total - _specScroll);
+        AddHit(new RectangleF(GL, y0, GW, listH), wheel: dir => _specScroll = Math.Clamp(_specScroll - dir, 0, Math.Max(0, total - visible)));
+        for (int k = 0; k < shown; k++)
         {
+            int i = _specScroll + k;
             int row = i;
             var def = ps[_vis[i]];
             float v = def.Get(_draft);
-            float y = y0 + i * rowH;
-            var rowRect = new RectangleF(GL, y, GW, rowH - 6);
+            float y = y0 + k * rowH;
+            var rowRect = new RectangleF(GL, y, GW, rowH - 8);
             bool selected = i == _sel;
             if (selected) { g.FillRectangle(Br(Palette.PanelHi), rowRect); g.FillRectangle(Br(Palette.Accent), rowRect.X, rowRect.Y, 4, rowRect.Height); }
             else if (rowRect.Contains(_mouseV)) g.FillRectangle(Br(Color.FromArgb(24, 28, 35)), rowRect);
-            AddHit(rowRect, down: _ => _sel = row, wheel: dir => { _sel = row; Nudge(row, dir, ModifierKeys.HasFlag(Keys.Shift)); });
+            AddHit(rowRect, down: _ => _sel = row);
 
-            Txt(g, def.Name, _fMd, selected ? Palette.Text : Palette.Dim, GL + 20, y + 6);
-            TxtR(g, def.Display(_draft), _fNum, selected ? Palette.Accent : Palette.Text, GL + GW - 20, y + 4);
+            Txt(g, def.Name, _fMd, selected ? Palette.Text : Palette.Dim, GL + 20, y + 8);
+            TxtR(g, def.Display(_draft), _fNum, selected ? Palette.Accent : Palette.Text, GL + GW - 20, y + 6);
 
-            float sy = y + rowH - 6 - 40;
-            SmallBtn(g, new RectangleF(GL + 16, sy + 2, 40, 30), "−", () => { _sel = row; Nudge(row, -1, ModifierKeys.HasFlag(Keys.Shift)); });
+            float sy = y + 40;
+            SmallBtn(g, new RectangleF(GL + 16, sy, 40, 30), "−", () => { _sel = row; Nudge(row, -1, ModifierKeys.HasFlag(Keys.Shift)); });
             float frac = (v - def.Min) / (def.Max - def.Min);
             var d0 = def;
-            Slider(g, new RectangleF(GL + 70, sy, GW - 140, 34), frac, selected ? Palette.Accent : Color.FromArgb(150, 100, 25), f =>
+            var sliderRect = new RectangleF(GL + 70, sy - 2, GW - 140, 34);
+            AddHit(sliderRect, wheel: dir => { _sel = row; Nudge(row, dir, ModifierKeys.HasFlag(Keys.Shift)); });   // ลูกกลิ้งบนแถบ = ปรับค่า
+            Slider(g, sliderRect, frac, selected ? Palette.Accent : Color.FromArgb(150, 100, 25), f =>
             {
                 _sel = row;
                 float nv = d0.Min + f * (d0.Max - d0.Min);
@@ -273,8 +295,9 @@ public sealed partial class MainForm
                 d0.Set(_draft, Math.Clamp(nv, d0.Min, d0.Max));
                 DraftChanged();
             });
-            SmallBtn(g, new RectangleF(GL + GW - 56, sy + 2, 40, 30), "+", () => { _sel = row; Nudge(row, +1, ModifierKeys.HasFlag(Keys.Shift)); });
+            SmallBtn(g, new RectangleF(GL + GW - 56, sy, 40, 30), "+", () => { _sel = row; Nudge(row, +1, ModifierKeys.HasFlag(Keys.Shift)); });
         }
+        DrawListScroll(g, y0, listH - 8, _specScroll, shown, total);
 
         if (_vis.Count > 0)
         {
@@ -283,7 +306,7 @@ public sealed partial class MainForm
         }
 
         // แรงดันอัด: เทียบเกณฑ์ (แท็บอัด · น้ำมัน)
-        if (_tab == 3) DrawPsiScale(g, 184 + _vis.Count * rowH + 10);
+        if (_tab == 3) DrawPsiScale(g, 184 + total * rowH + 10);
     }
 
     private void DrawHintBox(Graphics g, string text)
@@ -329,39 +352,48 @@ public sealed partial class MainForm
 
     private void DrawParts(Graphics g)
     {
-        const float y0 = 184; float rowH = MathF.Min(76f, 704f / (Parts.Categories.Length + 1));
+        const float y0 = 184, rowH = 64, listH = 640;
         int rows = Parts.Categories.Length + 1;
-        for (int r = 0; r < rows; r++)
+        int visible = (int)(listH / rowH);
+        _partScroll = Math.Clamp(_partScroll, 0, Math.Max(0, rows - visible));
+        if (_partRow < _partScroll) _partScroll = _partRow;
+        if (_partRow >= _partScroll + visible) _partScroll = _partRow - visible + 1;
+        int shown = Math.Min(visible, rows - _partScroll);
+        AddHit(new RectangleF(GL, y0, GW, listH), wheel: dir => _partScroll = Math.Clamp(_partScroll - dir, 0, Math.Max(0, rows - visible)));
+        for (int k = 0; k < shown; k++)
         {
+            int r = _partScroll + k;
             int row = r;
-            float y = y0 + r * rowH;
-            var rowRect = new RectangleF(GL, y, GW, rowH - 6);
+            float y = y0 + k * rowH;
+            var rowRect = new RectangleF(GL, y, GW, rowH - 8);
             bool selected = r == _partRow;
             if (selected) { g.FillRectangle(Br(Palette.PanelHi), rowRect); g.FillRectangle(Br(Palette.Accent), rowRect.X, rowRect.Y, 4, rowRect.Height); }
             else if (rowRect.Contains(_mouseV)) g.FillRectangle(Br(Color.FromArgb(24, 28, 35)), rowRect);
-            AddHit(rowRect, down: _ => _partRow = row, wheel: dir => PartStep(row, dir));
+            AddHit(rowRect, down: _ => _partRow = row);
 
-            string name, shown;
+            string name, shownTxt;
             if (r == 0)
             {
                 name = "เช็ตเครื่องสำเร็จรูป";
                 int cur = -1;
                 for (int i = 0; i < Parts.Sets.Length; i++) if (Parts.Sets[i].D.Serialize() == _draft.Serialize()) cur = i;
-                shown = cur < 0 ? "ปรับเอง  (ใช้ลูกศรซ้าย-ขวาเลือกเช็ต)" : Parts.Sets[cur].Name;
+                shownTxt = cur < 0 ? "ปรับเอง  (ใช้ลูกศรซ้าย-ขวาเลือกเช็ต)" : Parts.Sets[cur].Name;
             }
             else
             {
                 var cat = Parts.Categories[r - 1];
                 name = cat.Name;
                 int c = cat.Current(_draft);
-                shown = c < 0 ? "ปรับเอง  (ไม่ตรงชุดสำเร็จรูป)" : cat.Items[c].Name;
+                shownTxt = c < 0 ? "ปรับเอง  (ไม่ตรงชุดสำเร็จรูป)" : cat.Items[c].Name;
             }
-            Txt(g, name, _fXs, selected ? Palette.Text : Palette.Dim, GL + 20, y + rowH / 2 - 12);
-            SmallBtn(g, new RectangleF(GL + 300, y + 4, 52, rowH - 14), "◀", () => PartStep(row, -1));
-            FillRR(g, new RectangleF(GL + 360, y + 4, 480, rowH - 14), 4, Color.FromArgb(14, 17, 21));
-            TxtC(g, shown, _fXs, selected ? Palette.Accent : Palette.Text, GL + 600, y + 4 + (rowH - 14) / 2);
-            SmallBtn(g, new RectangleF(GL + 848, y + 4, 40, rowH - 14), "▶", () => PartStep(row, +1));
+            float cy = y + (rowH - 8) / 2;
+            Txt(g, name, _fSm, selected ? Palette.Text : Palette.Dim, GL + 20, cy - 14);
+            SmallBtn(g, new RectangleF(GL + 300, y + 4, 52, rowH - 16), "◀", () => PartStep(row, -1));
+            FillRR(g, new RectangleF(GL + 360, y + 4, 480, rowH - 16), 4, Color.FromArgb(14, 17, 21));
+            TxtC(g, shownTxt, _fSm, selected ? Palette.Accent : Palette.Text, GL + 600, cy);
+            SmallBtn(g, new RectangleF(GL + 848, y + 4, 40, rowH - 16), "▶", () => PartStep(row, +1));
         }
+        DrawListScroll(g, y0, listH - 8, _partScroll, shown, rows);
         string hint = _partRow == 0
             ? "เลือกเช็ตเครื่องทั้งชุด (* = ตัวอย่างสมมติ ไม่ใช่สเปกรถจริง) แล้วสลับอะไหล่ทีละชิ้นต่อได้"
             : Parts.Categories[_partRow - 1].Name + ": " + Parts.Categories[_partRow - 1].Hint;

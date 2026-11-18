@@ -590,26 +590,41 @@ function hintBox(text) {
   ui.wrap(text, F.sm, C.Yellow, box.x + 20, box.y + 42, box.w - 40, box.h - 46);
 }
 
+let specScroll = 0, partScroll = 0;     // แถวแรกที่เห็นในรายการ (เลื่อนเมื่อมีแถวเกินจอ จะได้ไม่เบียดกัน)
+function drawListScroll(y0, height, first, shown, total) {
+  if (total <= shown) return;
+  const th = Math.max(30, height * shown / total), ty = y0 + (height - th) * first / Math.max(1, total - shown);
+  ui.rect(GL + GW + 6, y0, 5, height, 'rgb(40,46,56)'); ui.rect(GL + GW + 6, ty, 5, th, C.Accent);
+  ui.txtR(`แสดง ${first + 1}–${first + shown} จาก ${total}  (เลื่อนลูกกลิ้ง / ↑ ↓)`, F.xs, C.Dim, GL + GW, y0 + height + 8);
+}
+
 function drawSpecRows() {
-  const y0 = 184, vs = vis(), rowH = Math.min(88, 700 / Math.max(1, vs.length));
-  vs.forEach((def, i) => {
-    const v = def.get(draft), y = y0 + i * rowH, rowRect = R(GL, y, GW, rowH - 6), selected = i === gSel;
+  const y0 = 184, rowH = 84, listH = 672, visible = 8, vs = vis(), total = vs.length;
+  specScroll = clamp(specScroll, 0, Math.max(0, total - visible));
+  if (gSel < specScroll) specScroll = gSel;
+  if (gSel >= specScroll + visible) specScroll = gSel - visible + 1;
+  const shown = Math.min(visible, total - specScroll);
+  ui.hit(R(GL, y0, GW, listH), null, null, null, dir => { specScroll = clamp(specScroll - dir, 0, Math.max(0, total - visible)); });
+  for (let k = 0; k < shown; k++) {
+    const i = specScroll + k, def = vs[i], v = def.get(draft), y = y0 + k * rowH, rowRect = R(GL, y, GW, rowH - 8), selected = i === gSel;
     if (selected) { ui.rect(rowRect.x, rowRect.y, rowRect.w, rowRect.h, C.PanelHi); ui.rect(rowRect.x, rowRect.y, 4, rowRect.h, C.Accent); }
     else if (inRect(rowRect, ui.mouse)) ui.rect(rowRect.x, rowRect.y, rowRect.w, rowRect.h, 'rgb(24,28,35)');
-    ui.hit(rowRect, () => { gSel = i; }, null, null, dir => { gSel = i; nudgeRow(i, dir, keys.has('shift')); });
-    ui.txt(def.name, F.md, selected ? C.Text : C.Dim, GL + 20, y + 6);
-    ui.txtR(paramDisplay(def, draft), F.num, selected ? C.Accent : C.Text, GL + GW - 20, y + 4);
-    const sy = y + rowH - 6 - 40;
-    ui.smallBtn(R(GL + 16, sy + 2, 40, 30), '−', () => { gSel = i; nudgeRow(i, -1, keys.has('shift')); });
-    const frac = (v - def.min) / (def.max - def.min);
-    ui.slider(R(GL + 70, sy, GW - 140, 34), frac, selected ? C.Accent : 'rgb(150,100,25)', f => {
+    ui.hit(rowRect, () => { gSel = i; });
+    ui.txt(def.name, F.md, selected ? C.Text : C.Dim, GL + 20, y + 8);
+    ui.txtR(paramDisplay(def, draft), F.num, selected ? C.Accent : C.Text, GL + GW - 20, y + 6);
+    const sy = y + 40;
+    ui.smallBtn(R(GL + 16, sy, 40, 30), '−', () => { gSel = i; nudgeRow(i, -1, keys.has('shift')); });
+    const frac = (v - def.min) / (def.max - def.min), sr = R(GL + 70, sy - 2, GW - 140, 34);
+    ui.hit(sr, null, null, null, dir => { gSel = i; nudgeRow(i, dir, keys.has('shift')); });      // ลูกกลิ้งบนแถบ = ปรับค่า
+    ui.slider(sr, frac, selected ? C.Accent : 'rgb(150,100,25)', f => {
       gSel = i; let nv = def.min + f * (def.max - def.min); nv = Math.round(nv / def.step) * def.step;
       def.set(draft, clamp(+nv.toFixed(6), def.min, def.max)); draftChanged();
     });
-    ui.smallBtn(R(GL + GW - 56, sy + 2, 40, 30), '+', () => { gSel = i; nudgeRow(i, 1, keys.has('shift')); });
-  });
-  if (vs.length > 0) hintBox(vs[gSel].name + ': ' + vs[gSel].hint);
-  if (gTab === 3) drawPsiScale(184 + vs.length * rowH + 10);
+    ui.smallBtn(R(GL + GW - 56, sy, 40, 30), '+', () => { gSel = i; nudgeRow(i, 1, keys.has('shift')); });
+  }
+  drawListScroll(y0, listH - 8, specScroll, shown, total);
+  if (total > 0) hintBox(vs[gSel].name + ': ' + vs[gSel].hint);
+  if (gTab === 3) drawPsiScale(184 + total * rowH + 10);
 }
 
 function drawPsiScale(y) {
@@ -636,27 +651,34 @@ function drawCalibrateButtons() {
 }
 
 function drawParts() {
-  const y0 = 184, rowH = Math.min(76, 704 / (PartCats.length + 1)), rows = PartCats.length + 1;
-  for (let r = 0; r < rows; r++) {
-    const row = r, y = y0 + r * rowH, rowRect = R(GL, y, GW, rowH - 6), selected = r === gPartRow;
+  const y0 = 184, rowH = 64, listH = 640, rows = PartCats.length + 1, visible = Math.floor(listH / rowH);
+  partScroll = clamp(partScroll, 0, Math.max(0, rows - visible));
+  if (gPartRow < partScroll) partScroll = gPartRow;
+  if (gPartRow >= partScroll + visible) partScroll = gPartRow - visible + 1;
+  const shown = Math.min(visible, rows - partScroll);
+  ui.hit(R(GL, y0, GW, listH), null, null, null, dir => { partScroll = clamp(partScroll - dir, 0, Math.max(0, rows - visible)); });
+  for (let k = 0; k < shown; k++) {
+    const r = partScroll + k, row = r, y = y0 + k * rowH, rowRect = R(GL, y, GW, rowH - 8), selected = r === gPartRow;
     if (selected) { ui.rect(rowRect.x, rowRect.y, rowRect.w, rowRect.h, C.PanelHi); ui.rect(rowRect.x, rowRect.y, 4, rowRect.h, C.Accent); }
     else if (inRect(rowRect, ui.mouse)) ui.rect(rowRect.x, rowRect.y, rowRect.w, rowRect.h, 'rgb(24,28,35)');
-    ui.hit(rowRect, () => { gPartRow = row; }, null, null, dir => partStep(row, dir));
-    let name, shown;
+    ui.hit(rowRect, () => { gPartRow = row; });
+    let name, shownTxt;
     if (r === 0) {
       name = 'เช็ตเครื่องสำเร็จรูป';
       const ci = Presets.findIndex(s => JSON.stringify(s[1]) === JSON.stringify(draft));
-      shown = ci < 0 ? 'ปรับเอง  (ใช้ลูกศรซ้าย-ขวาเลือกเช็ต)' : Presets[ci][0];
+      shownTxt = ci < 0 ? 'ปรับเอง  (ใช้ลูกศรซ้าย-ขวาเลือกเช็ต)' : Presets[ci][0];
     } else {
       const cat = PartCats[r - 1]; name = cat.name; const c = partCurrent(cat, draft);
-      shown = c < 0 ? 'ปรับเอง  (ไม่ตรงชุดสำเร็จรูป)' : cat.items[c].name;
+      shownTxt = c < 0 ? 'ปรับเอง  (ไม่ตรงชุดสำเร็จรูป)' : cat.items[c].name;
     }
-    ui.txt(name, F.xs, selected ? C.Text : C.Dim, GL + 20, y + rowH / 2 - 12);
-    ui.smallBtn(R(GL + 300, y + 4, 52, rowH - 14), '◀', () => partStep(row, -1));
-    ui.fillRR(R(GL + 360, y + 4, 480, rowH - 14), 4, 'rgb(14,17,21)');
-    ui.txtC(shown, F.xs, selected ? C.Accent : C.Text, GL + 600, y + 4 + (rowH - 14) / 2);
-    ui.smallBtn(R(GL + 848, y + 4, 40, rowH - 14), '▶', () => partStep(row, 1));
+    const cy = y + (rowH - 8) / 2;
+    ui.txt(name, F.sm, selected ? C.Text : C.Dim, GL + 20, cy - 14);
+    ui.smallBtn(R(GL + 300, y + 4, 52, rowH - 16), '◀', () => partStep(row, -1));
+    ui.fillRR(R(GL + 360, y + 4, 480, rowH - 16), 4, 'rgb(14,17,21)');
+    ui.txtC(shownTxt, F.sm, selected ? C.Accent : C.Text, GL + 600, cy);
+    ui.smallBtn(R(GL + 848, y + 4, 40, rowH - 16), '▶', () => partStep(row, 1));
   }
+  drawListScroll(y0, listH - 8, partScroll, shown, rows);
   hintBox(gPartRow === 0 ? 'เลือกเช็ตเครื่องทั้งชุด (* = ตัวอย่างสมมติ ไม่ใช่สเปกรถจริง) แล้วสลับอะไหล่ทีละชิ้นต่อได้' : PartCats[gPartRow - 1].name + ': ' + PartCats[gPartRow - 1].hint);
 }
 
