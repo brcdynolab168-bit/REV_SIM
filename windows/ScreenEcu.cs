@@ -120,32 +120,6 @@ public sealed partial class MainForm
         DraftChanged();
     }
 
-    /// <summary>ตัดน้ำมันช่องที่เลือก (เวลาฉีด 0 ms = ไม่มีการเผาไหม้) ใช้ทำอาการเดินหอบ/ทดลองตัดช่วงรอบ</summary>
-    private void EcuCutFuel()
-    {
-        EcuRange(out int c0, out int c1, out int r0, out int r1);
-        var t = EcuTable(0);
-        for (int r = r0; r <= r1; r++) for (int c = c0; c <= c1; c++) t[r * EN + c] = 0f;
-        DraftChanged();
-        Toast("ตัดน้ำมันช่องที่เลือกแล้ว (0 ms)  ตัดช่วงเดินเบาแล้วลองเปิดเครื่องจูนสด: จะเดินหอบ");
-    }
-
-    /// <summary>ทำอาการเดินหอบ: ตัดน้ำมันทุกโหลดในช่วงรอบเหนือรอบเดินเบาขึ้นไป (~0.95-1.55 เท่า) รอบจะตกลงใต้ช่วงที่ตัด น้ำมันกลับมา รอบขึ้นเข้าช่วงตัดอีก วนเป็นจังหวะ</summary>
-    private void EcuHunt()
-    {
-        var m = _preview;
-        var t = EcuTable(0);
-        float lo = m.IdleRpm * 0.95f, hi = m.IdleRpm * 1.55f;
-        for (int c = 0; c < EN; c++)
-        {
-            float rpm = m.EcuRpmAt(c);
-            if (rpm < lo || rpm > hi) continue;
-            for (int r = 0; r < EN; r++) t[r * EN + c] = 0f;
-        }
-        DraftChanged();
-        Toast($"ตัดน้ำมันช่วงรอบ {lo:N0}-{hi:N0} ทุกโหลดแล้ว เปิดเครื่องจูนสดแล้วดูรอบเดินเบาเหวี่ยง (เดินหอบ)");
-    }
-
     private void EcuFactoryAll()
     {
         if (EcuReadOnly()) return;

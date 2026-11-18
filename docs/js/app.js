@@ -590,54 +590,6 @@ const ecuFactory = mode => [preview.FactoryMsTable(), preview.FactoryEoiTable(),
 const ecuTableW = mode => { const p = ECU_PROP[mode]; draft.EcuAx = 2; return (draft[p] = (draft[p] || ecuFactory(mode)).slice()); };
 const editMode = () => (ecuMode === 4 ? 0 : ecuMode);
 const ecuReadOnly = () => false;
-/** ตัดน้ำมันช่องที่เลือก (เวลาฉีด 0 ms = ไม่มีการเผาไหม้) ใช้ทำอาการเดินหอบ/ทดลองตัดช่วงรอบ */
-function ecuCutFuel() {
-  const { c0, c1, r0, r1 } = ecuRange(), t = ecuTableW(0);
-  for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) t[r * EcuN + c] = 0;
-  draftChanged();
-  toast('ตัดน้ำมันช่องที่เลือกแล้ว (0 ms)  ตัดช่วงเดินเบาแล้วลองเปิดเครื่องจูนสด: จะเดินหอบ');
-}
-function ecuAdjust(dir, coarse) {
-  if (ecuReadOnly()) return;
-  const { c0, c1, r0, r1 } = ecuRange(), m = preview;
-  if (ecuMode === 4) {
-    const t = ecuTableW(0);
-    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {      // โหมด AFR: ตั้ง AFR เป้าหมายของช่อง แล้วแปลงเป็นเวลาฉีด (ms)
-      const rpmC = m.EcuRpmAt(c), tpsR = EngineModel.TpsAxis(r), loadR = m._loadOf(tpsR, rpmC), cur = m.EcuAt(rpmC, tpsR, {}).Afr;
-      t[r * EcuN + c] = clamp(Math.round(m.MsForAfr(rpmC, loadR, cur + (coarse ? 0.5 : 0.1) * dir) * 100) / 100, 0, 40);
-    }
-  } else {
-    const [fine, crs, lo, hi, rnd] = ECU_SPEC[ecuMode], t = ecuTableW(ecuMode), st = (coarse ? crs : fine) * dir;
-    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) t[r * EcuN + c] = clamp(Math.round((t[r * EcuN + c] + st) / rnd) * rnd, lo, hi);
-  }
-  draftChanged();
-}
-function ecuEdit(fn) {
-  if (ecuReadOnly()) return;
-  const { c0, c1, r0, r1 } = ecuRange(), t = ecuTableW(editMode());
-  fn(t, c0, c1, r0, r1); draftChanged();
-}
-function ecuSmooth() {
-  const rnd = ECU_SPEC[editMode()][4];
-  ecuEdit((t, c0, c1, r0, r1) => {
-    const src = t.slice();
-    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
-      let s = 0, n = 0;
-      for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) { const rr = r + dr, cc = c + dc; if (rr < 0 || cc < 0 || rr >= EcuN || cc >= EcuN) continue; s += src[rr * EcuN + cc]; n++; }
-      t[r * EcuN + c] = Math.round(s / n / rnd) * rnd;
-    }
-  });
-  if (ecuMode !== 5) toast('เกลี่ยค่าที่เลือกแล้ว');
-}
-function ecuEqualize() { ecuEdit((t, c0, c1, r0, r1) => { const v = t[ecuR0 * EcuN + ecuC0]; for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) t[r * EcuN + c] = v; }); }
-function ecuFactorySel() { if (ecuReadOnly()) return; const fac = ecuFactory(editMode()); ecuEdit((t, c0, c1, r0, r1) => { for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) t[r * EcuN + c] = fac[r * EcuN + c]; }); }
-/** ทำอาการเดินหอบ: ตัดน้ำมันทุกโหลดในช่วงรอบเหนือรอบเดินเบาขึ้นไป (~0.95-1.55 เท่า) */
-function ecuHunt() {
-  const m = preview, t = ecuTableW(0), lo = m.IdleRpm * 0.95, hi = m.IdleRpm * 1.55;
-  for (let c = 0; c < EcuN; c++) { const rpm = m.EcuRpmAt(c); if (rpm < lo || rpm > hi) continue; for (let r = 0; r < EcuN; r++) t[r * EcuN + c] = 0; }
-  draftChanged();
-  toast(`ตัดน้ำมันช่วงรอบ ${fmtN(lo)}-${fmtN(hi)} ทุกโหลดแล้ว เปิดเครื่องจูนสดแล้วดูรอบเดินเบาเหวี่ยง (เดินหอบ)`);
-}
 function ecuFactoryAll() { if (ecuReadOnly()) return; draft[ECU_PROP[editMode()]] = null; draftChanged(); toast('คืนตารางเป็นค่าโรงงานแล้ว'); }
 function ecuNearMbt() {
   if (ecuReadOnly()) return;
@@ -670,7 +622,7 @@ const EcuHelp = [
   ['AFR และ λ (แลมบ์ดา)', ['AFR = มวลอากาศ ÷ มวลน้ำมันที่เข้าห้องเผาไหม้  เบนซินเผาหมดพอดี (สโตอิก) = 14.7 : 1', 'λ = AFR ÷ สโตอิก   λ 1.00 = พอดี   ต่ำกว่า 1 = หนา   สูงกว่า 1 = บาง', 'แรงสูงสุดที่ AFR ~12.5–13.2 (λ 0.85–0.90)  ประหยัดตอนวิ่งเบา ~14.7', 'บางเกิน (>15.5) = ร้อน น็อก แรงตก   หนาเกิน (<11) = แรงตก เปลืองน้ำมัน เขม่า', 'E85 สโตอิก 9.76 / เมทานอล 6.45 ต้องฉีดมากกว่าเบนซินหลายเท่า']],
   ['MBT และ ไฟแก่ / ไฟอ่อน', ['MBT = Minimum advance for Best Torque คือองศาจุดระเบิดก่อนศูนย์ตายบน (°BTDC) ที่ได้แรงบิดสูงสุดพอดี', 'ไฟแก่ = จุดเร็ว (องศามาก)   ไฟอ่อน = จุดช้า (องศาน้อย)', 'แก่กว่า MBT = แรงดันพีคมาเร็วเกินจนต้านลูกสูบขาขึ้น แรงไม่เพิ่มแต่น็อกง่าย', 'อ่อนกว่า MBT = แรงตก ไอเสียร้อน', 'MBT สูงขึ้นเมื่อรอบสูง โหลดเบา ส่วนผสมบาง ลูกโต / ต่ำลงเมื่อ CR สูง ก้านยาว น้ำมันเผาไว (E85/เมทานอล)', 'ตั้งต่ำกว่า MBT 1–3° เป็นขอบปลอดภัย']],
   ['EGT (อุณหภูมิก๊าซไอเสีย)', ['EGT = Exhaust Gas Temperature อุณหภูมิก๊าซไอเสียที่คอท่อ บอกว่าเผาไหม้ร้อนแค่ไหน', 'เบนซินเครื่องเล็กตอนวิ่งหนักปกติ ~700–900°C   เกิน ~1,000°C เสี่ยงวาล์วไอเสียไหม้ ลูกสูบหลอม', 'ที่ทำให้สูง: ส่วนผสมบาง, ไฟอ่อน (ไฟยังเผาอยู่ตอนไอเสียเปิด), โหลดและรอบสูง', 'ส่วนผสมหนากว่าเล็กน้อยช่วยลด EGT (น้ำมันระเหยดูดความร้อน) แต่หนาเกินแรงตก', 'ค่าในเกมเป็นการประมาณ ใช้ดูแนวโน้ม']],
-  ['หัวฉีด (Duty)', ['Duty = สัดส่วนเวลาที่หัวฉีดเปิดต่อ 1 รอบเครื่อง', 'ยิ่งรอบสูง โหลดหนัก หรือใช้น้ำมันที่ต้องฉีดเยอะ (E85 เมทานอล) ค่ายิ่งสูง', 'เกิน ~85% ใกล้สุดกำลังหัวฉีด   100% = เต็ม น้ำมันไม่พอ ส่วนผสมบางลงเอง (ร้อน แรงตก)', 'แก้ด้วยหัวฉีดที่ใหญ่ขึ้น (แท็บ อัด·น้ำมัน แถว หัวฉีด)', 'ใส่เวลาฉีด 0 ms = ตัดน้ำมันช่องนั้น ไม่มีการเผาไหม้ ตัดช่วงเดินเบาแล้วเครื่องจะเดินหอบเอง (รอบขึ้น-ลงตามระบบคุมรอบเดินเบา) ปุ่ม "ตัดน้ำมัน (0)" ทำให้ทันที']],
+  ['หัวฉีด (Duty)', ['Duty = สัดส่วนเวลาที่หัวฉีดเปิดต่อ 1 รอบเครื่อง', 'ยิ่งรอบสูง โหลดหนัก หรือใช้น้ำมันที่ต้องฉีดเยอะ (E85 เมทานอล) ค่ายิ่งสูง', 'เกิน ~85% ใกล้สุดกำลังหัวฉีด   100% = เต็ม น้ำมันไม่พอ ส่วนผสมบางลงเอง (ร้อน แรงตก)', 'แก้ด้วยหัวฉีดที่ใหญ่ขึ้น (แท็บ อัด·น้ำมัน แถว หัวฉีด)', 'ใส่เวลาฉีด 0 ms = ตัดน้ำมันช่องนั้น ไม่มีการเผาไหม้ ตัดช่วงเดินเบาแล้วเครื่องจะเดินหอบเอง (รอบขึ้น-ลงตามระบบคุมรอบเดินเบา) ลดค่าด้วยปุ่ม − จนถึง 0 ได้เอง']],
   ['MAP (แรงดันท่อไอดี)', ['MAP = Manifold Absolute Pressure แรงดันสัมบูรณ์ในท่อไอดี หน่วย kPa  บรรยากาศ ~101 kPa  ยิ่งต่ำยิ่งสุญญากาศลึก', 'ลิ้นเร่งแคบ + รอบสูง = ดูดแรง MAP ต่ำ (~30–40 kPa) อากาศเข้าน้อย โหลดเบา   ลิ้นเปิดเต็ม MAP ใกล้บรรยากาศ', 'ECU ใช้ MAP บอกว่าเครื่องกินอากาศเท่าไร แล้วเลือกเวลาฉีด/องศาจุดตามโหลดนั้น', 'แก้ตารางนี้ได้ = คุมลิ้นเร่งไฟฟ้า: ตั้ง MAP เป้าหมายต่อคันเร่ง (TPS) x รอบ เครื่องจะได้อากาศตามนั้น (ไม่เกินที่ลิ้นเปิดสุดผ่านได้) ใส่ 0 = ไม่มีอากาศเข้า', 'ใช้จำกัดกำลังที่คันเร่งต่ำ หรือทำอาการเดินหอบจากช่วงเดินเบา (เช่นตั้ง MAP ช่อง TPS 0-5% ต่ำเกิน ระบบคุมรอบเดินเบาจะเปิดลิ้นตามจนรอบเหวี่ยง)']],
   ['องศาจบฉีด (EOI)', ['EOI = End Of Injection องศาที่หัวฉีดหยุดฉีด วัดเป็น °ก่อนศูนย์ตายบนของจังหวะดูด (ยิ่งมากยิ่งฉีดเสร็จเร็ว)', 'ฉีดให้เสร็จก่อนวาล์วไอดีเปิด น้ำมันมีเวลาระเหยบนวาล์วปิดที่ร้อน ผสมกับอากาศดี', 'ฉีดตอนวาล์วเปิดแล้ว (EOI น้อยกว่าองศาวาล์วเปิด) ละอองน้ำมันระเหยไม่ทัน กำลังตกเล็กน้อย โดยเฉพาะรอบต่ำ', 'รอบสูงเวลาฉีดยาว ต้องเลื่อน EOI ให้ช้าลงเพื่อฉีดทันในรอบเดียว ถ้าเลยจะฉีดข้ามไปรอบก่อน กำลังตก', 'ฉีดเร็วเกินไป (EOI มาก) น้ำมันเกาะผนังท่อไอดี ตอบสนองคันเร่งช้า']],
   ['ไทม์คอยล์ (Dwell)', ['Dwell = เวลาที่ ECU ปล่อยกระแสชาร์จคอยล์จุดระเบิดก่อนตัดให้เกิดประกายไฟ ยิ่งนานยิ่งเก็บพลังงานมากขึ้นจนอิ่มตัว', 'สั้นเกินไป = ประกายอ่อน จุดไม่ติด โดยเฉพาะโหลดหนัก กำลังอัดสูง ส่วนผสมบาง (ต้องใช้ประกายแรงกว่า)', 'นานเกินไป = คอยล์ร้อน เปลืองกระแส ประสิทธิภาพตก เสี่ยงคอยล์ไหม้ (เครื่องสูบเดียวมีเวลาเหลือเฟือ ปกติ ~2–6 ms)', 'ค่าโรงงานคำนวณให้พลังงานประกายเกินที่ต้องการราว 8%']],
@@ -757,8 +709,6 @@ function drawEcu() {
   B('เกลี่ย', 66, ecuSmooth, C.Blue); B('เท่ากัน', 76, ecuEqualize, C.Blue);
   B('โรงงาน(เลือก)', 128, ecuFactorySel, C.Green); B('โรงงาน(ทั้งหมด)', 152, ecuFactoryAll, C.Red);
   if (ecuMode === 2) B('ใกล้ MBT', 104, ecuNearMbt, C.Yellow);
-  if (ecuMode === 0 || ecuMode === 4) B('ตัดน้ำมัน 0', 122, ecuCutFuel, C.Red);
-  if (ecuMode === 0 || ecuMode === 4) B('เดินหอบ', 96, ecuHunt, C.Yellow);
 
   // ซ้ายล่าง: ช่องที่เลือก
   const prpm = m.EcuRpmAt(ecuC1), ptps = EngineModel.TpsAxis(ecuR1), pload = m._loadOf(ptps, prpm), s = m.EcuAt(prpm, ptps, {}), dl2 = s.Adv - s.Mbt;
