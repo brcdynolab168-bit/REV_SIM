@@ -587,7 +587,7 @@ const ecuRange = () => ({ c0: Math.min(ecuC0, ecuC1), c1: Math.max(ecuC0, ecuC1)
 const ECU_PROP = ['EcuMs', 'EcuEoi', 'EcuIgn', 'EcuDwell', 'EcuMs', 'EcuMap'];
 const ECU_SPEC = [[0.1, 0.5, 0, 40, 0.01], [5, 20, 0, 560, 1], [0.5, 2, -5, 50, 0.1], [0.1, 0.5, 0.5, 9, 0.01], [0.1, 0.5, 0, 40, 0.01], [1, 5, 0, 115, 1]];     // [ละเอียด, หยาบ, ต่ำสุด, สูงสุด, ปัดเศษ]
 const ecuFactory = mode => [preview.FactoryMsTable(), preview.FactoryEoiTable(), preview.FactoryIgnTable(), preview.FactoryDwellTable(), preview.FactoryMsTable(), preview.FactoryMapTable()][mode];
-const ecuTableW = mode => { const p = ECU_PROP[mode]; draft.EcuAx = 1; return (draft[p] = (draft[p] || ecuFactory(mode)).slice()); };
+const ecuTableW = mode => { const p = ECU_PROP[mode]; draft.EcuAx = 2; return (draft[p] = (draft[p] || ecuFactory(mode)).slice()); };
 const editMode = () => (ecuMode === 4 ? 0 : ecuMode);
 const ecuReadOnly = () => false;
 /** ตัดน้ำมันช่องที่เลือก (เวลาฉีด 0 ms = ไม่มีการเผาไหม้) ใช้ทำอาการเดินหอบ/ทดลองตัดช่วงรอบ */
@@ -703,7 +703,7 @@ function drawEcu() {
   const cellVal = ecuMode === 0 ? (c, r) => m.CellMs(c, r) : ecuMode === 1 ? (c, r) => m.CellEoi(c, r) : ecuMode === 3 ? (c, r) => m.CellDwell(c, r) : ecuMode === 5 ? (c, r) => m.CellMap(c, r) : null;
   if (cellVal) for (let r = 0; r < EcuN; r++) for (let c = 0; c < EcuN; c++) { const v = cellVal(c, r); fMin = Math.min(fMin, v); fMax = Math.max(fMax, v); }
   ui.txt('TPS %', F.cap, C.Dim, LX + 4, hdrY + 2);
-  for (let r = 0; r < EcuN; r++) ui.txtC((EngineModel.TpsAxis(r) * 100).toFixed(0), F.cap, r >= sr0 && r <= sr1 ? C.Accent : C.Dim, gx + (r + 0.5) * cw, hdrY + 10);
+  for (let r = 0; r < EcuN; r++) ui.txtC(String(+(EngineModel.TpsAxis(r) * 100).toFixed(1)), F.cap, r >= sr0 && r <= sr1 ? C.Accent : C.Dim, gx + (r + 0.5) * cw, hdrY + 10);
   const e = {};
   for (let c = 0; c < EcuN; c++) {
     const y = gridY + c * cellH;

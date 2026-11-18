@@ -28,12 +28,13 @@ export function newDesign(o = {}) {
     Inj: 0, EcuAx: 0, EcuMs: null, EcuMap: null, EcuEoi: null, EcuDwell: null, EcuIgn: null,
     SpringK: 20, Primary: 3.35, Gear1: 2.5, Gear2: 1.55, Gear3: 1.15, Gear4: 0.923, Gears: 4, Gear5: 0.8, Gear6: 0.72, Pipe: 0, Fuel: 1,
   }, o);
-  if (r.EcuAx !== 1) { r.EcuMs = r.EcuEoi = r.EcuIgn = r.EcuDwell = null; }      // ตารางจูนเก่าใช้แกนโหลด: ทิ้ง ใช้ค่าโรงงานแกน TPS
+  if (r.EcuAx !== 2) { r.EcuMs = r.EcuEoi = r.EcuIgn = r.EcuDwell = r.EcuMap = null; }      // ตารางจูนเก่าใช้แกนโหลด: ทิ้ง ใช้ค่าโรงงานแกน TPS
   return r;
 }
 
 export const gearAt = (d, g) => d['Gear' + clamp(Math.round(g), 1, clamp(d.Gears, 4, 6))];
 export const EcuN = 20;
+const TPS_PCT = [0, 0.5, 1, 1.5, 2, 3, 4, 5, 6.5, 8, 10, 13, 17, 22, 30, 40, 52, 66, 82, 100];
 export const InjDeadMs = 0.7, DwellTau = 1.8;
 const pulseDeg = (pwMs, rpm) => { const cyc = 120000 / Math.max(rpm, 200); return Math.min(pwMs, cyc) / cyc * 720; };
 const sparkQ = (dwell, req) => (1 - Math.exp(-dwell / DwellTau)) / req;
@@ -357,7 +358,7 @@ export class EngineModel {
   Load(thr, rpm) {
     const nat = this.NaturalLoad(thr, rpm), t = this.D.EcuMap;
     if (!t) return nat;
-    const map = this._samp(t, (rpm - 1000) / (this.EcuRpmMax - 1000) * (EcuN - 1), clamp(thr, 0, 1) * (EcuN - 1));
+    const map = this._samp(t, (rpm - 1000) / (this.EcuRpmMax - 1000) * (EcuN - 1), EngineModel.TpsToIndex(thr));
     return Math.min(clamp((map / 101.3 - 0.28) / 0.72, 0, 1), this.NaturalLoad(1, rpm));
   }
   VeNorm(rpm) { return lerpT(this._veN, rpm); }
@@ -406,14 +407,19 @@ export class EngineModel {
   }
   /** โหลดอากาศจากตำแหน่งลิ้นเร่ง (TPS 0..1) ที่รอบนั้น */
   _loadOf(tps, rpm) { return clamp(this.Load(tps, rpm), 0.02, 1); }
-  TableMs(rpm, tps) { const t = this.D.EcuMs; return t ? this._samp(t, (rpm - 1000) / (this.EcuRpmMax - 1000) * (EcuN - 1), clamp(tps, 0, 1) * (EcuN - 1)) : this.FactoryMs(rpm, this._loadOf(tps, rpm)); }
+  TableMs(rpm, tps) { const t = this.D.EcuMs; return t ? this._samp(t, (rpm - 1000) / (this.EcuRpmMax - 1000) * (EcuN - 1), EngineModel.TpsToIndex(tps)) : this.FactoryMs(rpm, this._loadOf(tps, rpm)); }
   // ---------------- MAP ----------------
   /** แรงดันท่อไอดี (kPa สัมบูรณ์) จากโหลดอากาศ 0..1 */
   MapKpa(load) { return 101.3 * (0.28 + 0.72 * clamp(load, 0, 1)); }
   MapAtTps(rpm, tps) { return this.MapKpa(this.Load(tps, rpm)); }
   /** แกนคันเร่ง TPS ของตาราง MAP: เริ่มที่ 0% (ลิ้นปิด) ถึง 100% เรียงเท่า ๆ กัน 20 ช่อง */
-  static TpsAxis(j) { return j / 19; }
-  static TpsToIndex(tps) { return clamp(tps * 19, 0, 19); }
+  static TpsAxis(j) { return TPS_PCT[clamp(j, 0, EcuN - 1)] / 100; }
+  /** ตำแหน่งในแกน TPS (ทศนิยม) ของค่า TPS 0..1 : แกนถี่ที่ปลายล่างเพราะเครื่องใหญ่ ลิ้นเปิดนิดเดียวอากาศก็แทบเต็ม */
+  static TpsToIndex(tps) {
+    const v = clamp(tps, 0, 1) * 100; let i = 0;
+    while (i < EcuN - 2 && v > TPS_PCT[i + 1]) i++;
+    return i + clamp((v - TPS_PCT[i]) / (TPS_PCT[i + 1] - TPS_PCT[i]), 0, 1);
+  }
   // ---------------- องศาจบฉีด (EOI) ----------------
   get IvoBtdc() { return this.D.Duration * 0.5 - this.D.Lsa + 12; }
   FactoryEoi(rpm, load) {
@@ -425,18 +431,18 @@ export class EngineModel {
     const open = clamp((this.IvoBtdc + 10 - eoi) / Math.max(pd, 20), 0, 1), hi = clamp((rpm - 6000) / 4000, 0, 1);
     return 1 - 0.06 * open * (1 - 0.6 * hi) - 0.04 * clamp((eoi + pd - 720) / 90, 0, 1) - 0.012 * clamp((eoi - 360) / 180, 0, 1);
   }
-  TableEoi(rpm, tps) { const t = this.D.EcuEoi; return t ? this._samp(t, (rpm - 1000) / (this.EcuRpmMax - 1000) * (EcuN - 1), clamp(tps, 0, 1) * (EcuN - 1)) : this.FactoryEoi(rpm, this._loadOf(tps, rpm)); }
+  TableEoi(rpm, tps) { const t = this.D.EcuEoi; return t ? this._samp(t, (rpm - 1000) / (this.EcuRpmMax - 1000) * (EcuN - 1), EngineModel.TpsToIndex(tps)) : this.FactoryEoi(rpm, this._loadOf(tps, rpm)); }
   // ---------------- ไทม์คอยล์ (dwell) ----------------
   CoilReq(load, lam) { return clamp(0.52 + 0.26 * load + 0.03 * (this.CrEff - 10) + 0.35 * clamp(lam - 1, 0, 0.4), 0.4, 1); }
   FactoryDwell(rpm, load) { const req = this.CoilReq(load, this.LambdaBase(rpm, load)); return Math.round(-DwellTau * Math.log(1 - Math.min(0.96, req * 1.08)) * 20) / 20; }
-  TableDwell(rpm, tps) { const t = this.D.EcuDwell; return t ? this._samp(t, (rpm - 1000) / (this.EcuRpmMax - 1000) * (EcuN - 1), clamp(tps, 0, 1) * (EcuN - 1)) : this.FactoryDwell(rpm, this._loadOf(tps, rpm)); }
+  TableDwell(rpm, tps) { const t = this.D.EcuDwell; return t ? this._samp(t, (rpm - 1000) / (this.EcuRpmMax - 1000) * (EcuN - 1), EngineModel.TpsToIndex(tps)) : this.FactoryDwell(rpm, this._loadOf(tps, rpm)); }
   CellEoi(c, r) { const t = this.D.EcuEoi; return t ? t[r * EcuN + c] : this.FactoryEoi(this.EcuRpmAt(c), this._loadOf(EngineModel.TpsAxis(r), this.EcuRpmAt(c))); }
   CellDwell(c, r) { const t = this.D.EcuDwell; return t ? t[r * EcuN + c] : this.FactoryDwell(this.EcuRpmAt(c), this._loadOf(EngineModel.TpsAxis(r), this.EcuRpmAt(c))); }
   FactoryEoiTable() { const t = new Array(EcuN * EcuN); for (let r = 0; r < EcuN; r++) for (let c = 0; c < EcuN; c++) t[r * EcuN + c] = this.FactoryEoi(this.EcuRpmAt(c), this._loadOf(EngineModel.TpsAxis(r), this.EcuRpmAt(c))); return t; }
   FactoryDwellTable() { const t = new Array(EcuN * EcuN); for (let r = 0; r < EcuN; r++) for (let c = 0; c < EcuN; c++) t[r * EcuN + c] = this.FactoryDwell(this.EcuRpmAt(c), this._loadOf(EngineModel.TpsAxis(r), this.EcuRpmAt(c))); return t; }
   OpenValveFrac(c, r) { return clamp((this.IvoBtdc + 10 - this.CellEoi(c, r)) / Math.max(pulseDeg(this.CellMs(c, r), this.EcuRpmAt(c)), 20), 0, 1); }
   CoilDuty(c, r) { return this.CellDwell(c, r) / (120000 / Math.max(this.EcuRpmAt(c), 200)); }
-  TableAdv(rpm, tps) { const t = this.D.EcuIgn; return t ? this._samp(t, (rpm - 1000) / (this.EcuRpmMax - 1000) * (EcuN - 1), clamp(tps, 0, 1) * (EcuN - 1)) : this.StockAdv(rpm, this._loadOf(tps, rpm)); }
+  TableAdv(rpm, tps) { const t = this.D.EcuIgn; return t ? this._samp(t, (rpm - 1000) / (this.EcuRpmMax - 1000) * (EcuN - 1), EngineModel.TpsToIndex(tps)) : this.StockAdv(rpm, this._loadOf(tps, rpm)); }
   /** ผลของตารางจูนกล่อง ณ รอบ/โหลดนั้น (คืนออบเจ็กต์ที่ใช้ซ้ำ) */
   EcuAt(rpm, tps, out = this._ecuTmp || (this._ecuTmp = {})) {
     tps = clamp(tps, 0, 1); const load = this._loadOf(tps, rpm);

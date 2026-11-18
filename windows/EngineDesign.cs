@@ -189,7 +189,7 @@ public sealed class EngineDesign
     {
         string s = string.Join(";", Params.Where(p => p.Persist).Select(p => p.Key + "=" + p.Get(this).ToString(CultureInfo.InvariantCulture)));
         if (EcuMs != null) s += ";ecum=" + string.Join(",", EcuMs.Select(v => v.ToString("0.##", CultureInfo.InvariantCulture)));
-        if (EcuMs != null || EcuEoi != null || EcuIgn != null || EcuDwell != null) s += ";ecuax=1";
+        if (EcuMs != null || EcuEoi != null || EcuIgn != null || EcuDwell != null || EcuMap != null) s += ";ecuax=2";
         if (EcuMap != null) s += ";ecup=" + string.Join(",", EcuMap.Select(v => v.ToString("0.#", CultureInfo.InvariantCulture)));
         if (EcuIgn != null) s += ";ecui=" + string.Join(",", EcuIgn.Select(v => v.ToString("0.#", CultureInfo.InvariantCulture)));
         if (EcuEoi != null) s += ";ecue=" + string.Join(",", EcuEoi.Select(v => v.ToString("0.#", CultureInfo.InvariantCulture)));
@@ -229,7 +229,7 @@ public sealed class EngineDesign
             if (d.Auto == 1 && MathF.Abs(d.Bore - 70f) < 0.3f) { d.RimInch = 14f; d.RimW = 3.5f; d.TireW = 140f; d.TireAsp = 70f; }
             else if (d.Auto == 1) { d.RimInch = 14f; d.RimW = 1.6f; d.TireW = 90f; d.TireAsp = 90f; }
         }
-        if (!s.Contains("ecuax=1")) { d.EcuMs = null; d.EcuEoi = null; d.EcuIgn = null; d.EcuDwell = null; }   // ตารางจูนแบบเก่าใช้แกนโหลด: ทิ้ง ใช้ค่าโรงงานแกน TPS
+        if (!s.Contains("ecuax=2")) { d.EcuMs = null; d.EcuEoi = null; d.EcuIgn = null; d.EcuDwell = null; d.EcuMap = null; }   // ตารางจูนแบบเก่าใช้แกนโหลด: ทิ้ง ใช้ค่าโรงงานแกน TPS
         if (!s.Contains("rampout=")) d.RampOutDeg = d.RampDeg;       // เซฟเก่า: ใบนอกเท่าใบใน
         if (!s.Contains("liftex=")) d.LiftEx = d.Lift;              // เซฟเก่า: ยกไอเสียเท่าไอดี
         if (!s.Contains("durex=")) d.DurationEx = d.Duration;       // เซฟเก่า: ไอเสียเท่าไอดี
@@ -606,7 +606,7 @@ public sealed class EngineModel
     {
         float nat = NaturalLoad(throttleEff, rpm);
         if (D.EcuMap == null) return nat;
-        float map = Samp(D.EcuMap, EcuX(rpm), Math.Clamp(throttleEff, 0f, 1f) * (EcuN - 1));
+        float map = Samp(D.EcuMap, EcuX(rpm), TpsToIndex(throttleEff));
         float want = Math.Clamp((map / 101.3f - 0.28f) / 0.72f, 0f, 1f);
         return MathF.Min(want, NaturalLoad(1f, rpm));
     }
@@ -707,7 +707,7 @@ public sealed class EngineModel
     public float MsForAfr(float rpm, float load, float afr) => InjDeadMs + AirPerCycleG(rpm, load) / MathF.Max(afr, 1f) / InjFlowGpMs;
     /// <summary>โหลดอากาศจากตำแหน่งลิ้นเร่ง (TPS 0..1) ที่รอบนั้น</summary>
     public float LoadOf(float tps, float rpm) => Math.Clamp(Load(tps, rpm), 0.02f, 1f);
-    private static float EcuYT(float tps) => Math.Clamp(tps, 0f, 1f) * (EcuN - 1);
+    private static float EcuYT(float tps) => TpsToIndex(tps);
     public float TableMs(float rpm, float tps) => D.EcuMs == null ? FactoryMs(rpm, LoadOf(tps, rpm)) : Samp(D.EcuMs, EcuX(rpm), EcuYT(tps));
     // ---------------- MAP (แรงดันท่อร่วมไอดี) ----------------
     /// <summary>แรงดันในท่อไอดี (kPa สัมบูรณ์) จากโหลดอากาศ 0..1  ลิ้นปิดเกือบหมด ~28 kPa (สุญญากาศลึก)  เปิดเต็ม ~ใกล้บรรยากาศ 101 kPa</summary>
@@ -715,8 +715,16 @@ public sealed class EngineModel
     /// <summary>MAP ที่รอบและตำแหน่งคันเร่ง (0..1) ที่กำหนด</summary>
     public float MapAtTps(float rpm, float tps) => MapKpa(Load(tps, rpm));
     /// <summary>แกนคันเร่ง TPS ของตาราง MAP: เริ่มที่ 0% (ลิ้นปิด) ถึง 100% เรียงเท่า ๆ กัน 20 ช่อง</summary>
-    public static float TpsAxis(int j) => j / 19f;
-    public static float TpsToIndex(float tps) => Math.Clamp(tps * 19f, 0f, 19f);
+    private static readonly float[] TpsPct = { 0f, 0.5f, 1f, 1.5f, 2f, 3f, 4f, 5f, 6.5f, 8f, 10f, 13f, 17f, 22f, 30f, 40f, 52f, 66f, 82f, 100f };
+    public static float TpsAxis(int j) => TpsPct[Math.Clamp(j, 0, EcuN - 1)] / 100f;
+    /// <summary>ตำแหน่งในแกน TPS (ทศนิยม) ของค่า TPS 0..1 : แกนถี่ที่ปลายล่างเพราะเครื่องใหญ่ ลิ้นเปิดนิดเดียวอากาศก็แทบเต็ม</summary>
+    public static float TpsToIndex(float tps)
+    {
+        float v = Math.Clamp(tps, 0f, 1f) * 100f;
+        int i = 0;
+        while (i < EcuN - 2 && v > TpsPct[i + 1]) i++;
+        return i + Math.Clamp((v - TpsPct[i]) / (TpsPct[i + 1] - TpsPct[i]), 0f, 1f);
+    }
 
     // ---------------- องศาจบฉีด (EOI) ----------------
     /// <summary>วาล์วไอดีเริ่มเปิดก่อนศูนย์ตายบนกี่องศา (ประมาณจากองศาแคม/มุมแคม)</summary>

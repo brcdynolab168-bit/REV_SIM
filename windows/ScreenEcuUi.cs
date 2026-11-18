@@ -109,7 +109,7 @@ public sealed partial class MainForm
         if (cellVal != null) for (int rr0 = 0; rr0 < EN; rr0++) for (int cc0 = 0; cc0 < EN; cc0++) { float vv = cellVal(cc0, rr0); fMin = MathF.Min(fMin, vv); fMax = MathF.Max(fMax, vv); }
         Txt(g, "TPS %", _fCap, Palette.Dim, LX + 4, hdrY + 2);
         for (int r = 0; r < EN; r++)
-            TxtC(g, (EngineModel.TpsAxis(r) * 100f).ToString("0"), _fCap, r >= sr0 && r <= sr1 ? Palette.Accent : Palette.Dim, gx + (r + 0.5f) * cw, hdrY + 10);
+            TxtC(g, (EngineModel.TpsAxis(r) * 100f).ToString("0.#"), _fCap, r >= sr0 && r <= sr1 ? Palette.Accent : Palette.Dim, gx + (r + 0.5f) * cw, hdrY + 10);
         for (int c = 0; c < EN; c++)
         {
             float y = gridY + c * cellH;
