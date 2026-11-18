@@ -25,13 +25,19 @@ export function newDesign(o = {}) {
     SprocketF: 14, SprocketR: 36, RiderKg: 65, Auto: 0,
     RampDeg: 13.5, RampOutDeg: 13.5, Rollers: 6, RollerG: 8.5, RollerG2: 8.5, GearF: 13, GearR: 40, FirstRed: 3.0,
     BikeKg: 107, CdA: 0.415, RimInch: 17, RimW: 1.4, TireW: 80, TireAsp: 90,
-    Inj: 0, EcuMs: null, EcuIgn: null,
+    Inj: 0, EcuMs: null, EcuEoi: null, EcuDwell: null, EcuIgn: null,
     SpringK: 20, Primary: 3.35, Gear1: 2.5, Gear2: 1.55, Gear3: 1.15, Gear4: 0.923, Gears: 4, Gear5: 0.8, Gear6: 0.72, Pipe: 0, Fuel: 1,
   }, o);
 }
 export const gearAt = (d, g) => d['Gear' + clamp(Math.round(g), 1, clamp(d.Gears, 4, 6))];
 export const EcuN = 20;
-export const InjDeadMs = 0.7;
+export const InjDeadMs = 0.7, DwellTau = 1.8;
+const pulseDeg = (pwMs, rpm) => { const cyc = 120000 / Math.max(rpm, 200); return Math.min(pwMs, cyc) / cyc * 720; };
+const sparkQ = (dwell, req) => (1 - Math.exp(-dwell / DwellTau)) / req;
+const dwellF = (dwell, rpm, req) => {
+  const sq = sparkQ(dwell, req), g = sq >= 1 ? 1 : Math.max(0.1, 1 - 2.4 * (1 - sq)), cyc = 120000 / Math.max(rpm, 200);
+  return g * (1 - 0.25 * clamp((dwell / cyc - 0.55) / 0.4, 0, 1));
+};
 export const ecuLoadAt = j => (j + 1) / EcuN;
 const StoichTab = [14.7, 14.7, 14.1, 14.6, 9.76, 6.45, 5.2], FuelDens = [0.74, 0.74, 0.75, 0.74, 0.78, 0.79, 0.85], BurnK = [0, 0, -0.5, 0, -2, -3, -4];
 const timingF = d => Math.max(0.15, 1 - (d > 0 ? 0.0013 : 0.0009) * d * d);
@@ -387,6 +393,35 @@ export class EngineModel {
     return a + (b - a) * fy;
   }
   TableMs(rpm, load) { const t = this.D.EcuMs; return t ? this._samp(t, (rpm - 1000) / (this.EcuRpmMax - 1000) * (EcuN - 1), load * EcuN - 1) : this.FactoryMs(rpm, load); }
+  // ---------------- MAP ----------------
+  /** แรงดันท่อไอดี (kPa สัมบูรณ์) จากโหลดอากาศ 0..1 */
+  MapKpa(load) { return 101.3 * (0.28 + 0.72 * clamp(load, 0, 1)); }
+  MapAtTps(rpm, tps) { return this.MapKpa(this.Load(tps, rpm)); }
+  /** แกนคันเร่งของตาราง MAP (สเกลลอการิทึม 0.4%..100%) */
+  static TpsAxis(j) { return 0.004 * Math.pow(250, j / 19); }
+  static TpsToIndex(tps) { return clamp(Math.log(Math.max(tps, 0.0041) / 0.004) / Math.log(250) * 19, 0, 19); }
+  // ---------------- องศาจบฉีด (EOI) ----------------
+  get IvoBtdc() { return this.D.Duration * 0.5 - this.D.Lsa + 12; }
+  FactoryEoi(rpm, load) {
+    let e = Math.max(this.IvoBtdc + 25, 330 - 15 * rpm / 1000);
+    e = Math.min(e, 700 - pulseDeg(this.FactoryMs(rpm, load), rpm));
+    return clamp(Math.round(e / 5) * 5, 60, 540);
+  }
+  _injF(rpm, eoi, pd) {
+    const open = clamp((this.IvoBtdc + 10 - eoi) / Math.max(pd, 20), 0, 1), hi = clamp((rpm - 6000) / 4000, 0, 1);
+    return 1 - 0.06 * open * (1 - 0.6 * hi) - 0.04 * clamp((eoi + pd - 720) / 90, 0, 1) - 0.012 * clamp((eoi - 360) / 180, 0, 1);
+  }
+  TableEoi(rpm, load) { const t = this.D.EcuEoi; return t ? this._samp(t, (rpm - 1000) / (this.EcuRpmMax - 1000) * (EcuN - 1), load * EcuN - 1) : this.FactoryEoi(rpm, load); }
+  // ---------------- ไทม์คอยล์ (dwell) ----------------
+  CoilReq(load, lam) { return clamp(0.52 + 0.26 * load + 0.03 * (this.CrEff - 10) + 0.35 * clamp(lam - 1, 0, 0.4), 0.4, 1); }
+  FactoryDwell(rpm, load) { const req = this.CoilReq(load, this.LambdaBase(rpm, load)); return Math.round(-DwellTau * Math.log(1 - Math.min(0.96, req * 1.08)) * 20) / 20; }
+  TableDwell(rpm, load) { const t = this.D.EcuDwell; return t ? this._samp(t, (rpm - 1000) / (this.EcuRpmMax - 1000) * (EcuN - 1), load * EcuN - 1) : this.FactoryDwell(rpm, load); }
+  CellEoi(c, r) { const t = this.D.EcuEoi; return t ? t[r * EcuN + c] : this.FactoryEoi(this.EcuRpmAt(c), ecuLoadAt(r)); }
+  CellDwell(c, r) { const t = this.D.EcuDwell; return t ? t[r * EcuN + c] : this.FactoryDwell(this.EcuRpmAt(c), ecuLoadAt(r)); }
+  FactoryEoiTable() { const t = new Array(EcuN * EcuN); for (let r = 0; r < EcuN; r++) for (let c = 0; c < EcuN; c++) t[r * EcuN + c] = this.FactoryEoi(this.EcuRpmAt(c), ecuLoadAt(r)); return t; }
+  FactoryDwellTable() { const t = new Array(EcuN * EcuN); for (let r = 0; r < EcuN; r++) for (let c = 0; c < EcuN; c++) t[r * EcuN + c] = this.FactoryDwell(this.EcuRpmAt(c), ecuLoadAt(r)); return t; }
+  OpenValveFrac(c, r) { return clamp((this.IvoBtdc + 10 - this.CellEoi(c, r)) / Math.max(pulseDeg(this.CellMs(c, r), this.EcuRpmAt(c)), 20), 0, 1); }
+  CoilDuty(c, r) { return this.CellDwell(c, r) / (120000 / Math.max(this.EcuRpmAt(c), 200)); }
   TableAdv(rpm, load) { const t = this.D.EcuIgn; return t ? this._samp(t, (rpm - 1000) / (this.EcuRpmMax - 1000) * (EcuN - 1), load * EcuN - 1) : this.StockAdv(rpm, load); }
   /** ผลของตารางจูนกล่อง ณ รอบ/โหลดนั้น (คืนออบเจ็กต์ที่ใช้ซ้ำ) */
   EcuAt(rpm, load, out = this._ecuTmp || (this._ecuTmp = {})) {
@@ -399,9 +434,12 @@ export class EngineModel {
     let mult = timingF(dlt) / timingF(-4) * lambdaF(lam) / lambdaF(lamB);
     const mf = lam > 1.35 ? clamp((1.5 - lam) / 0.15, 0, 1) : lam < 0.6 ? clamp((lam - 0.45) / 0.15, 0, 1) : 1;
     mult *= Math.max(0.1, mf);
+    const eoi = this.TableEoi(rpm, load), fInj = this._injF(rpm, eoi, pulseDeg(pw, rpm)) / this._injF(rpm, this.FactoryEoi(rpm, load), pulseDeg(this.FactoryMs(rpm, load), rpm));
+    const dwell = this.TableDwell(rpm, load), reqA = this.CoilReq(load, lam), reqB = this.CoilReq(load, lamB), spark = sparkQ(dwell, reqA);
+    mult *= fInj * dwellF(dwell, rpm, reqA) / dwellF(this.FactoryDwell(rpm, load), rpm, reqB);
     out.Mult = mult; out.KnockShift = 1.8 * (lamB - lam) - 0.11 * (adv - this.StockAdv(rpm, load));
-    out.Afr = afr; out.Lambda = lam; out.Adv = adv; out.Mbt = mbt; out.Duty = duty; out.PulseMs = pw;
-    out.Egt = 330 + 380 * load + 12 * rpm / 1000 + 300 * clamp((lam - 0.8) / 0.25, 0, 1) - 150 * clamp((lam - 1.1) / 0.3, 0, 1) + 9 * Math.max(0, mbt - adv);
+    out.Afr = afr; out.Lambda = lam; out.Adv = adv; out.Mbt = mbt; out.Duty = duty; out.PulseMs = pw; out.Eoi = eoi; out.DwellMs = dwell; out.Spark = spark;
+    out.Egt = 330 + 380 * load + 12 * rpm / 1000 + 300 * clamp((lam - 0.8) / 0.25, 0, 1) - 150 * clamp((lam - 1.1) / 0.3, 0, 1) + 9 * Math.max(0, mbt - adv) + 200 * Math.max(0, 1 - spark);
     return out;
   }
   CellMs(c, r) { const t = this.D.EcuMs; return t ? t[r * EcuN + c] : this.FactoryMs(this.EcuRpmAt(c), ecuLoadAt(r)); }

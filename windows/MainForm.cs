@@ -324,8 +324,8 @@ public sealed partial class MainForm : Form
         bool starter = false;
         // เครื่องจูนสด: ติดเครื่องที่กำลังออกแบบ (แบบร่าง) บนแท่น เกียร์ว่าง ในแท็บจูนกล่อง
         bool bench = _benchOn && _page == Page.Garage && IsEcuTab && !_advisor;
-        if (bench && (!_benchApplied || _benchDirty)) { _eng.Assemble(_draft); _benchApplied = true; _benchDirty = false; }
-        else if (!bench && _benchApplied) { _eng.Assemble(_save.Design); _benchApplied = false; }
+        if (bench && (!_benchApplied || _benchDirty)) { if (!_benchApplied) _gearSel = 0; _eng.Assemble(_draft); _benchApplied = true; _benchDirty = false; }
+        else if (!bench && _benchApplied) { _eng.Assemble(_save.Design); _benchApplied = false; _gearSel = 0; }
         if ((_page == Page.Drive && !_showDyno) || bench)
         {
             // X/Z = ค่อย ๆ บิดคันเร่ง (ไม่ใช่ระดับตายตัว): X หยุดที่ต่ำกว่ารอบตัดไม่ตัด, Z ไปจนเกือบ/แตะรอบตัดเบา ๆ, W = เต็ม
@@ -345,22 +345,21 @@ public sealed partial class MainForm : Form
             starter = Down(Keys.S) || _mouseStarter;
             if (starter && Down(Keys.S)) _eng.Ignition = true;
             if (_autoDrive && _page == Page.Drive) AutopilotStep(dt, ref thr, ref brake, ref starter);
-            if (bench) brake = 0f;
         }
         else if (_autoDrive) { _autoDrive = false; }
         _eng.ThrottleInput = thr;
         _eng.BrakeInput = brake;
         _eng.StarterHeld = starter;
         bool shiftHeld = Down(Keys.ShiftKey) || Down(Keys.LShiftKey) || Down(Keys.RShiftKey);
-        _eng.ClutchInput = !bench && _page == Page.Drive && !_showDyno && (shiftHeld || _mouseClutch || _clock.Elapsed.TotalSeconds < _apClutchUntil) ? 1f : 0f;
-        _eng.GearInput = bench ? 0 : _gearSel;
+        _eng.ClutchInput = ((_page == Page.Drive && !_showDyno) || bench) && (shiftHeld || _mouseClutch || _clock.Elapsed.TotalSeconds < _apClutchUntil) ? 1f : 0f;
+        _eng.GearInput = _gearSel;
         _eng.SlopePct = _slope;
 
         if (dt > 0f) { _rpmRate += ((_eng.Rpm - _lastRpmG) / dt - _rpmRate) * 0.3f; _lastRpmG = _eng.Rpm; }
         float rpm = _eng.Rpm;
         _needleRpm += (rpm - _needleRpm) * Math.Min(1f, dt * 25f);
-        if (rpm > _peakRpm) _peakRpm = rpm;
-        if (_peakRpm > _cur.PeakRpm) _cur.PeakRpm = _peakRpm;
+        if (!bench && rpm > _peakRpm) _peakRpm = rpm;       // ขณะจูนสด ไม่นับเป็นสถิติ
+        if (!bench && _peakRpm > _cur.PeakRpm) _cur.PeakRpm = _peakRpm;
 
         // ผลไดโนเสร็จ
         if (_eng.DynoVersion != _dynoVersionSeen)
@@ -369,7 +368,7 @@ public sealed partial class MainForm : Form
             FinishDyno();
         }
 
-        RoadTests(now);
+        if (!bench) RoadTests(now);
         _frame++;
         if (_page == Page.Drive || _showDyno || bench || _frame % 3 == 0) Invalidate();
     }
