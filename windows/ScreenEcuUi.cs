@@ -4,6 +4,7 @@ namespace RevGame;
 public sealed partial class MainForm
 {
     private bool _benchOn, _benchApplied, _benchDirty, _showEcuHelp;
+    private int _liveTab;                                  // 0 = ข้อมูลสด, 1 = กราฟก่อน/หลัง (ในการ์ดเครื่องจูนสด)
     private readonly List<PointF> _benchTrail = new();
 
     private static readonly (string Title, string Body)[] EcuHelp =
@@ -106,7 +107,7 @@ public sealed partial class MainForm
         if (cellVal != null) for (int rr0 = 0; rr0 < EN; rr0++) for (int cc0 = 0; cc0 < EN; cc0++) { float vv = cellVal(cc0, rr0); fMin = MathF.Min(fMin, vv); fMax = MathF.Max(fMax, vv); }
         Txt(g, _ecuMode == 5 ? "TPS %" : "โหลด→", _fCap, Palette.Dim, LX + 4, hdrY + 2);
         for (int r = 0; r < EN; r++)
-            TxtC(g, _ecuMode == 5 ? (EngineModel.TpsAxis(r) * 100f).ToString(EngineModel.TpsAxis(r) < 0.1f ? "0.0" : "0") : $"{(r + 1) * 5}%", _fCap, r >= sr0 && r <= sr1 ? Palette.Accent : Palette.Dim, gx + (r + 0.5f) * cw, hdrY + 10);
+            TxtC(g, _ecuMode == 5 ? (EngineModel.TpsAxis(r) * 100f).ToString("0") : $"{(r + 1) * 5}%", _fCap, r >= sr0 && r <= sr1 ? Palette.Accent : Palette.Dim, gx + (r + 0.5f) * cw, hdrY + 10);
         for (int c = 0; c < EN; c++)
         {
             float y = gridY + c * cellH;
@@ -199,7 +200,7 @@ public sealed partial class MainForm
             : _ecuMode == 1 ? "ฟ้า = จบฉีดช้า  •  แดง = จบฉีดเร็ว  •  มุมดำ = ฉีดตอนวาล์วเปิด"
             : _ecuMode == 2 ? "มุมขวาบน: แดง = แก่เกิน MBT  •  ขาว = ใกล้  •  ดำ = ไฟอ่อน"
             : _ecuMode == 3 ? "มุมแดง = ประกายอ่อน (ชาร์จไม่พอ)  •  มุมดำ = คอยล์ร้อน"
-            : _ecuMode == 5 ? "แกนคันเร่งแบบลอการิทึม  •  ฟ้า = สุญญากาศลึก  •  แดง = ใกล้บรรยากาศ"
+            : _ecuMode == 5 ? "แกน TPS เริ่มที่ 0%  •  ฟ้า = สุญญากาศลึก  •  แดง = ใกล้บรรยากาศ"
             : "ฟ้า = หนา  •  เขียว = แรงสุด  •  เหลือง = บาง  •  แดง = บางเกิน";
         TxtR(g, legend, _fCap, Palette.Dim, gx + EN * cw, ly);
 
@@ -227,31 +228,37 @@ public sealed partial class MainForm
 
         // ---------- ขวา: เครื่องจูนสด ----------
         float ix = RX + 28f, iw = RW - 56f;
-        PanelBox(g, new RectangleF(RX, 176, RW, 564), "เครื่องจูนสด  (ติดเครื่องจริงบนแท่น)");
         if (!bench)
         {
-            g.DrawString("เปิดโหมดนี้เพื่อติดเครื่องที่กำลังออกแบบอยู่บนแท่น แล้วสตาร์ท เร่งเครื่อง เข้าเกียร์ ลองขับ ฟังเสียง และดูว่าจุดทำงานวิ่งผ่านช่องไหนของตาราง\n\nค่าที่แก้ในตารางมีผลทันที ออกจากแท็บนี้แล้วเครื่องที่ติดตั้งจริงจะกลับมาตามเดิม และสถิติจะไม่ถูกบันทึกขณะจูน",
+            PanelBox(g, new RectangleF(RX, 176, RW, 564), "เครื่องจูนสด  (ติดเครื่องจริงบนแท่น)");
+            g.DrawString("เปิดโหมดนี้เพื่อติดเครื่องที่กำลังออกแบบอยู่บนแท่น แล้วสตาร์ท เร่งเครื่อง เข้าเกียร์ ลองขับ ฟังเสียง และดูข้อมูลสดของเครื่อง (MAP, AFR, ฉีด, จุดระเบิด, คอยล์, EGT ฯลฯ) พร้อมจุดทำงานบนตาราง\n\nค่าที่แก้ในตารางมีผลทันที ออกจากแท็บนี้แล้วเครื่องที่ติดตั้งจริงจะกลับมาตามเดิม และสถิติจะไม่ถูกบันทึกขณะจูน",
                 _fSm, Br(Palette.Dim), new RectangleF(ix, 236, iw, 230));
             Btn(g, new RectangleF(ix, 500, iw, 68), "เปิดเครื่องจูนสด", false, Palette.Green, () => { _benchOn = true; _benchDirty = true; _benchTrail.Clear(); }, _fMd);
             Txt(g, "ปุ่มลัด:   S สตาร์ท (ค้าง)   W เร่งเต็ม   K จุดระเบิด   E/Q เปลี่ยนเกียร์", _fCap, Palette.Dim, ix, 596);
+            DrawCompareChart(g, new RectangleF(RX, 756, RW, 284), m, _draft.Limiter);
         }
         else
         {
             var ec = _eng.Ecu;
+            var em = _eng.Model;
+            float rpmNow = _eng.Rpm, loadNow = _eng.LoadNow;
+            PanelBox(g, new RectangleF(RX, 176, RW, 864), "เครื่องจูนสด");
+            Btn(g, new RectangleF(RX + 214, 180, 124, 32), "ข้อมูลสด", _liveTab == 0, Palette.Green, () => _liveTab = 0, _fCap);
+            Btn(g, new RectangleF(RX + 344, 180, 124, 32), "กราฟ ก่อน/หลัง", _liveTab == 1, Palette.Blue, () => _liveTab = 1, _fCap);
+            Btn(g, new RectangleF(RX + RW - 28 - 100, 180, 100, 32), "ปิดจูนสด", false, Palette.Red, () => { _benchOn = false; _mouseThrottle = false; _mouseStarter = false; }, _fCap);
             string st = !_eng.Ignition ? "ปิดจุดระเบิด" : _eng.Running ? "ติดเครื่อง" : "ดับ";
-            TxtR(g, st, _fSm, _eng.Running ? Palette.Green : Palette.Dim, RX + RW - 28, 226);
-            Btn(g, new RectangleF(RX + RW - 28 - 128, 180, 128, 32), "ปิดจูนสด", false, Palette.Red, () => { _benchOn = false; _mouseThrottle = false; _mouseStarter = false; }, _fCap);
+            TxtR(g, st, _fSm, _eng.Running ? Palette.Green : Palette.Dim, RX + RW - 28, 228);
 
             // รอบ + ความเร็ว
-            Txt(g, $"{_eng.Rpm:N0}", _fNumL, Palette.Accent, ix, 240);
-            Txt(g, "รอบเครื่อง rpm", _fXs, Palette.Dim, ix + 2, 322);
-            Txt(g, $"{_eng.SpeedKmh:0}", _fNumL, Palette.Text, ix + 330, 240);
+            Txt(g, $"{rpmNow:N0}", _fNumL, Palette.Accent, ix, 238);
+            Txt(g, "รอบเครื่อง rpm", _fXs, Palette.Dim, ix + 2, 318);
+            Txt(g, $"{_eng.SpeedKmh:0}", _fNumL, Palette.Text, ix + 330, 238);
             string gearTxt = _eng.IsAuto ? $"ออโต้  (สายพาน x{_eng.CvtRatio:0.00})" : _eng.Gear == 0 ? "เกียร์ว่าง (N)" : $"เกียร์ {_eng.Gear}";
-            Txt(g, "กม./ชม.   " + gearTxt, _fXs, Palette.Dim, ix + 332, 322);
+            Txt(g, "กม./ชม.   " + gearTxt, _fXs, Palette.Dim, ix + 332, 318);
 
             // คันเร่ง
-            Txt(g, $"คันเร่ง {_eng.Throttle * 100f:0}%   MAP {m.MapKpa(_eng.LoadNow):0} kPa   โหลด {_eng.LoadNow * 100f:0}%   แรงบิด x{ec.Mult:0.000}", _fXs, Palette.Dim, ix, 356);
-            var tb = new RectangleF(ix, 388, iw, 26);
+            Txt(g, $"คันเร่ง {_eng.Throttle * 100f:0}%", _fXs, Palette.Dim, ix, 350);
+            var tb = new RectangleF(ix + 130, 354, iw - 130, 24);
             FillRR(g, tb, 3, Color.FromArgb(14, 17, 21));
             g.FillRectangle(Br(Palette.Accent), tb.X, tb.Y, tb.Width * Math.Clamp(_eng.Throttle, 0f, 1f), tb.Height);
             DrawRR(g, tb, 3, Palette.Border, 1f);
@@ -260,13 +267,11 @@ public sealed partial class MainForm
 
             // ปุ่มควบคุม
             float cwd = (iw - 20) / 3f;
-            Btn(g, new RectangleF(ix, 432, cwd, 44), "S สตาร์ท (ค้าง)", _mouseStarter || Down(Keys.S), Palette.Green, null, _fXs);
-            AddHit(new RectangleF(ix, 432, cwd, 44), down: _ => { _eng.Ignition = true; _mouseStarter = true; }, up: () => _mouseStarter = false);
-            Btn(g, new RectangleF(ix + cwd + 10, 432, cwd, 44), "W เร่งเต็ม (ค้าง)", Down(Keys.W), Palette.Accent, null, _fXs);
-            AddHit(new RectangleF(ix + cwd + 10, 432, cwd, 44), down: _ => { _mouseThrottle = true; _mouseThrottleValue = 1f; }, up: () => _mouseThrottle = false);
-            Btn(g, new RectangleF(ix + 2 * (cwd + 10), 432, cwd, 44), _eng.Ignition ? "K ปิดจุดระเบิด" : "K เปิดจุดระเบิด", !_eng.Ignition, Palette.Red, () => _eng.Ignition = !_eng.Ignition, _fXs);
-
-            // เกียร์ (รถเกียร์ธรรมดา)
+            Btn(g, new RectangleF(ix, 396, cwd, 42), "S สตาร์ท (ค้าง)", _mouseStarter || Down(Keys.S), Palette.Green, null, _fXs);
+            AddHit(new RectangleF(ix, 396, cwd, 42), down: _ => { _eng.Ignition = true; _mouseStarter = true; }, up: () => _mouseStarter = false);
+            Btn(g, new RectangleF(ix + cwd + 10, 396, cwd, 42), "W เร่งเต็ม (ค้าง)", Down(Keys.W), Palette.Accent, null, _fXs);
+            AddHit(new RectangleF(ix + cwd + 10, 396, cwd, 42), down: _ => { _mouseThrottle = true; _mouseThrottleValue = 1f; }, up: () => _mouseThrottle = false);
+            Btn(g, new RectangleF(ix + 2 * (cwd + 10), 396, cwd, 42), _eng.Ignition ? "K ปิดจุดระเบิด" : "K เปิดจุดระเบิด", !_eng.Ignition, Palette.Red, () => _eng.Ignition = !_eng.Ignition, _fXs);
             if (!_eng.IsAuto)
             {
                 int ng = m.D.Gears;
@@ -274,26 +279,65 @@ public sealed partial class MainForm
                 for (int i = 0; i <= ng; i++)
                 {
                     int gi = i;
-                    Btn(g, new RectangleF(ix + i * gsp, 490, gsp - 8, 40), i == 0 ? "N" : i.ToString(), _gearSel == i, Palette.Accent, () => SelectGear(gi), _fSm);
+                    Btn(g, new RectangleF(ix + i * gsp, 450, gsp - 8, 38), i == 0 ? "N" : i.ToString(), _gearSel == i, Palette.Accent, () => SelectGear(gi), _fSm);
                 }
             }
-            else Txt(g, "รถออโต้ CVT: บิดคันเร่งแล้วออกตัวได้เลย", _fXs, Palette.Dim, ix, 500);
+            else Txt(g, "รถออโต้ CVT: บิดคันเร่งแล้วออกตัวได้เลย", _fXs, Palette.Dim, ix, 458);
+            g.DrawLine(Pn(Palette.Border, 1f), ix, 506, ix + iw, 506);
 
-            // แถบค่าสด
-            float by0 = 550f, bw = iw, rowH = 38f;
-            float lam = ec.Lambda;
-            Color afrCol = lam > 1.12f ? Palette.Red : lam < 0.7f ? Palette.Blue : lam > 0.97f ? Palette.Yellow : Palette.Green;
-            DrawLiveBar(g, ix, by0, bw, "AFR (อากาศ:น้ำมัน)", $"{ec.Afr:0.0}  (λ {lam:0.00})", (lam - 0.6f) / 0.9f, afrCol, (0.89f - 0.6f) / 0.9f);
-            float dlt = ec.Adv - ec.Mbt;
-            Color advCol = dlt > 1.5f ? Palette.Red : dlt < -8f ? Palette.Blue : Palette.Green;
-            DrawLiveBar(g, ix, by0 + rowH, bw, "จุดระเบิด (ขีดขาว = MBT)", $"{ec.Adv:0.0}°  ({(dlt >= 0 ? "แก่" : "อ่อน")} {Math.Abs(dlt):0.0}°)", ec.Adv / 50f, advCol, ec.Mbt / 50f);
-            DrawLiveBar(g, ix, by0 + 2 * rowH, bw, "หัวฉีด (Duty)", $"{ec.Duty * 100f:0}%{(ec.Duty > 1f ? "  เต็ม!" : "")}", ec.Duty, ec.Duty > 1f ? Palette.Red : ec.Duty > 0.85f ? Palette.Yellow : Palette.Green);
-            DrawLiveBar(g, ix, by0 + 3 * rowH, bw, "EGT (ก๊าซไอเสีย)", $"{ec.Egt:0} °C", (ec.Egt - 400f) / 800f, ec.Egt > 1050f ? Palette.Red : ec.Egt > 950f ? Palette.Yellow : Palette.Green, (900f - 400f) / 800f);
-            DrawLiveBar(g, ix, by0 + 4 * rowH, bw, "น็อก", $"{_eng.KnockNow * 100f:0}%", _eng.KnockNow * 5f, _eng.KnockNow > 0.05f ? Palette.Red : Palette.Green);
+            if (_liveTab == 1)
+            {
+                DrawCompareChart(g, new RectangleF(RX + 16, 520, RW - 32, 504), m, _draft.Limiter);
+            }
+            else
+            {
+                // ----- แถบค่าสำคัญ -----
+                float lam = ec.Lambda, dlt = ec.Adv - ec.Mbt;
+                Color afrCol = lam > 1.12f ? Palette.Red : lam < 0.7f ? Palette.Blue : lam > 0.97f ? Palette.Yellow : Palette.Green;
+                Color advCol = dlt > 1.5f ? Palette.Red : dlt < -8f ? Palette.Blue : Palette.Green;
+                DrawLiveBar(g, ix, 518, iw, "AFR (อากาศ:น้ำมัน)", $"{ec.Afr:0.0}  (λ {lam:0.00})", (lam - 0.6f) / 0.9f, afrCol, (0.89f - 0.6f) / 0.9f);
+                DrawLiveBar(g, ix, 560, iw, "จุดระเบิด (ขีดขาว = MBT)", $"{ec.Adv:0.0}°  ({(dlt >= 0 ? "แก่" : "อ่อน")} {Math.Abs(dlt):0.0}° จาก MBT)", ec.Adv / 50f, advCol, ec.Mbt / 50f);
+                DrawLiveBar(g, ix, 602, iw, "EGT (ก๊าซไอเสีย)", $"{ec.Egt:0} °C", (ec.Egt - 400f) / 800f, ec.Egt > 1050f ? Palette.Red : ec.Egt > 950f ? Palette.Yellow : Palette.Green, (900f - 400f) / 800f);
+
+                // ----- ค่าสดอื่น ๆ (ตาราง 3 คอลัมน์) -----
+                float cyc = 120000f / MathF.Max(rpmNow, 200f);
+                float airCyc = em.AirPerCycleG(rpmNow, loadNow);
+                float fuelCyc = MathF.Max(0f, MathF.Min(ec.PulseMs, cyc) - EngineModel.InjDeadMs) * em.InjFlowGpMs;
+                float airGs = airCyc * rpmNow / 120f, fuelGs = fuelCyc * rpmNow / 120f;
+                float tq = _eng.Running ? em.TorqueInd(rpmNow) * loadNow * ec.Mult * (1f - 0.5f * _eng.KnockNow) - em.Friction(rpmNow) : 0f;
+                float kw = tq * rpmNow * 2f * MathF.PI / 60000f;
+                float bsfc = kw > 0.4f ? fuelGs * 3600f / kw : 0f;
+                float lph = fuelGs / em.FuelDensity * 3.6f;
+                (string L, string V, Color C)[] cells =
+                {
+                    ("MAP (แรงดันท่อไอดี)", $"{em.MapKpa(loadNow):0} kPa", Palette.Text),
+                    ("โหลดอากาศ", $"{loadNow * 100f:0} %", Palette.Text),
+                    ("VE (หายใจ)", $"{em.VeAbs(rpmNow) * 100f:0} %", Palette.Text),
+                    ("แรงบิดขณะนี้", $"{tq:0.0} N·m", Palette.Blue),
+                    ("กำลังขณะนี้", $"{EngineModel.Hp(tq, rpmNow):0.0} HP", Palette.Accent),
+                    ("ตัวคูณจากตาราง", $"x{ec.Mult:0.000}", ec.Mult < 0.97f ? Palette.Red : ec.Mult > 1.005f ? Palette.Green : Palette.Text),
+                    ("เวลาฉีด", $"{ec.PulseMs:0.00} ms", Palette.Text),
+                    ("หัวฉีดเปิด (Duty)", $"{ec.Duty * 100f:0} %" + (ec.Duty > 1f ? " เต็ม!" : ""), ec.Duty > 1f ? Palette.Red : ec.Duty > 0.85f ? Palette.Yellow : Palette.Text),
+                    ("จบฉีด (EOI)", $"{ec.Eoi:0} °", Palette.Text),
+                    ("อากาศเข้า", $"{airGs:0.0} g/s", Palette.Text),
+                    ("น้ำมัน", $"{lph:0.0} ล./ชม.", Palette.Text),
+                    ("BSFC", bsfc > 0f ? $"{bsfc:0} g/kWh" : "-", bsfc > 0f && bsfc > 380f ? Palette.Yellow : Palette.Text),
+                    ("จุดระเบิด", $"{ec.Adv:0.0} °", advCol),
+                    ("MBT", $"{ec.Mbt:0.0} °", Palette.Text),
+                    ("ไทม์คอยล์", $"{ec.DwellMs:0.00} ms", Palette.Text),
+                    ("ประกายไฟ", $"{ec.Spark * 100f:0} %", ec.Spark < 0.95f ? Palette.Red : Palette.Green),
+                    ("ความเร็วลูกสูบ", $"{em.PistonSpeed(rpmNow):0.0} ม./วิ", em.PistonSpeed(rpmNow) > 22f ? Palette.Yellow : Palette.Text),
+                    ("น็อก", $"{_eng.KnockNow * 100f:0} %", _eng.KnockNow > 0.05f ? Palette.Red : Palette.Green),
+                };
+                float gx0 = ix, gy0 = 662f, cwid = iw / 3f, rh = 56f;
+                for (int i = 0; i < cells.Length; i++)
+                {
+                    float cx = gx0 + (i % 3) * cwid, cy = gy0 + (i / 3) * rh;
+                    Txt(g, cells[i].L, _fCap, Palette.Dim, cx, cy);
+                    Txt(g, cells[i].V, _fSm, cells[i].C, cx, cy + 20);
+                }
+            }
         }
-
-        // ---------- ขวาล่าง: กราฟ ก่อน/หลัง ----------
-        DrawCompareChart(g, new RectangleF(RX, 756, RW, 284), m, _draft.Limiter);
 
         if (_showEcuHelp) DrawEcuHelp(g);
     }

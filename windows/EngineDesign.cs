@@ -681,6 +681,9 @@ public sealed class EngineModel
     private static float EcuY(float load) => load * EcuN - 1f;
 
     /// <summary>มวลอากาศต่อ 1 จังหวะดูด (กรัม) = VE x ซีซี x ความหนาแน่นอากาศ x โหลด</summary>
+    public float FuelDensity => FuelDens[FuelIdx];
+    /// <summary>VE สัมบูรณ์ที่รอบนั้น (1.0 = เติมเต็มกระบอก)</summary>
+    public float VeAbs(float rpm) => Lerp(_veA, rpm);
     public float AirPerCycleG(float rpm, float load) => Lerp(_veA, rpm) * (Cc / 1000f) * 1.18f * load;
     /// <summary>เวลาฉีดโรงงาน (ms) ที่ให้ AFR ตามแมพโรงงาน: dead time + น้ำมัน / อัตราไหลหัวฉีด</summary>
     public float FactoryMs(float rpm, float load) => InjDeadMs + AirPerCycleG(rpm, load) / (Stoich * LambdaBase(rpm, load)) / InjFlowGpMs;
@@ -692,9 +695,9 @@ public sealed class EngineModel
     public float MapKpa(float load) => 101.3f * (0.28f + 0.72f * Math.Clamp(load, 0f, 1f));
     /// <summary>MAP ที่รอบและตำแหน่งคันเร่ง (0..1) ที่กำหนด</summary>
     public float MapAtTps(float rpm, float tps) => MapKpa(Load(tps, rpm));
-    /// <summary>แกนคันเร่งของตาราง MAP (สเกลลอการิทึม 0.4%..100% เพราะลิ้นเร่งอิ่มตัวเร็วที่เปิดน้อย)</summary>
-    public static float TpsAxis(int j) => 0.004f * MathF.Pow(250f, j / 19f);
-    public static float TpsToIndex(float tps) => Math.Clamp(MathF.Log(MathF.Max(tps, 0.0041f) / 0.004f) / MathF.Log(250f) * 19f, 0f, 19f);
+    /// <summary>แกนคันเร่ง TPS ของตาราง MAP: เริ่มที่ 0% (ลิ้นปิด) ถึง 100% เรียงเท่า ๆ กัน 20 ช่อง</summary>
+    public static float TpsAxis(int j) => j / 19f;
+    public static float TpsToIndex(float tps) => Math.Clamp(tps * 19f, 0f, 19f);
 
     // ---------------- องศาจบฉีด (EOI) ----------------
     /// <summary>วาล์วไอดีเริ่มเปิดก่อนศูนย์ตายบนกี่องศา (ประมาณจากองศาแคม/มุมแคม)</summary>

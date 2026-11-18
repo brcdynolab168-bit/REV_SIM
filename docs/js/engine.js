@@ -368,6 +368,8 @@ export class EngineModel {
   /** หัวฉีดตามรถ: เปิดราว 78% ที่อากาศไหลสูงสุด (หลักการเลือกหัวฉีดจริง เผื่อไว้ ~20%) */
   get InjCapCc() { return this.D.Inj > 0 ? this.D.Inj : this._injAuto; }
   get InjFlowGpMs() { return this.InjCapCc * FuelDens[this._fi()] / 60000; }
+  get FuelDensity() { return FuelDens[this._fi()]; }
+  VeAbs(rpm) { return lerpT(this._veA, rpm); }
   AirPerCycleG(rpm, load) { return lerpT(this._veA, rpm) * (this.Cc / 1000) * 1.18 * load; }
   /** เวลาฉีดโรงงาน (ms) = dead time + น้ำมันตามแมพโรงงาน / อัตราไหลหัวฉีด */
   FactoryMs(rpm, load) { return InjDeadMs + this.AirPerCycleG(rpm, load) / (this.Stoich * this.LambdaBase(rpm, load)) / this.InjFlowGpMs; }
@@ -397,9 +399,9 @@ export class EngineModel {
   /** แรงดันท่อไอดี (kPa สัมบูรณ์) จากโหลดอากาศ 0..1 */
   MapKpa(load) { return 101.3 * (0.28 + 0.72 * clamp(load, 0, 1)); }
   MapAtTps(rpm, tps) { return this.MapKpa(this.Load(tps, rpm)); }
-  /** แกนคันเร่งของตาราง MAP (สเกลลอการิทึม 0.4%..100%) */
-  static TpsAxis(j) { return 0.004 * Math.pow(250, j / 19); }
-  static TpsToIndex(tps) { return clamp(Math.log(Math.max(tps, 0.0041) / 0.004) / Math.log(250) * 19, 0, 19); }
+  /** แกนคันเร่ง TPS ของตาราง MAP: เริ่มที่ 0% (ลิ้นปิด) ถึง 100% เรียงเท่า ๆ กัน 20 ช่อง */
+  static TpsAxis(j) { return j / 19; }
+  static TpsToIndex(tps) { return clamp(tps * 19, 0, 19); }
   // ---------------- องศาจบฉีด (EOI) ----------------
   get IvoBtdc() { return this.D.Duration * 0.5 - this.D.Lsa + 12; }
   FactoryEoi(rpm, load) {

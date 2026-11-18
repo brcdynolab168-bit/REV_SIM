@@ -47,7 +47,7 @@ export class EngineSim {
     this._roadReset = false; this._dynoRequest = false;
     // สถานะ
     this.rpm = 0; this.thr = 0; this.cut = false; this.softK = 0; this.speed = 0; this.dist = 0; this.gear = 0;
-    this.clutchLock = 0; this.cvtS = 0; this.load = 0; this.knock = 0; this.ecuMult = 1; this.ecuAfr = 14.7; this.ecuAdv = 15; this.ecuDuty = 0; this.ecuEgt = 0; this.ecuMbt = 15;
+    this.clutchLock = 0; this.cvtS = 0; this.load = 0; this.knock = 0; this.ecuMult = 1; this.ecuAfr = 14.7; this.ecuAdv = 15; this.ecuDuty = 0; this.ecuEgt = 0; this.ecuMbt = 15; this.ecuPw = 0; this.ecuEoi = 0; this.ecuDwell = 0; this.ecuSpark = 1;
     this.dynoPhase = 0; this.dynoVersion = 0; this.dynoFailed = false; this.dynoTq = new Float32Array(DynoBins).fill(NaN);
     this._dynoSum = new Float64Array(DynoBins); this._dynoCnt = new Int32Array(DynoBins); this._dynoRpm = 0;
     this._blockPos = 0; this._idleInt = 0; this._huntPh = 0; this._huntRate = 0; this._idleWobble = 0;
@@ -103,7 +103,7 @@ export class EngineSim {
     const eff = idleThr + thr * (1 - idleThr);
     this.load = m.Load(eff, rpm);
     const ecu = m.EcuAt(rpm, this.load);
-    this.ecuMult = ecu.Mult; this.ecuAfr = ecu.Afr; this.ecuAdv = ecu.Adv; this.ecuDuty = ecu.Duty; this.ecuEgt = ecu.Egt; this.ecuMbt = ecu.Mbt;
+    this.ecuMult = ecu.Mult; this.ecuAfr = ecu.Afr; this.ecuAdv = ecu.Adv; this.ecuDuty = ecu.Duty; this.ecuEgt = ecu.Egt; this.ecuMbt = ecu.Mbt; this.ecuPw = ecu.PulseMs; this.ecuEoi = ecu.Eoi; this.ecuDwell = ecu.DwellMs; this.ecuSpark = ecu.Spark;
     this.knock = m.Knock(rpm, this.load, ecu.KnockShift);
 
     const D = m.D;
