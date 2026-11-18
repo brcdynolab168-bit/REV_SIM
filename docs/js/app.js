@@ -727,8 +727,8 @@ function drawGarageStats() {
     const v = hold < m.PeakPsRpm * 0.93 ? 'ถือรอบต่ำกว่าพีค' : hold > m.PeakPsRpm * 1.08 ? 'ถือรอบเกินพีค' : 'ใกล้รอบพีค (ดี)';
     line(`CVT ถือ ~${fmtN(hold)} rpm: ${v}  •  ท็อป ${f0(Veh.topSpeedAuto(m).kmh)} กม./ชม.`, ok ? 1 : 2);
   } else {
-    const sp = Array.from({ length: d.Gears }, (_, i) => (i === 0 ? 'เกียร์ 1 ' : `${i + 1} `) + f0(d.Limiter * 2 * Math.PI / 60 * Veh.wheelRadius(d) / Veh.total(d, i + 1) * 3.6));
-    line(`ความเร็วที่รอบตัด: ${sp.join('  •  ')} กม./ชม.`, 0);
+    const sp = Array.from({ length: d.Gears }, (_, i) => f0(d.Limiter * 2 * Math.PI / 60 * Veh.wheelRadius(d) / Veh.total(d, i + 1) * 3.6));
+    line(`ที่รอบตัด (กม./ชม.) เกียร์ 1-${d.Gears}: ${sp.join(' / ')}`, 0);
     const top = Veh.topSpeed(m, d.Gears), v = top.rpm >= d.Limiter - 150 ? '  รอบตัดมาก่อน ปลายสั้น' : top.rpm < m.PeakPsRpm * 0.88 ? '  ปลายยาว ลากไม่ถึงพีค' : '';
     line(`ท็อปเกียร์ ${d.Gears}: ${f0(top.kmh)} กม./ชม. @ ${fmtN(top.rpm)} rpm${v}`, v ? 2 : 1);
   }

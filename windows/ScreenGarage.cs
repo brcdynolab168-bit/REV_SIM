@@ -487,8 +487,8 @@ public sealed partial class MainForm
         else
         {
             var spl = new List<string>();
-            for (int gi = 1; gi <= d.Gears; gi++) spl.Add((gi == 1 ? "เกียร์ 1 " : $"{gi} ") + $"{d.Limiter * 2f * MathF.PI / 60f * Vehicle.WheelRadius(d) / Vehicle.Total(d, gi) * 3.6f:0}");
-            Line("ความเร็วที่รอบตัด: " + string.Join("  •  ", spl) + " กม./ชม.", 0);
+            for (int gi = 1; gi <= d.Gears; gi++) spl.Add($"{d.Limiter * 2f * MathF.PI / 60f * Vehicle.WheelRadius(d) / Vehicle.Total(d, gi) * 3.6f:0}");
+            Line("ที่รอบตัด (กม./ชม.) เกียร์ 1-" + d.Gears + ": " + string.Join(" / ", spl), 0);
             var top = Vehicle.TopSpeed(m, d.Gears);
             string v = top.Rpm >= d.Limiter - 150f ? "  รอบตัดมาก่อน ปลายสั้น" : top.Rpm < m.PeakPsRpm * 0.88f ? "  ปลายยาว ลากไม่ถึงพีค" : "";
             Line($"ท็อปเกียร์ {d.Gears}: {top.Kmh:0} กม./ชม. @ {top.Rpm:N0} rpm{v}", v.Length > 0 ? 2 : 1);
