@@ -105,6 +105,12 @@ public static class Parts
                 d => { d.Primary = c.P; d.Gear1 = c.A; d.Gear2 = c.B; d.Gear3 = c.C; d.Gear4 = c.D; },
                 d => Near(d.Primary, c.P, 0.006f) && Near(d.Gear1, c.A, 0.006f) && Near(d.Gear2, c.B, 0.006f) && Near(d.Gear3, c.C, 0.006f) && Near(d.Gear4, c.D, 0.006f))).ToArray()),
 
+        new("ชามเม็ด (องศาใน/นอก)", "ชามแต่งมี 2 องศา: ใบใน (ออกตัว) / ใบนอก (ปลายทาง)  ใบนอกน้อยกว่า = ปลายไล่ไว  ใบนอกมากกว่า = ปลายถือรอบสูง (ใช้กับรถออโต้)",
+            new (float I, float O)[] { (13.5f, 13.5f), (13f, 12f), (14f, 12f), (12f, 14f), (15f, 11f), (12f, 12f), (14f, 14f), (11f, 13f), (16f, 12f) }
+                .Select(c => new PartItem($"ชาม {c.I:0.#}° / {c.O:0.#}°",
+                    d => { d.RampDeg = c.I; d.RampOutDeg = c.O; },
+                    d => Near(d.RampDeg, c.I, 0.05f) && Near(d.RampOutDeg, c.O, 0.05f))).ToArray()),
+
         new("ท่อไอเสีย", "เดิม = เงียบ / ผ่าหมก = ปลายขึ้นเล็กน้อย / ผ่าเปิด = ปลายดี รอบต่ำตก เสียงดัง / ท่อสูตร = พีคแรงเฉพาะรอบ (จูนตามแคม)",
             EngineDesign.PipeNames.Select((n, i) => new PartItem(n, d => d.Pipe = i, d => d.Pipe == i)).ToArray()),
 

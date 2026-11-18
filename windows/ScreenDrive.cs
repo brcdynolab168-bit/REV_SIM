@@ -45,7 +45,7 @@ public sealed partial class MainForm
         if (auto)
         {
             string w = d.Rollers == 6 && d.RollerG != d.RollerG2 ? $"{d.RollerG:0.#}/{d.RollerG2:0.#} g" : $"{d.RollerG:0.#} g";
-            Txt(g, $"ชาม {d.RampDeg:0.0}°  •  {d.Rollers} เม็ด {w}  •  สปริง {d.SpringK:0} N/มม.", _fMd, Palette.Text, px + 20, 140);
+            Txt(g, $"ชาม {d.RampDeg:0.0}°/{d.RampOutDeg:0.0}°  •  {d.Rollers} เม็ด {w}  •  สปริง {d.SpringK:0} N/มม.", _fMd, Palette.Text, px + 20, 140);
             Txt(g, $"{m.Cc:0} cc  •  {m.PeakHp:0.0} HP @ {m.PeakPsRpm:N0}", _fSm, Palette.Dim, px + 20, 176);
             Txt(g, $"สายพาน {_eng.CvtRatio:0.00}  •  เฟืองท้าย {d.GearF}/{d.GearR} x {d.FirstRed:0.00} (ทดรวม {Cvt.Final(d):0.00})", _fSm, Palette.Dim, px + 20, 208);
             Bar(g, new RectangleF(px + 20, 240, pw - 40, 12), _eng.CvtPosition, Palette.Accent);

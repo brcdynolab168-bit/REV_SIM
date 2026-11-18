@@ -32,7 +32,8 @@ public sealed class EngineDesign
     public float SprocketR = 36f;   // สเตอร์หลัง (ฟัน)
     public float RiderKg = 65f;     // น้ำหนักคนขี่ + ของ kg
     public int Auto = 0;            // 0 = เกียร์ธรรมดา (Wave), 1 = ออโต้ (สายพาน CVT)
-    public float RampDeg = 13.5f;   // องศาชามเม็ด (ramp plate) ของชุดขับหน้า
+    public float RampDeg = 13.5f;   // องศาชามเม็ด ใบใน (ช่วงต้นทาง ตอนออกตัว) ของชุดขับหน้า
+    public float RampOutDeg = 13.5f; // องศาชามเม็ด ใบนอก (ช่วงปลายทาง ตอนไล่สายพานจนสุด) ชามแต่งมีองศา 2 ช่วง เช่น 13/11
     public int Rollers = 6;         // จำนวนเม็ด (4 หรือ 6)
     public float RollerG = 8.5f;    // น้ำหนักเม็ดหลัก (กรัม)
     public float RollerG2 = 8.5f;   // น้ำหนักเม็ดสลับ: เม็ดตำแหน่งที่ 2, 4, 6 (กรัม)
@@ -139,6 +140,7 @@ public sealed class EngineDesign
             if (d.Auto == 1 && MathF.Abs(d.Bore - 70f) < 0.3f) { d.RimInch = 14f; d.RimW = 3.5f; d.TireW = 140f; d.TireAsp = 70f; }
             else if (d.Auto == 1) { d.RimInch = 14f; d.RimW = 1.6f; d.TireW = 90f; d.TireAsp = 90f; }
         }
+        if (!s.Contains("rampout=")) d.RampOutDeg = d.RampDeg;       // เซฟเก่า: ใบนอกเท่าใบใน
         if (!s.Contains("liftex=")) d.LiftEx = d.Lift;              // เซฟเก่า: ยกไอเสียเท่าไอดี
         if (!s.Contains("durex=")) d.DurationEx = d.Duration;       // เซฟเก่า: ไอเสียเท่าไอดี
         if (!s.Contains("fly="))
@@ -241,8 +243,10 @@ public sealed class EngineDesign
         new("auto", "ระบบส่งกำลัง", "", 0f, 1f, 1f, "0", d => d.Auto, (d, v) => d.Auto = (int)v,
             "ออโต้ = สายพาน CVT ไม่ต้องเปลี่ยนเกียร์ ปรับชามเม็ด/น้ำหนักเม็ดเพื่อจูนการไล่รอบ",
             text: v => v > 0.5f ? "ออโต้ (CVT)" : "เกียร์ธรรมดา"),
-        new("ramp", "องศาชาม", "°", 11f, 16f, 0.5f, "0.0", d => d.RampDeg, (d, v) => d.RampDeg = v,
-            "องศาน้อย = เม็ดดันชุดขับแรง ไล่รอบเร็ว ถือรอบต่ำ (ปลายยาว)  องศามาก = ถือรอบสูง ออกตัวจัด", d => d.Auto == 1),
+        new("ramp", "องศาชาม ใบใน", "°", 11f, 16f, 0.5f, "0.0", d => d.RampDeg, (d, v) => d.RampDeg = v,
+            "ช่วงต้นทาง (ออกตัว): องศาน้อย = เม็ดดันชุดขับแรง ไล่รอบเร็ว ถือรอบต่ำ  องศามาก = ถือรอบสูง ออกตัวจัด", d => d.Auto == 1),
+        new("rampout", "องศาชาม ใบนอก", "°", 11f, 16f, 0.5f, "0.0", d => d.RampOutDeg, (d, v) => d.RampOutDeg = v,
+            "ช่วงปลายทาง (ไล่สายพานใกล้สุด): องศาน้อยกว่าใบใน = ปลายดันแรง ไล่ถึงปลายไว รอบปลายต่ำลง  มากกว่าใบใน = ปลายถือรอบสูงขึ้น ท็อปไกล (ชามแต่งองศา 2 ช่วง เช่น 13/11)", d => d.Auto == 1),
         new("rollers", "จำนวนเม็ด", "เม็ด", 4f, 6f, 2f, "0", d => d.Rollers, (d, v) => d.Rollers = (int)v,
             "6 เม็ด = มวลรวมมาก ไล่รอบเร็ว นุ่ม  4 เม็ด = มวลน้อยลง ถือรอบสูงกว่า", d => d.Auto == 1),
         new("rollerg", "น้ำหนักเม็ด", "กรัม", 4f, 20f, 0.5f, "0.0", d => d.RollerG, (d, v) => d.RollerG = v,

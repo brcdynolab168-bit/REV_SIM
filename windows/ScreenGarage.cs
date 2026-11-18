@@ -68,7 +68,7 @@ public sealed partial class MainForm
         ("เครื่องยนต์", new[] { "bore", "stroke", "rod", "crank", "fly", "valves" }),
         ("ไอดี·แคม·ท่อ", new[] { "throttle", "lsa", "duration", "durationex", "lift", "liftex", "pipe" }),
         ("อัด·น้ำมัน", new[] { "cr", "psi", "fuel", "limiter", "resume", "softcut" }),
-        ("ส่งกำลัง", new[] { "auto", "prim", "g1", "g2", "g3", "g4", "sprf", "sprr", "ramp", "rollers", "rollerg", "rollerg2", "fdf", "fdr", "firstred", "spring" }),
+        ("ส่งกำลัง", new[] { "auto", "prim", "g1", "g2", "g3", "g4", "sprf", "sprr", "ramp", "rampout", "rollers", "rollerg", "rollerg2", "fdf", "fdr", "firstred", "spring" }),
         ("ตัวรถ", new[] { "rider", "bikekg", "rim", "rimw", "tirew", "tireasp", "cda" }),
         ("รถจริง", new[] { "realhp", "realhprpm", "realtq", "realtqrpm", "calk" }),
     };

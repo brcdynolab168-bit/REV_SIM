@@ -4,7 +4,7 @@ import { EngineModel, Veh, Cvt, Params, paramDisplay, clamp, PsToHp } from './en
 export const GoalNames = ['402 ม. (เร่งไว)', 'ท็อปสปีด', '0–60 (ออกตัว)'];
 export const Groups = [
   ['สเตอร์/เกียร์', ['sprr', 'sprf', 'g1', 'g4']],
-  ['เฟืองท้าย/CVT', ['fdr', 'fdf', 'ramp', 'rollerg', 'spring']],
+  ['เฟืองท้าย/CVT', ['fdr', 'fdf', 'ramp', 'rampout', 'rollerg', 'spring']],
   ['เรือนลิ้น', ['throttle']],
   ['แคม', ['lsa', 'duration', 'durationex', 'lift', 'liftex']],
   ['ท่อ', ['pipe']],
@@ -55,7 +55,7 @@ export function predict(m) {
 const knocks = m => m.Knock(3500, m.Load(1, 3500)) > 0.02;
 const TWEAKS = [
   ['sprr', [-2, -1, 1, 2], 0, 1], ['sprf', [-1, 1], 0, 1], ['g4', [-0.06, 0.06], 0, 1], ['g1', [-0.2, 0.2], 0, 1],
-  ['fdr', [-2, -1, 1, 2], 1, 0], ['fdf', [-1, 1], 1, 0], ['ramp', [-1, -0.5, 0.5, 1], 1, 0], ['rollerg', [-2, -1, 1, 2], 1, 0], ['spring', [-4, -2, 2, 4], 1, 0],
+  ['fdr', [-2, -1, 1, 2], 1, 0], ['fdf', [-1, 1], 1, 0], ['ramp', [-1, -0.5, 0.5, 1], 1, 0], ['rampout', [-2, -1, 1, 2], 1, 0], ['rollerg', [-2, -1, 1, 2], 1, 0], ['spring', [-4, -2, 2, 4], 1, 0],
   ['throttle', [2, 4, -2], 1, 1], ['lsa', [-4, -2, 2, 4], 1, 1], ['duration', [-10, -6, 6, 10], 1, 1], ['durationex', [-10, -6, 6, 10], 1, 1],
   ['lift', [-0.5, 0.5, 1], 1, 1], ['liftex', [-0.5, 0.5, 1], 1, 1], ['cr', [-0.5, 0.5, 1], 1, 1], ['pipe', [1, 2, 3, -1], 1, 1],
   ['limiter', [-500, 500, 1000], 1, 1], ['crank', [-0.4, -0.8, 0.4], 1, 1], ['fly', [-0.2, -0.4, 0.2], 1, 1],

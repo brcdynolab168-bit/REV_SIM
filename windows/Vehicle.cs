@@ -170,7 +170,9 @@ public static class Cvt
     /// <summary>แรงตามแกนที่เม็ดดันฝาเลื่อน (N) ที่ความเร็วเชิงมุมเครื่อง omega (rad/s)</summary>
     public static float Ff(EngineDesign d, float omega, float s)
     {
-        float tanA = MathF.Tan(d.RampDeg * MathF.PI / 180f);
+        // องศาชามค่อย ๆ เปลี่ยนจากใบใน (s = 0) ไปใบนอก (s = 1)
+        float ang = d.RampDeg + (d.RampOutDeg - d.RampDeg) * Math.Clamp(s, 0f, 1f);
+        float tanA = MathF.Tan(ang * MathF.PI / 180f);
         return Mass(d) * omega * omega * (R0 + (R1 - R0) * s) / tanA;
     }
 

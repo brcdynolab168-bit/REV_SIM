@@ -52,7 +52,7 @@ public sealed partial class MainForm
         if (d.Auto == 1)
         {
             Row("ระบบ", "ออโต้ CVT");
-            Row("ชาม / เม็ด / สปริง", $"{d.RampDeg:0.0}° / {d.Rollers} × {d.RollerG:0.#} g / {d.SpringK:0} N/มม.");
+            Row("ชาม ใน/นอก / เม็ด / สปริง", $"{d.RampDeg:0.0}°/{d.RampOutDeg:0.0}° / {d.Rollers} × {d.RollerG:0.#} g / {d.SpringK:0} N/มม.");
             Row("เฟืองท้าย", $"{d.GearF}/{d.GearR}  (ทดรวม {Cvt.Final(d):0.00})");
         }
         else

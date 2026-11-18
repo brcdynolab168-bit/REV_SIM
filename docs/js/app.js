@@ -22,6 +22,7 @@ const persist = () => { clearTimeout(saveTimer); saveTimer = setTimeout(() => { 
 
 Veh.setSurface(save.surface || 0);
 let design = newDesign(save.design || {});
+if (save.design && save.design.RampOutDeg === undefined) design.RampOutDeg = design.RampDeg;     // เซฟเก่า: ใบนอกเท่าใบใน
 let draft = { ...design };
 let installed = new EngineModel(design);
 let preview = new EngineModel(draft);
@@ -294,7 +295,7 @@ function drawMenu() {
   row('น้ำมัน', `${fuel.name}  (RON ${f0(fuel.ron)})`); row('รอบตัด', `${fmtN(d.Limiter)} rpm`);
   sec('OUTPUT'); row('กำลังสูงสุด', `${f1(m.PeakHp)} HP @ ${fmtN(m.PeakPsRpm)} rpm`); row('แรงบิดสูงสุด', `${f1(m.PeakTq)} N·m @ ${fmtN(m.PeakTqRpm)} rpm`);
   sec('DRIVETRAIN');
-  if (d.Auto === 1) { row('ระบบ', 'ออโต้ CVT'); row('ชาม / เม็ด / สปริง', `${f1(d.RampDeg)}° / ${d.Rollers} × ${+d.RollerG.toFixed(1)} g / ${f0(d.SpringK)} N/มม.`); row('เฟืองท้าย', `${d.GearF}/${d.GearR}  (ทดรวม ${f2(Cvt.final(d))})`); }
+  if (d.Auto === 1) { row('ระบบ', 'ออโต้ CVT'); row('ชาม ใน/นอก / เม็ด / สปริง', `${f1(d.RampDeg)}°/${f1(d.RampOutDeg)}° / ${d.Rollers} × ${+d.RollerG.toFixed(1)} g / ${f0(d.SpringK)} N/มม.`); row('เฟืองท้าย', `${d.GearF}/${d.GearR}  (ทดรวม ${f2(Cvt.final(d))})`); }
   else { row('ระบบ', 'เกียร์ธรรมดา 4 สปีด'); row('สเตอร์ หน้า/หลัง', `${f0(d.SprocketF)}/${f0(d.SprocketR)}  (ทดสุดท้าย ${Veh.final(d).toFixed(3)})`); }
 
   const rec = R(1280, 124, 600, 400);
@@ -350,7 +351,7 @@ function drawDrive() {
   ui.panelBox(R(px, 100, pw, 176), auto ? 'รถออโต้ (CVT)' : 'รถเกียร์ธรรมดา');
   if (auto) {
     const w = d.Rollers === 6 && d.RollerG !== d.RollerG2 ? `${+d.RollerG.toFixed(1)}/${+d.RollerG2.toFixed(1)} g` : `${+d.RollerG.toFixed(1)} g`;
-    ui.txt(`ชาม ${f1(d.RampDeg)}°  •  ${d.Rollers} เม็ด ${w}  •  สปริง ${f0(d.SpringK)} N/มม.`, F.md, C.Text, px + 20, 140);
+    ui.txt(`ชาม ${f1(d.RampDeg)}°/${f1(d.RampOutDeg)}°  •  ${d.Rollers} เม็ด ${w}  •  สปริง ${f0(d.SpringK)} N/มม.`, F.md, C.Text, px + 20, 140);
     ui.txt(`${f0(m.Cc)} cc  •  ${f1(m.PeakHp)} HP @ ${fmtN(m.PeakPsRpm)}`, F.sm, C.Dim, px + 20, 176);
     ui.txt(`สายพาน ${f2(Cvt.ratio(S.cvtS))}  •  เฟืองท้าย ${d.GearF}/${d.GearR} x ${f2(d.FirstRed)} (ทดรวม ${f2(Cvt.final(d))})`, F.sm, C.Dim, px + 20, 208);
     ui.bar(R(px + 20, 240, pw - 40, 12), S.cvtS, C.Accent);

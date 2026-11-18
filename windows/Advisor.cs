@@ -43,7 +43,7 @@ public static class Advisor
     public static readonly (string Name, string[] Keys)[] Groups =
     {
         ("สเตอร์/เกียร์", new[] { "sprr", "sprf", "g1", "g4" }),
-        ("เฟืองท้าย/CVT", new[] { "fdr", "fdf", "ramp", "rollerg", "spring" }),
+        ("เฟืองท้าย/CVT", new[] { "fdr", "fdf", "ramp", "rampout", "rollerg", "spring" }),
         ("เรือนลิ้น", new[] { "throttle" }),
         ("แคม", new[] { "lsa", "duration", "durationex", "lift", "liftex" }),
         ("ท่อ", new[] { "pipe" }),
@@ -120,6 +120,7 @@ public static class Advisor
         ("fdr", new[] { -2f, -1f, 1f, 2f }, true, false),
         ("fdf", new[] { -1f, 1f }, true, false),
         ("ramp", new[] { -1f, -0.5f, 0.5f, 1f }, true, false),
+        ("rampout", new[] { -2f, -1f, 1f, 2f }, true, false),
         ("rollerg", new[] { -2f, -1f, 1f, 2f }, true, false),
         ("spring", new[] { -4f, -2f, 2f, 4f }, true, false),
         ("throttle", new[] { 2f, 4f, -2f }, true, true),

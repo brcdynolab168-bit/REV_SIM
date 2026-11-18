@@ -23,7 +23,7 @@ export function newDesign(o = {}) {
     RealHp: 0, RealHpRpm: 0, RealTq: 0, RealTqRpm: 0, CalK: 1,
     Limiter: 9500, ResumeGap: 80, SoftGap: 0,
     SprocketF: 14, SprocketR: 36, RiderKg: 65, Auto: 0,
-    RampDeg: 13.5, Rollers: 6, RollerG: 8.5, RollerG2: 8.5, GearF: 13, GearR: 40, FirstRed: 3.0,
+    RampDeg: 13.5, RampOutDeg: 13.5, Rollers: 6, RollerG: 8.5, RollerG2: 8.5, GearF: 13, GearR: 40, FirstRed: 3.0,
     BikeKg: 107, CdA: 0.415, RimInch: 17, RimW: 1.4, TireW: 80, TireAsp: 90,
     SpringK: 20, Primary: 3.35, Gear1: 2.5, Gear2: 1.55, Gear3: 1.15, Gear4: 0.923, Pipe: 0, Fuel: 1,
   }, o);
@@ -100,7 +100,8 @@ export const Params = [
   num('tirew', 'หน้ายาง', 'มม.', 50, 190, 5, '0', 'TireW', 'ยางกว้าง = เกาะดีขึ้น แต่ต้านการกลิ้งมากขึ้นและล้อหนักขึ้น'),
   num('tireasp', 'แก้มยาง', '%', 40, 100, 5, '0', 'TireAsp', 'แก้มสูง = รัศมีล้อโต ความเร็วต่อรอบสูงขึ้น  แก้มต่ำ = ทดจัดขึ้น'),
   P('auto', 'ระบบส่งกำลัง', '', 0, 1, 1, '0', ...pr('auto', 'Auto'), 'ออโต้ = สายพาน CVT ไม่ต้องเปลี่ยนเกียร์ ปรับชามเม็ด/น้ำหนักเม็ดเพื่อจูน', { text: v => (v > 0.5 ? 'ออโต้ (CVT)' : 'เกียร์ธรรมดา') }),
-  num('ramp', 'องศาชาม', '°', 11, 16, 0.5, '0.0', 'RampDeg', 'องศาน้อย = ไล่รอบเร็ว ถือรอบต่ำ (ปลายยาว)  องศามาก = ถือรอบสูง ออกตัวจัด', { visible: auto }),
+  num('ramp', 'องศาชาม ใบใน', '°', 11, 16, 0.5, '0.0', 'RampDeg', 'ช่วงต้นทาง (ออกตัว): องศาน้อย = เม็ดดันชุดขับแรง ไล่รอบเร็ว ถือรอบต่ำ  องศามาก = ถือรอบสูง ออกตัวจัด', { visible: auto }),
+  num('rampout', 'องศาชาม ใบนอก', '°', 11, 16, 0.5, '0.0', 'RampOutDeg', 'ช่วงปลายทาง (ไล่สายพานใกล้สุด): องศาน้อยกว่าใบใน = ปลายดันแรง ไล่ถึงปลายไว รอบปลายต่ำลง  มากกว่าใบใน = ปลายถือรอบสูงขึ้น ท็อปไกล (ชามแต่งองศา 2 ช่วง เช่น 13/11)', { visible: auto }),
   num('rollers', 'จำนวนเม็ด', 'เม็ด', 4, 6, 2, '0', 'Rollers', '6 เม็ด = มวลรวมมาก ไล่รอบเร็ว  4 เม็ด = ถือรอบสูงกว่า', { visible: auto }),
   num('rollerg', 'น้ำหนักเม็ด', 'กรัม', 4, 20, 0.5, '0.0', 'RollerG', 'เม็ดหนัก = ไล่รอบไว ถือรอบต่ำ  เม็ดเบา = ถือรอบสูง ปลายไปไกล', { visible: auto }),
   num('rollerg2', 'น้ำหนักเม็ดสลับ', 'กรัม', 4, 20, 0.5, '0.0', 'RollerG2', 'เม็ดตำแหน่งที่ 2, 4, 6 ผสมหนัก/เบาเพื่อจูนละเอียด', { visible: auto }),
@@ -134,7 +135,7 @@ export const GarageTabs = [
   ['เครื่องยนต์', ['bore', 'stroke', 'rod', 'crank', 'fly', 'valves']],
   ['ไอดี·แคม·ท่อ', ['throttle', 'lsa', 'duration', 'durationex', 'lift', 'liftex', 'pipe']],
   ['อัด·น้ำมัน', ['cr', 'psi', 'fuel', 'limiter', 'resume', 'softcut']],
-  ['ส่งกำลัง', ['auto', 'prim', 'g1', 'g2', 'g3', 'g4', 'sprf', 'sprr', 'ramp', 'rollers', 'rollerg', 'rollerg2', 'fdf', 'fdr', 'firstred', 'spring']],
+  ['ส่งกำลัง', ['auto', 'prim', 'g1', 'g2', 'g3', 'g4', 'sprf', 'sprr', 'ramp', 'rampout', 'rollers', 'rollerg', 'rollerg2', 'fdf', 'fdr', 'firstred', 'spring']],
   ['ตัวรถ', ['rider', 'bikekg', 'rim', 'rimw', 'tirew', 'tireasp', 'cda']],
   ['รถจริง', ['realhp', 'realhprpm', 'realtq', 'realtqrpm', 'calk']],
 ];
@@ -176,6 +177,8 @@ export const PartCats = [
     items: [['เดิม Wave 125i', 3.35, 2.5, 1.55, 1.15, 0.923], ['เกียร์ชิด', 3.35, 2.4, 1.7, 1.3, 1.05], ['ออกตัวจัด', 3.35, 2.9, 1.8, 1.3, 1.0], ['ปลายยาว', 3.35, 2.5, 1.55, 1.15, 0.85], ['ดรัก (ชิดจัด)', 3.6, 2.7, 1.9, 1.45, 1.15]]
       .map(([n, p, a, b, c, dd]) => item(`${n}  ${a}/${b}/${c}/${dd}`, d => { d.Primary = p; d.Gear1 = a; d.Gear2 = b; d.Gear3 = c; d.Gear4 = dd; },
         d => near(d.Primary, p, 0.006) && near(d.Gear1, a, 0.006) && near(d.Gear2, b, 0.006) && near(d.Gear3, c, 0.006) && near(d.Gear4, dd, 0.006))) },
+  { name: 'ชามเม็ด (องศาใน/นอก)', hint: 'ชามแต่งมี 2 องศา: ใบใน (ออกตัว) / ใบนอก (ปลายทาง)  ใบนอกน้อยกว่า = ปลายไล่ไว  ใบนอกมากกว่า = ปลายถือรอบสูง (ใช้กับรถออโต้)',
+    items: [[13.5, 13.5], [13, 12], [14, 12], [12, 14], [15, 11], [12, 12], [14, 14], [11, 13], [16, 12]].map(([i, o]) => item(`ชาม ${i}° / ${o}°`, d => { d.RampDeg = i; d.RampOutDeg = o; }, d => near(d.RampDeg, i, 0.05) && near(d.RampOutDeg, o, 0.05))) },
   { name: 'ท่อไอเสีย', hint: 'เดิม = เงียบ / ผ่าหมก / ผ่าเปิด / ท่อสูตร = พีคแรงเฉพาะรอบ',
     items: PipeNames.map((n, i) => item(n, d => { d.Pipe = i; }, d => d.Pipe === i)) },
   { name: 'รอบตัด (hard cut)', hint: 'ตั้งสูงเกินที่วาล์ว/ลูกสูบรับไหว = กำลังตก',
@@ -380,7 +383,7 @@ export const Cvt = {
   RLow: 2.5, RHigh: 0.77, R0: 0.038, R1: 0.044, FBase: 1000, SpringPreloadMm: 25, SpringTravelMm: 35, KCam: 250, FScale: 1500, Rate: 1.5,
   ratio: s => Cvt.RLow * Math.pow(Cvt.RHigh / Cvt.RLow, clamp(s, 0, 1)),
   mass(d) { const n = d.Rollers, a = Math.floor((n + 1) / 2), b = Math.floor(n / 2); return (a * d.RollerG + b * d.RollerG2) / 1000; },
-  ff(d, omega, s) { const tanA = Math.tan(d.RampDeg * PI / 180); return Cvt.mass(d) * omega * omega * (Cvt.R0 + (Cvt.R1 - Cvt.R0) * s) / tanA; },
+  ff(d, omega, s) { const ang = d.RampDeg + (d.RampOutDeg - d.RampDeg) * clamp(s, 0, 1), tanA = Math.tan(ang * PI / 180); return Cvt.mass(d) * omega * omega * (Cvt.R0 + (Cvt.R1 - Cvt.R0) * s) / tanA; },
   final: d => d.FirstRed * d.GearR / d.GearF,
   fr: (d, torque, s) => Cvt.FBase + d.SpringK * (Cvt.SpringPreloadMm + Cvt.SpringTravelMm * s) + Cvt.KCam * Math.max(0, torque),
   holdRpm(m, d = m.D) {
