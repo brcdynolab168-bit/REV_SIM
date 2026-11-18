@@ -119,7 +119,7 @@ export class EngineSim {
     if (this._fuelOn && this._cycleFiring) drive = m.TorqueInd(rpm) * this.load * this.ecuMult * this._cycleVar * (1 - 0.5 * this._cycKnock) * (1 - 0.4 * this.softK);
     let torque = drive;
     if (this._starterActive) torque += 5.5 * Math.max(0, 1 - rpm / 650);
-    let friction = m.Friction(rpm) + (1 - this.load) * (0.30 + 0.00018 * rpm) * m.FrictionScale;
+    let friction = m.Friction(rpm) + m.PumpLoss(rpm, this.load);
     if (rpm <= 0 && torque < friction) friction = torque;
 
     if (this.dynoPhase === 1 && rpm >= DynoStartRpm) { this.dynoPhase = 2; this._dynoRpm = DynoStartRpm; }

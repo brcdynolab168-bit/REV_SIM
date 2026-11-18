@@ -510,7 +510,8 @@ public sealed class EngineModel
         float rodF = Math.Clamp(1f + 0.25f * (1.65f - RodRatio), 0.85f, 1.3f);
         FrictionScale = MathF.Pow(Cc / 150f, 0.6f) * (D.Valves == 4 ? 1.08f : 1f) * rodF;
 
-        Inertia = 0.0076f + D.CrankKg * 0.0016f + D.FlywheelKg * 0.0040f;
+        // ความเฉื่อยหมุน (kg·m²): อ้างอิงเวฟ (ข้อ 2.8 กก. + จานไฟ 0.6 กก.) = 0.0145  ข้อ/จานไฟหนักขึ้นเร่งรอบช้าลงชัดเจน เบาลงเร่งไวแต่เดินเบาไม่นิ่ง
+        Inertia = MathF.Max(0.006f, 0.0145f + (D.CrankKg - 2.8f) * 0.0026f + (D.FlywheelKg - 0.6f) * 0.0065f);
         IdleSteady = Math.Clamp(0.0144f / Inertia, 0.55f, 1.8f);
         IdleRpm = 1400f + MathF.Max(0f, Overlap - 10f) * 10f;
         AirK = 40000f * (D.Throttle / 28f) * (D.Throttle / 28f) * (Cc / 110f);
@@ -597,6 +598,36 @@ public sealed class EngineModel
     public float TorqueInd(float rpm) => Lerp(_tInd, rpm) * D.CalK;
 
     public float Friction(float rpm) => Lerp(_fric, rpm);
+
+    /// <summary>แรงฝืดจากการอัด (เบรกเครื่อง) : แรงดันอัดสูง/CR สูง ลูกสูบต้านตอนปิดคันเร่งมาก รอบตกเร็วขึ้น  อ้างอิง ~190 psi = 1.0</summary>
+    public float CompDrag => MathF.Pow(Math.Clamp(Psi / 190f, 0.5f, 2.2f), 1.4f);
+    /// <summary>แรงต้านปั๊มอากาศ (pumping loss) ที่ภาระ load  ลิ้นปิด = มากสุด</summary>
+    public float PumpLoss(float rpm, float load) => (1f - load) * (0.30f + 0.00018f * rpm) * FrictionScale * CompDrag;
+
+    /// <summary>เวลา (วิ) ที่เครื่องเปล่า (ไม่มีล้อ) เร่งเปิดคันเร่งสุดจากรอบ a ไป b : ความเฉื่อย (ข้อ/จานไฟ) และแรงบิดสุทธิ</summary>
+    public float RevUpTime(float a, float b)
+    {
+        float t = 0f;
+        for (float r = a; r < b; r += 100f)
+        {
+            float tq = BrakeTorqueWot(r + 50f);
+            if (tq < 0.05f) return float.PositiveInfinity;
+            t += Inertia * (100f * 2f * MathF.PI / 60f) / tq;
+        }
+        return t;
+    }
+    /// <summary>เวลา (วิ) ที่รอบตกจาก a ลง b ตอนปล่อยคันเร่ง (เบรกเครื่อง = แรงเสียดทาน + ปั๊มอากาศ รวมแรงดันอัด)</summary>
+    public float CoastTime(float a, float b)
+    {
+        float t = 0f;
+        for (float r = a; r > b; r -= 100f)
+        {
+            float mid = r - 50f;
+            float tq = Friction(mid) + PumpLoss(mid, 0.05f);
+            t += Inertia * (100f * 2f * MathF.PI / 60f) / MathF.Max(tq, 0.05f);
+        }
+        return t;
+    }
 
     /// <summary>ปริมาณไอดีต่อรอบตามการเปิดลิ้น (0..1)</summary>
     /// <summary>โหลดอากาศตามธรรมชาติของลิ้นเร่ง (ไม่รวมตาราง MAP)</summary>

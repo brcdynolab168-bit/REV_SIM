@@ -254,7 +254,7 @@ public sealed class EngineSim
         if (_starterActive) torque += 5.5f * MathF.Max(0f, 1f - rpm / 650f);
 
         // แรงเสียดทาน + pumping loss (ลิ้นปิด = เอนจินเบรก)
-        float friction = m.Friction(rpm) + (1f - _load) * (0.30f + 0.00018f * rpm) * m.FrictionScale;
+        float friction = m.Friction(rpm) + m.PumpLoss(rpm, _load);
         if (rpm <= 0f && torque < friction) friction = torque;   // หยุดนิ่ง ไม่หมุนกลับ
 
         // ----- ไดโน: เบรกคุมรอบให้กวาดขึ้นคงที่ แล้ววัดแรงบิดที่เครื่องทำได้ -----

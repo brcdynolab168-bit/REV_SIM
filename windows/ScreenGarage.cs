@@ -478,6 +478,11 @@ public sealed partial class MainForm
         Line($"วาล์วลอยที่ {m.FloatRpm:N0} rpm" + (floatBad ? "  รอบตัดสูงไป" : ""), floatBad ? 2 : 1);
 
         float vpL = m.PistonSpeed(d.Limiter);
+        {
+            float ra = MathF.Round(d.Limiter * 0.35f / 100f) * 100f, rb = MathF.Round(d.Limiter * 0.80f / 100f) * 100f;
+            float up = m.RevUpTime(ra, rb), dn = m.CoastTime(rb, ra);
+            Line($"เร่งรอบ {ra:N0}→{rb:N0}: {up:0.00} วิ  •  ปล่อยคันเร่งตก: {dn:0.00} วิ  (เครื่องเปล่า)" + (up > 1.6f ? "  เร่งยาน" : up < 0.35f ? "  เร่งไวมาก" : ""), up > 1.6f ? 2 : 1);
+        }
         Line($"ลูกสูบเฉลี่ย {vpL:0.0} ม./วิ ที่รอบตัด" + (vpL > 24f ? "  (ชักยาวเกิน กำลังตก)" : ""), vpL > 24f ? 2 : vpL > 22f ? 0 : 1);
 
         float kn = m.KnockWot(3500f);

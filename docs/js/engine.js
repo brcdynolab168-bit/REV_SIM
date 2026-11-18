@@ -296,7 +296,8 @@ export class EngineModel {
 
     const rodF = clamp(1 + 0.25 * (1.65 - this.RodRatio), 0.85, 1.3);
     this.FrictionScale = Math.pow(Cc / 150, 0.6) * (D.Valves === 4 ? 1.08 : 1) * rodF;
-    this.Inertia = 0.0076 + D.CrankKg * 0.0016 + D.FlywheelKg * 0.0040;
+    // ความเฉื่อยหมุน (kg·m²): อ้างอิงเวฟ (ข้อ 2.8 กก. + จานไฟ 0.6 กก.) = 0.0145  ข้อ/จานไฟหนักขึ้นเร่งรอบช้าลงชัดเจน เบาลงเร่งไวแต่เดินเบาไม่นิ่ง
+    this.Inertia = Math.max(0.006, 0.0145 + (D.CrankKg - 2.8) * 0.0026 + (D.FlywheelKg - 0.6) * 0.0065);
     this.IdleSteady = clamp(0.0144 / this.Inertia, 0.55, 1.8);
     this.IdleRpm = 1400 + Math.max(0, this.Overlap - 10) * 10;
     this.AirK = 40000 * (D.Throttle / 28) ** 2 * (Cc / 110);
@@ -353,6 +354,13 @@ export class EngineModel {
   }
   TorqueInd(rpm) { return lerpT(this._tInd, rpm) * this.D.CalK; }
   Friction(rpm) { return lerpT(this._fric, rpm); }
+  /** แรงฝืดจากการอัด (เบรกเครื่อง) : แรงดันอัดสูง/CR สูง ต้านตอนปิดคันเร่งมาก รอบตกเร็วขึ้น  อ้างอิง ~190 psi = 1.0 */
+  get CompDrag() { return Math.pow(clamp(this.Psi / 190, 0.5, 2.2), 1.4); }
+  PumpLoss(rpm, load) { return (1 - load) * (0.30 + 0.00018 * rpm) * this.FrictionScale * this.CompDrag; }
+  /** เวลา (วิ) ที่เครื่องเปล่าเร่งเปิดคันเร่งสุดจากรอบ a ไป b */
+  RevUpTime(a, b) { let t = 0; for (let r = a; r < b; r += 100) { const tq = this.BrakeTorqueWot(r + 50); if (tq < 0.05) return Infinity; t += this.Inertia * (100 * 2 * Math.PI / 60) / tq; } return t; }
+  /** เวลา (วิ) ที่รอบตกจาก a ลง b ตอนปล่อยคันเร่ง */
+  CoastTime(a, b) { let t = 0; for (let r = a; r > b; r -= 100) { const mid = r - 50, tq = this.Friction(mid) + this.PumpLoss(mid, 0.05); t += this.Inertia * (100 * 2 * Math.PI / 60) / Math.max(tq, 0.05); } return t; }
   NaturalLoad(thr, rpm) { return 1 - Math.exp(-thr * this.AirK / Math.max(rpm, 400)); }
   /** ปริมาณอากาศต่อรอบ (0..1)  ถ้าแก้ตาราง MAP แล้ว = ตาม MAP เป้าหมายของช่อง (TPS x รอบ) แต่ไม่เกินที่ลิ้นเปิดสุดจะผ่านได้ */
   Load(thr, rpm) {
