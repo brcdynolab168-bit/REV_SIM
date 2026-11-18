@@ -35,6 +35,7 @@ export function loadPulses(x, marksText, fs) {
   return P;
 }
 
+const IdleBoost = 1.8;      // เสริมเสียงเดินเบา (x2.8 ที่รอบเดินเบา)
 export class EngineSim {
   constructor(design, pulses, sampleRate) {
     this.Fs = sampleRate;
@@ -284,6 +285,8 @@ export class EngineSim {
         if (this._cycCut) amp = 0.55;
         else if (this._wantOn) amp = this._cycAmp;
         else amp = 0.75 * (0.35 + 0.65 * clamp((this._rpmAudio - 2500) / 5000, 0, 1)) * this._cycleVar;
+        // เสียงเดินเบาเบาเกินไป (พัลส์โหลดต่ำ) : เสริมระดับช่วงรอบเดินเบาให้ได้ยินชัด ค่อย ๆ ลดจนไม่มีผลที่ ~รอบเดินเบา+2,500
+        if (!this._cycCut) amp *= 1 + IdleBoost * clamp(1 - (this._rpmAudio - this.model.IdleRpm) / 2500, 0, 1);
         this._emitGrain(this._nextPulse(this._rpmAudio, this._wantOn), amp, this._rpmAudio);
       }
       if (ph >= 720) { ph -= 720; this._newCycle(); }
