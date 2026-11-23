@@ -493,7 +493,8 @@ function drawGauge(cx, cy, r) {
   ui.txtC(`กม./ชม.     ${gear}`, F.sm, C.Text, cx, cy + 238 * k);
   ui.txt('ระยะจากจอด', F.xs, C.Dim, 262, 800);
   ui.txt(runDist < 0 ? '-' : `${runDist < 1000 ? f0(runDist) + ' ม.' : f2(runDist / 1000) + ' กม.'}`, F.num, C.Accent, 262, 826);
-  ui.txt(`AFR ${f1(S.ecuAfr ?? 14.7)}  •  จุด ${f0(S.ecuAdv ?? 0)}° (MBT ${f0(S.ecuMbt ?? 0)})`, F.xs, (S.ecuAfr ?? 14.7) / installed.Stoich > 1.12 ? C.Red : C.Dim, 262, 912);
+  { const lm = (S.ecuAfr ?? 14.7) / installed.Stoich, sy = mixSymptom(lm);
+    ui.txt(`AFR ${f1(S.ecuAfr ?? 14.7)}  •  จุด ${f0(S.ecuAdv ?? 0)}° (MBT ${f0(S.ecuMbt ?? 0)})` + (sy ? '  •  ' + sy[0] : ''), F.xs, sy ? sy[1] : C.Dim, 262, 912); }
   ui.txt(`หัวฉีด ${f0((S.ecuDuty ?? 0) * 100)}%  •  EGT ${f0(S.ecuEgt ?? 0)}°C  •  น็อก ${f0((S.knock ?? 0) * 100)}%`, F.xs, (S.knock ?? 0) > 0.05 || (S.ecuEgt ?? 0) > 1050 ? C.Red : C.Dim, 262, 934);
   ui.txt(runDist < 0 ? 'ออกตัวจากหยุดนิ่งเพื่อวัด' : `${f1(runTime)} วิ  ${runFull ? '• เต็มคันเร่ง' : '• ไม่เต็มคันเร่ง'}`, F.xs, runDist >= 0 && runFull ? C.Green : C.Dim, 262, 876);
   if (S.dynoPhase !== 0) ui.txtC('กำลังวัดไดโน...', F.btn, C.Green, cx, cy - 112 * k);
@@ -505,6 +506,16 @@ function drawGauge(cx, cy, r) {
   g.beginPath(); g.arc(cx, cy, 16 * k, 0, 7); g.fillStyle = 'rgb(60,66,78)'; g.fill();
 }
 
+/** อาการตามส่วนผสม (lambda): [ข้อความ, สี] หรือ null ถ้าปกติ */
+function mixSymptom(lm) {
+  if (lm > 1.40) return ['บางมาก: ติดไม่ครบ สะดุด/ดับ', C.Red];
+  if (lm > 1.22) return ['บาง: แห้ง ๆ กระตุก เร่งไม่ขึ้น', C.Red];
+  if (lm > 1.10) return ['บางเล็กน้อย: เครื่องแห้ง ร้อน', C.Yellow];
+  if (lm < 0.60) return ['หนามาก: สะดุด ควันดำ อาจดับ', C.Red];
+  if (lm < 0.72) return ['หนา: อืด สะดุด ควันดำ', C.Red];
+  if (lm < 0.80) return ['หนาเล็กน้อย: อืด เสียงทุ้มอุ้ม', C.Yellow];
+  return null;
+}
 function drawDynoResult() {
   const g = ui.g;
   let runs = dynoRuns.filter(r => r.visible);

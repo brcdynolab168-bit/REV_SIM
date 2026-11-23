@@ -677,7 +677,7 @@ public sealed class EngineModel
     private static readonly float[] FuelDens = { 0.74f, 0.74f, 0.75f, 0.74f, 0.78f, 0.79f, 0.85f };     // ความหนาแน่นน้ำมัน (กรัม/cc)
     private static readonly float[] BurnK = { 0f, 0f, -0.5f, 0f, -2f, -3f, -4f };                       // เปลวไฟวิ่งไว (เอทานอล/เมทานอล) ใช้องศาน้อยลง
 
-    public readonly record struct EcuState(float Mult, float KnockShift, float Afr, float Lambda, float Adv, float Mbt, float Duty, float Egt, float PulseMs, float Eoi, float DwellMs, float Spark, float Misfire);
+    public readonly record struct EcuState(float Mult, float KnockShift, float Afr, float Lambda, float Adv, float Mbt, float Duty, float Egt, float PulseMs, float Eoi, float DwellMs, float Spark, float Misfire, float Lean = 0f, float Rich = 0f);
 
     private int FuelIdx => Math.Clamp(D.Fuel, 0, StoichTab.Length - 1);
     public float Stoich => StoichTab[FuelIdx];
@@ -822,7 +822,9 @@ public sealed class EngineModel
         float mbt = Mbt(rpm, load, lam);
         float dlt = adv - mbt;
         float mult = TimingF(dlt) / TimingF(-4f) * LambdaF(lam) / LambdaF(lamB);
-        float mf = lam > 1.2f ? Math.Clamp((1.45f - lam) / 0.25f, 0f, 1f) : lam < 0.65f ? Math.Clamp((lam - 0.45f) / 0.2f, 0f, 1f) : 1f;   // บาง/หนาเกิน จุดไม่ติด
+        // ส่วนผสม: หนา (lam<0.8) สะดุด/ติดไม่ครบ  บาง (lam>1.08) แห้ง ๆ กระตุก ติดไม่ครบ  ยิ่งโหลดต่ำยิ่งสังเกตง่าย
+        float lowLd = 1f + 0.35f * (1f - load), leanR = Math.Clamp((lam - 1.06f) / 0.30f, 0f, 1f), richR = Math.Clamp((0.80f - lam) / 0.28f, 0f, 1f);
+        float mixMf = MathF.Max(Math.Clamp((lam - 1.12f) / 0.33f, 0f, 1f), Math.Clamp((0.74f - lam) / 0.26f, 0f, 1f)) * 0.95f * MathF.Min(1f, lowLd);
         // บาง/หนาเกิน/ประกายอ่อน/ตัดน้ำมัน: จุดไม่ติดเป็นจังหวะ ๆ (สุ่มรายจังหวะ) ทำให้รอบสะดุด/เดินหอบ แทนการลดแรงบิดเฉย ๆ
         // องศาจบฉีด + ไทม์คอยล์ (เทียบค่าโรงงาน)
         float eoi = TableEoi(rpm, tps);
@@ -835,10 +837,10 @@ public sealed class EngineModel
         float shift = 1.8f * (lamB - lam) - 0.11f * (adv - StockAdv(rpm, load));       // หนา = เย็น ทนน็อกขึ้น  จุดแก่/บาง = น็อกง่าย
         float egt = 330f + 380f * load + 12f * rpm / 1000f + 300f * Math.Clamp((lam - 0.8f) / 0.25f, 0f, 1f)
                     - 150f * Math.Clamp((lam - 1.1f) / 0.3f, 0f, 1f) + 9f * MathF.Max(0f, mbt - adv) + 200f * MathF.Max(0f, 1f - spark);
-        float misfire = 1f - mf;
+        float misfire = mixMf;
         misfire = MathF.Max(misfire, Math.Clamp((0.8f - spark) / 0.3f, 0f, 1f));
         if (fuel <= 1e-6f) misfire = 1f;
-        return new EcuState(mult, shift, afr, lam, adv, mbt, duty, egt, pw, eoi, dwell, spark, misfire);
+        return new EcuState(mult, shift, afr, lam, adv, mbt, duty, egt, pw, eoi, dwell, spark, misfire, MathF.Min(1f, leanR * lowLd), MathF.Min(1f, richR * lowLd));
     }
 
     /// <summary>ค่าโรงงาน/ค่าที่ตั้งไว้ของเซลล์ตาราง (คอลัมน์ = รอบ, แถว = โหลด)</summary>

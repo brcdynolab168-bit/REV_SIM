@@ -3,6 +3,18 @@ namespace RevGame;
 /// <summary>รายงานไดโน (DYNO REPORT): เปรียบเทียบหลายรอบวัด (Run) บนกราฟแกนคู่ HP / N·m พร้อมการ์ดพีค ตารางรอบวัด และบันทึกช่วงรอบที่ดีขึ้น/แย่ลง</summary>
 public sealed partial class MainForm
 {
+    /// <summary>อาการตามส่วนผสม (lambda)</summary>
+    private static (string t, Color c) MixSymptom(float lm)
+    {
+        if (lm > 1.40f) return ("บางมาก: ติดไม่ครบ สะดุด/ดับ", Palette.Red);
+        if (lm > 1.22f) return ("บาง: แห้ง ๆ กระตุก เร่งไม่ขึ้น", Palette.Red);
+        if (lm > 1.10f) return ("บางเล็กน้อย: เครื่องแห้ง ร้อน", Palette.Yellow);
+        if (lm < 0.60f) return ("หนามาก: สะดุด ควันดำ อาจดับ", Palette.Red);
+        if (lm < 0.72f) return ("หนา: อืด สะดุด ควันดำ", Palette.Red);
+        if (lm < 0.80f) return ("หนาเล็กน้อย: อืด เสียงทุ้มอุ้ม", Palette.Yellow);
+        return (null, Palette.Dim);
+    }
+
     private sealed class DynoRun
     {
         public int N;

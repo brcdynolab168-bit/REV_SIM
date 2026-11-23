@@ -105,7 +105,7 @@ export class EngineSim {
     this.thrEff = eff;
     this.load = m.Load(eff, rpm);
     const ecu = m.EcuAt(rpm, eff);
-    this.ecuMult = ecu.Mult; this.ecuAfr = ecu.Afr; this.ecuAdv = ecu.Adv; this.ecuDuty = ecu.Duty; this.ecuEgt = ecu.Egt; this.ecuMbt = ecu.Mbt; this.ecuPw = ecu.PulseMs; this.ecuEoi = ecu.Eoi; this.ecuDwell = ecu.DwellMs; this.ecuSpark = ecu.Spark; this.ecuMisfire = ecu.Misfire;
+    this.ecuMult = ecu.Mult; this.ecuAfr = ecu.Afr; this.ecuAdv = ecu.Adv; this.ecuDuty = ecu.Duty; this.ecuEgt = ecu.Egt; this.ecuMbt = ecu.Mbt; this.ecuPw = ecu.PulseMs; this.ecuEoi = ecu.Eoi; this.ecuDwell = ecu.DwellMs; this.ecuSpark = ecu.Spark; this.ecuMisfire = ecu.Misfire; this._lean = ecu.Lean || 0; this._rich = ecu.Rich || 0; this._surgePh = (this._surgePh || 0) + dt * 6.2832 * (2.2 + 1.5 * this._noise());
     this.knock = m.Knock(rpm, this.load, ecu.KnockShift);
 
     const D = m.D;
@@ -116,7 +116,7 @@ export class EngineSim {
     this._starterActive = this.starterHeld && rpm < 1000;
 
     let drive = 0;
-    if (this._fuelOn && this._cycleFiring) drive = m.TorqueInd(rpm) * this.load * this.ecuMult * this._cycleVar * (1 - 0.5 * this._cycKnock) * (1 - 0.4 * this.softK);
+    if (this._fuelOn && this._cycleFiring) drive = m.TorqueInd(rpm) * this.load * this.ecuMult * (1 + 0.16 * (this._lean || 0) * Math.sin(this._surgePh || 0) - 0.10 * (this._rich || 0) * Math.max(0, Math.sin((this._surgePh || 0) * 0.5))) * this._cycleVar * (1 - 0.5 * this._cycKnock) * (1 - 0.4 * this.softK);
     let torque = drive;
     if (this._starterActive) torque += 5.5 * Math.max(0, 1 - rpm / 650);
     let friction = m.Friction(rpm) + m.PumpLoss(rpm, this.load);
@@ -201,7 +201,7 @@ export class EngineSim {
     if (fire && rpm > m.FloatRpm && this._unit() < 0.45) fire = false;
     this._cycleFiring = fire;
     const gg = this._noise() + this._noise() + this._noise();
-    const jitter = 0.03 + 0.12 * (1 - load) + 0.22 * m.Lope * low + 0.30 * this.knock;
+    const jitter = 0.03 + 0.12 * (1 - load) + 0.22 * m.Lope * low + 0.30 * this.knock + 0.42 * (this._lean || 0) + 0.34 * (this._rich || 0);   // บางเกิน/หนาเกิน: เผาไหม้ไม่สม่ำเสมอ แรงแต่ละจังหวะแกว่ง
     this._cycleVar = clamp(1 + jitter * gg, 0.5, 1.5);
     this._cycKnock = fire ? this.knock * (0.5 + this._unit()) : 0;
     let cond = m.CrAmp * (0.55 + 0.45 * m.VeNorm(rpm));

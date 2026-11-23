@@ -460,7 +460,9 @@ export class EngineModel {
     const afr = fuel > 1e-6 ? air / fuel : 99, lam = afr / st;
     const adv = this.TableAdv(rpm, tps), mbt = this.Mbt(rpm, load, lam), dlt = adv - mbt;
     let mult = timingF(dlt) / timingF(-4) * lambdaF(lam) / lambdaF(lamB);
-    const mf = lam > 1.2 ? clamp((1.45 - lam) / 0.25, 0, 1) : lam < 0.65 ? clamp((lam - 0.45) / 0.2, 0, 1) : 1;
+    // ส่วนผสม: หนา (lam<0.8) สะดุด/ติดไม่ครบ  บาง (lam>1.08) แห้ง ๆ กระตุก ติดไม่ครบ  ยิ่งโหลดต่ำยิ่งสังเกตง่าย
+    const lowLd = 1 + 0.35 * (1 - load), leanR = clamp((lam - 1.06) / 0.30, 0, 1), richR = clamp((0.80 - lam) / 0.28, 0, 1);
+    const mixMf = Math.max(clamp((lam - 1.12) / 0.33, 0, 1), clamp((0.74 - lam) / 0.26, 0, 1)) * 0.95 * Math.min(1, lowLd);
     // บาง/หนาเกิน/ประกายอ่อน/ตัดน้ำมัน: จุดไม่ติดเป็นจังหวะ ๆ (สุ่มรายจังหวะ) ทำให้รอบสะดุด/เดินหอบ แทนการลดแรงบิดเฉย ๆ
     const eoi = this.TableEoi(rpm, tps), fInj = this._injF(rpm, eoi, pulseDeg(pw, rpm)) / this._injF(rpm, this.FactoryEoi(rpm, load), pulseDeg(this.FactoryMs(rpm, load), rpm));
     const dwell = this.TableDwell(rpm, tps), reqA = this.CoilReq(load, lam), reqB = this.CoilReq(load, lamB), spark = sparkQ(dwell, reqA);
@@ -468,7 +470,8 @@ export class EngineModel {
     if (fuel <= 1e-6) mult = 0;      // เวลาฉีด 0 (หรือไม่เกิน dead time) = ตัดน้ำมัน ไม่มีการเผาไหม้
     out.Mult = mult; out.KnockShift = 1.8 * (lamB - lam) - 0.11 * (adv - this.StockAdv(rpm, load));
     out.Afr = afr; out.Lambda = lam; out.Adv = adv; out.Mbt = mbt; out.Duty = duty; out.PulseMs = pw; out.Eoi = eoi; out.DwellMs = dwell; out.Spark = spark;
-    out.Misfire = fuel <= 1e-6 ? 1 : Math.max(1 - mf, clamp((0.8 - spark) / 0.3, 0, 1));
+    out.Misfire = fuel <= 1e-6 ? 1 : Math.max(mixMf, clamp((0.8 - spark) / 0.3, 0, 1));
+    out.Lean = Math.min(1, leanR * lowLd); out.Rich = Math.min(1, richR * lowLd);      // ความรุนแรงของอาการบาง/หนา 0..1
     out.Egt = 330 + 380 * load + 12 * rpm / 1000 + 300 * clamp((lam - 0.8) / 0.25, 0, 1) - 150 * clamp((lam - 1.1) / 0.3, 0, 1) + 9 * Math.max(0, mbt - adv) + 200 * Math.max(0, 1 - spark);
     return out;
   }

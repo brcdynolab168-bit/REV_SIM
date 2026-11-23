@@ -281,7 +281,8 @@ public sealed partial class MainForm
         Txt(g, _runDist < 0f ? "-" : (_runDist < 1000f ? $"{_runDist:0} ม." : $"{_runDist / 1000f:0.00} กม."), _fNum, Palette.Accent, 262, 826);
         Txt(g, _runDist < 0f ? "ออกตัวจากหยุดนิ่งเพื่อวัด" : $"{_runTime:0.0} วิ  " + (_runFull ? "• เต็มคันเร่ง" : "• ไม่เต็มคันเร่ง"), _fXs, _runDist >= 0f && _runFull ? Palette.Green : Palette.Dim, 262, 876);
         var ec = _eng.Ecu;
-        Txt(g, $"AFR {ec.Afr:0.0}  •  จุด {ec.Adv:0}° (MBT {ec.Mbt:0})", _fXs, ec.Lambda > 1.12f ? Palette.Red : Palette.Dim, 262, 912);
+        var sy = MixSymptom(ec.Lambda);
+        Txt(g, $"AFR {ec.Afr:0.0}  •  จุด {ec.Adv:0}° (MBT {ec.Mbt:0})" + (sy.t != null ? "  •  " + sy.t : ""), _fXs, sy.t != null ? sy.c : Palette.Dim, 262, 912);
         Txt(g, $"หัวฉีด {ec.Duty * 100f:0}%  •  EGT {ec.Egt:0}°C  •  น็อก {_eng.KnockNow * 100f:0}%", _fXs, _eng.KnockNow > 0.05f || ec.Egt > 1050f ? Palette.Red : Palette.Dim, 262, 934);
 
         // ข้อความสถานะ
