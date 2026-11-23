@@ -217,6 +217,17 @@ function driveKey(k) {
 }
 
 // ================================================================= ไดโน
+const RunColors = ['rgb(0,122,224)', 'rgb(224,54,66)', 'rgb(70,200,120)', 'rgb(240,170,40)', 'rgb(170,110,240)', 'rgb(40,210,220)'];
+const dynoRuns = []; let dynoRunCounter = 0;
+function addDynoRun(r) {
+  const d = r.model.D, ser = JSON.stringify(d);
+  const preset = Presets.find(p => JSON.stringify(p[1]) === ser);
+  dynoRuns.push({ n: ++dynoRunCounter, r, vehicle: preset ? preset[0].replace(/\*$/, '') : 'ออกแบบเอง', when: new Date(), inertia: r.model.Inertia, calK: d.CalK, visible: true,
+    spec: `${f0(r.model.Cc)} cc  ${+d.Bore.toFixed(1)}x${+d.Stroke.toFixed(1)}  CR ${+d.Cr.toFixed(1)}  ${d.Auto === 1 ? 'CVT' : d.Gears + ' สปีด'}` });
+  while (dynoRuns.length > 5) dynoRuns.shift();
+  dynoRuns.forEach((q, i) => { q.visible = i >= dynoRuns.length - 2; });     // แสดงสองรอบล่าสุดเป็นค่าเริ่มต้น
+}
+const niceStep = mx => { for (const v of [1, 2, 4, 5, 10, 20, 25, 40, 50, 100, 200, 250, 500]) if (v * 5 >= mx) return v; return 1000; };
 function finishDyno(tqRaw) {
   if (S.dynoFailed) { dynoRes = null; toast('วิ่งไดโนไม่จบ: เครื่องดับระหว่างวัด'); return; }
   const tq = Array.from(tqRaw);
@@ -234,6 +245,7 @@ function finishDyno(tqRaw) {
   });
   if (!any) return;
   dynoRes = { curve: sm, model: installed, ps: pk.ps, psRpm: pk.psRpm, peakTq: pk.tq, tqRpm: pk.tqRpm };
+  addDynoRun(dynoRes);
   cur.hp = pk.ps * PsToHp;
   showDyno = true;
 }
@@ -494,31 +506,102 @@ function drawGauge(cx, cy, r) {
 }
 
 function drawDynoResult() {
-  const res = dynoRes;
+  const g = ui.g;
+  let runs = dynoRuns.filter(r => r.visible);
+  if (!runs.length && dynoRuns.length) { dynoRuns[dynoRuns.length - 1].visible = true; runs = [dynoRuns[dynoRuns.length - 1]]; }
   ui.hit(R(0, 0, VW, VH), () => { showDyno = false; });
-  ui.fillRR(R(0, 0, VW, VH), 0, 'rgba(0,0,0,0.75)');
-  const box = R(260, 120, 1400, 840);
-  ui.fillRR(box, 4, 'rgba(17,20,25,0.99)'); ui.drawRR(box, 4, C.Accent, 2);
-  ui.txt(`ผลวัดไดโน  (${f0(res.model.Cc)} cc)`, F.title, C.Accent, box.x + 40, box.y + 24);
-  const rpm = res.curve.map((_, i) => i * 100), hp = res.curve.map((t, i) => (Number.isNaN(t) ? NaN : Hp(t, i * 100)));
-  let base = null;
-  if (dynoPrev) {      // เทียบผลไดโนครั้งก่อน (เส้นประ) + ป้ายช่วงรอบที่ดีขึ้น/แย่ลง
-    const tq0 = rpm.map((_, i) => (i < dynoPrev.curve.length ? dynoPrev.curve[i] : NaN)), hp0 = tq0.map((t, i) => (Number.isNaN(t) ? NaN : Hp(t, i * 100)));
-    base = { tq: tq0, hp: hp0 };
-    ui.txt(`เทียบกับผลไดโนครั้งก่อน (เส้นประ)   ก่อน ${f1(dynoPrev.ps * PsToHp)} HP → หลัง ${f1(res.ps * PsToHp)} HP`, F.sm, C.Yellow, box.x + 40, box.y + 76);
+  g.fillStyle = 'rgba(0,0,0,0.8)'; g.fillRect(0, 0, VW, VH);
+  const box = R(70, 24, 1780, 1032);
+  ui.fillRR(box, 4, 'rgba(15,18,24,0.99)'); ui.drawRR(box, 4, C.Border, 1.5);
+  ui.hit(box, () => { });
+  ui.rect(box.x, box.y, box.w, 84, 'rgb(8,11,18)'); ui.rect(box.x, box.y + 84, box.w, 4, 'rgb(0,122,224)');
+  ui.txt('REV LAB  DYNO REPORT', F.title, '#fff', box.x + 36, box.y + 14);
+  const last = dynoRuns[dynoRuns.length - 1], pad2 = v => String(v).padStart(2, '0');
+  ui.txtR('Rev Lab Dyno', F.md, '#fff', box.x + box.w - 36, box.y + 12);
+  ui.txtR(`${last.when.getFullYear()}-${pad2(last.when.getMonth() + 1)}-${pad2(last.when.getDate())}  ${pad2(last.when.getHours())}:${pad2(last.when.getMinutes())}`, F.sm, C.Dim, box.x + box.w - 36, box.y + 48);
+  const ix = box.x + 36, iy = box.y + 100;
+  const info = (label, val, x, w) => { ui.txt(label, F.cap, C.Dim, x, iy); ui.txt(val, F.sm, C.Text, x, iy + 22); ui.line(x, iy + 56, x + w, iy + 56, C.Border, 1); };
+  info('VEHICLE', last.vehicle, ix, 520); info('ENGINE', last.spec, ix + 560, 560);
+  info('ROTATING INERTIA', `${last.inertia.toFixed(4)} kg·m²`, ix + 1160, 280);
+  info('CALIBRATION', Math.abs(last.calK - 1) < 0.005 ? 'none (x1.000)' : `CalK x${last.calK.toFixed(3)}`, ix + 1480, 250);
+
+  const sorted = [...runs].sort((p, q) => p.n - q.n), newest = sorted[sorted.length - 1], oldest = sorted[0], two = newest.n !== oldest.n;
+  const hpN = newest.r.ps * PsToHp, hpO = oldest.r.ps * PsToHp, dP = hpN - hpO, dT = newest.r.peakTq - oldest.r.peakTq, cy = box.y + 170, ch = 112, cw = 410, gc = 'rgb(40,170,90)';
+  const card = (x, title, big, unit, sub, accent, bigCol) => {
+    const r = R(x, cy, cw, ch); ui.fillRR(r, 5, 'rgb(22,26,34)'); ui.drawRR(r, 5, C.Border, 1); ui.rect(r.x, r.y + 8, 5, r.h - 16, accent);
+    ui.txt(title, F.cap, C.Dim, r.x + 24, r.y + 10); ui.txt(big, F.numL, bigCol, r.x + 22, r.y + 20);
+    ui.txt(unit, F.sm, C.Dim, r.x + 30 + 40 * big.length, r.y + 62); ui.txt(sub, F.cap, C.Dim, r.x + 24, r.y + r.h - 26);
+  };
+  const sg = v => (v >= 0 ? '+' : '') + v.toFixed(1);
+  card(box.x + 36, 'PEAK POWER', f1(hpN), 'HP', `@ ${fmtN(newest.r.psRpm)} rpm  (Run ${newest.n})`, C.Green, C.Green);
+  card(box.x + 36 + 436, 'PEAK TORQUE', f1(newest.r.peakTq), 'N·m', `@ ${fmtN(newest.r.tqRpm)} rpm  (Run ${newest.n})`, C.Red, C.Red);
+  card(box.x + 36 + 872, two ? `Run ${newest.n} vs Run ${oldest.n}  POWER` : 'POWER (เทียบ)', two ? sg(dP) : '-', two ? 'HP' : '', two ? `${dP >= 0 ? 'ดีขึ้น' : 'แย่ลง'} ${(hpO > 0 ? dP / hpO * 100 : 0).toFixed(1)}%` : 'เปิดอย่างน้อย 2 รอบ', C.Border, two ? (dP >= 0 ? gc : C.Red) : C.Dim);
+  card(box.x + 36 + 1308, 'TORQUE', two ? sg(dT) : '-', two ? 'N·m' : '', two ? `${dT >= 0 ? 'ดีขึ้น' : 'แย่ลง'} ${(oldest.r.peakTq > 0 ? dT / oldest.r.peakTq * 100 : 0).toFixed(1)}%` : '', C.Border, two ? (dT >= 0 ? gc : C.Red) : C.Dim);
+
+  const plot = R(box.x + 90, box.y + 322, box.w - 180, 300), hpOf = (r, i) => (Number.isNaN(r.curve[i]) ? NaN : Hp(r.curve[i], i * 100));
+  let iMin = 1e9, iMax = -1, maxHp = 1, maxTq = 1;
+  for (const run of runs) run.r.curve.forEach((t, i) => { if (Number.isNaN(t)) return; iMin = Math.min(iMin, i); iMax = Math.max(iMax, i); maxHp = Math.max(maxHp, hpOf(run.r, i)); maxTq = Math.max(maxTq, t); });
+  if (iMax < 0) { iMin = 20; iMax = 100; }
+  const xMin = Math.floor(iMin * 100 / 500) * 500, xMax = Math.max(xMin + 1000, Math.ceil(iMax * 100 / 500) * 500), hpStep = niceStep(maxHp * 1.08), tqStep = niceStep(maxTq * 1.08);
+  const XP = rpm => plot.x + (rpm - xMin) / (xMax - xMin) * plot.w, gHp = 'rgb(70,200,120)', gTq = 'rgb(235,90,100)';
+  ui.fillRR(plot, 3, 'rgb(14,17,22)'); ui.drawRR(plot, 3, C.Border, 1);
+  ui.txt('HP', F.cap, gHp, plot.x - 60, plot.y - 30); ui.txt('N·m', F.cap, gTq, plot.x + plot.w + 14, plot.y - 30);
+  for (let k = 0; k <= 5; k++) {
+    const y = plot.y + plot.h - k / 5 * plot.h;
+    ui.line(plot.x, y, plot.x + plot.w, y, 'rgb(34,40,50)', 1); ui.txtR(String(k * hpStep), F.xs, gHp, plot.x - 10, y - 12); ui.txt(String(k * tqStep), F.xs, gTq, plot.x + plot.w + 10, y - 12);
   }
-  ui.chart(R(box.x + 40, box.y + 110, box.w - 80, 460), rpm, res.curve, hp, res.model.D.Limiter, base);
-  const y = box.y + 600, m = res.model, rd = m.D;
-  ui.txt(`กำลังสูงสุด  ${f1(res.ps * PsToHp)} HP @ ${fmtN(res.psRpm)} rpm`, F.lg, C.Accent, box.x + 40, y);
-  ui.txt(`แรงบิดสูงสุด  ${f1(res.peakTq)} N·m @ ${fmtN(res.tqRpm)} rpm`, F.lg, C.Blue, box.x + 40, y + 52);
-  ui.txt(`ซีซี ${f0(m.Cc)}   •   HP ต่อลิตร = ${f0(res.ps * PsToHp / m.Cc * 1000)}`, F.md, C.Text, box.x + 40, y + 112);
+  const xs = xMax - xMin > 6000 ? 1000 : 500;
+  for (let r = xMin; r <= xMax + 1; r += xs) { const x = XP(r); ui.line(x, plot.y, x, plot.y + plot.h, 'rgb(34,40,50)', 1); ui.txtC(String(r), F.xs, C.Dim, x, plot.y + plot.h + 18); }
+  ui.txtC('RPM', F.xs, C.Dim, plot.x + plot.w / 2, plot.y + plot.h + 42);
+  for (const run of runs) {
+    const c = RunColors[(run.n - 1) % RunColors.length], ph = [], pt = [];
+    run.r.curve.forEach((t, i) => { if (Number.isNaN(t)) return; const x = XP(i * 100); ph.push([x, plot.y + plot.h - clamp(hpOf(run.r, i) / (hpStep * 5), 0, 1) * plot.h]); pt.push([x, plot.y + plot.h - clamp(t / (tqStep * 5), 0, 1) * plot.h]); });
+    const stroke = (pts, w, dash) => { if (pts.length < 2) return; g.strokeStyle = c; g.lineWidth = w; g.lineJoin = 'round'; g.setLineDash(dash); g.beginPath(); pts.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y))); g.stroke(); g.setLineDash([]); };
+    stroke(pt, 2.4, [4, 3]); stroke(ph, 3.4, []);
+    const px = XP(run.r.psRpm), py = plot.y + plot.h - clamp(run.r.ps * PsToHp / (hpStep * 5), 0, 1) * plot.h;
+    g.beginPath(); g.arc(px, py, 7, 0, 7); g.fillStyle = 'rgb(15,18,24)'; g.fill(); g.strokeStyle = c; g.lineWidth = 3; g.stroke();
+    ui.txtC(f1(run.r.ps * PsToHp), F.sm, c, px, py + ((run.n % 2) ? 12 : -24));
+  }
+  let lx = plot.x + 24; const ly = plot.y + 22;
+  for (const run of sorted) { const c = RunColors[(run.n - 1) % RunColors.length]; ui.line(lx, ly, lx + 34, ly, c, 4); ui.txt(`Run ${run.n}`, F.xs, C.Text, lx + 44, ly - 13); lx += 150; }
+  ui.line(lx + 20, ly, lx + 54, ly, C.Dim, 2.4); ui.txt('HP', F.xs, C.Dim, lx + 62, ly - 13);
+  g.strokeStyle = C.Dim; g.lineWidth = 2.4; g.setLineDash([4, 3]); g.beginPath(); g.moveTo(lx + 120, ly); g.lineTo(lx + 154, ly); g.stroke(); g.setLineDash([]); ui.txt('N·m', F.xs, C.Dim, lx + 162, ly - 13);
+
+  let ty = plot.y + plot.h + 58;
+  ui.rect(box.x + 36, ty, box.w - 72, 30, 'rgb(24,28,37)');
+  const cxs = [box.x + 70, box.x + 520, box.x + 860, box.x + 1160, box.x + 1500, box.x + 1700];
+  ['RUN', 'PEAK POWER (HP)', '@ RPM', 'PEAK TORQUE (N·m)', '@ RPM', 'SAMPLES'].forEach((h, i) => ui.txt(h, F.cap, C.Dim, cxs[i], ty + 5));
+  ty += 32;
+  for (const run of dynoRuns) {
+    const c = RunColors[(run.n - 1) % RunColors.length], row = R(box.x + 36, ty, box.w - 72, 28), tc = run.visible ? C.Text : C.Dim;
+    if (!run.visible) ui.rect(row.x, row.y, row.w, row.h, 'rgb(14,16,21)');
+    ui.rect(box.x + 44, ty + 6, 16, 16, run.visible ? c : 'rgb(70,76,88)');
+    ui.txt(`Run ${run.n}   ${run.vehicle}`, F.xs, tc, cxs[0], ty + 3); ui.txt(f1(run.r.ps * PsToHp), F.xs, tc, cxs[1], ty + 3); ui.txt(fmtN(run.r.psRpm), F.xs, C.Dim, cxs[2], ty + 3);
+    ui.txt(f1(run.r.peakTq), F.xs, tc, cxs[3], ty + 3); ui.txt(fmtN(run.r.tqRpm), F.xs, C.Dim, cxs[4], ty + 3); ui.txt(String(run.r.curve.filter(t => !Number.isNaN(t)).length), F.xs, C.Dim, cxs[5], ty + 3);
+    ui.line(row.x, row.y + row.h, row.x + row.w, row.y + row.h, C.Border, 1);
+    ui.hit(row, () => { run.visible = !run.visible; if (!dynoRuns.some(q => q.visible)) run.visible = true; });
+    ty += 29;
+  }
+  ui.btn(R(box.x + box.w - 36 - 190, ty + 4, 190, 34), 'ล้างประวัติรอบวัด', false, C.Red, () => { const keep = dynoRuns[dynoRuns.length - 1]; dynoRuns.length = 0; dynoRuns.push(keep); keep.visible = true; }, F.cap);
+  ui.txt('คลิกแถวในตารางเพื่อเปิด/ปิดเส้นของรอบนั้น  •  เส้นทึบ = HP  เส้นประ = N·m', F.cap, C.Dim, box.x + 40, ty + 12);
+  const ny = ty + 48; ui.rect(box.x + 40, ny + 2, 4, 20, C.Yellow); ui.txt('NOTES', F.cap, C.Dim, box.x + 56, ny);
+  const notes = [];
+  if (two) {
+    const o = oldest.r, n = newest.r, rpmA = [], h1 = [], h0 = [];
+    for (let i = 0; i < Math.min(o.curve.length, n.curve.length); i++) { if (Number.isNaN(n.curve[i])) continue; rpmA.push(i * 100); h1.push(hpOf(n, i)); h0.push(hpOf(o, i)); }
+    chartZones(rpmA, h1, h0).slice(0, 3).forEach(z => notes.push([`Run ${newest.n} เทียบ Run ${oldest.n}: ช่วง ${(z.lo / 1000).toFixed(1)}–${(z.hi / 1000).toFixed(1)}k rpm กำลัง${z.good ? 'เพิ่ม' : 'ลด'}สูงสุด ${sg(z.peak)} HP`, z.good ? C.Green : C.Red]));
+    if (!notes.length) notes.push(['สองรอบต่างกันน้อยมากในทุกช่วงรอบ', C.Dim]);
+    if (newest.r.psRpm !== oldest.r.psRpm) notes.push([`พีคกำลังย้ายจาก ${fmtN(oldest.r.psRpm)} ไป ${fmtN(newest.r.psRpm)} rpm`, C.Dim]);
+  } else notes.push(['วิ่งไดโนอีกครั้งหลังแก้ค่า แล้วจะเทียบกับรอบนี้ให้ทั้งกราฟและตาราง', C.Dim]);
+  const rd = newest.r.model.D;
   if (rd.RealHp > 0 || rd.RealTq > 0) {
     let cmp = 'เทียบรถจริง:  ';
-    if (rd.RealHp > 0) cmp += `แรงม้า เกม ${f1(res.ps * PsToHp)} / จริง ${f1(rd.RealHp)} HP (${((res.ps * PsToHp / rd.RealHp - 1) * 100).toFixed(0)}%)   `;
-    if (rd.RealTq > 0) cmp += `แรงบิด เกม ${f1(res.peakTq)} / จริง ${f1(rd.RealTq)} N·m (${((res.peakTq / rd.RealTq - 1) * 100).toFixed(0)}%)`;
-    ui.txt(cmp, F.md, C.Yellow, box.x + 40, y + 160);
+    if (rd.RealHp > 0) cmp += `แรงม้า เกม ${f1(hpN)} / จริง ${f1(rd.RealHp)} HP (${((hpN / rd.RealHp - 1) * 100).toFixed(0)}%)   `;
+    if (rd.RealTq > 0) cmp += `แรงบิด เกม ${f1(newest.r.peakTq)} / จริง ${f1(rd.RealTq)} N·m (${((newest.r.peakTq / rd.RealTq - 1) * 100).toFixed(0)}%)`;
+    notes.push([cmp, C.Yellow]);
   }
-  ui.txtR('คลิก / Enter เพื่อปิด', F.sm, C.Dim, box.x + box.w - 30, box.y + box.h - 46);
+  notes.slice(0, 3).forEach(([t, c], i) => ui.txt(t, F.xs, c, box.x + 56, ny + 28 + i * 26));
+  ui.txtR('Generated by REV LAB (simulated dyno)  •  Enter / Esc / คลิกนอกรายงานเพื่อปิด', F.cap, C.Dim, box.x + box.w - 36, box.y + box.h - 28);
 }
 
 // ================================================================= สรุปการแก้ไข (เทียบเครื่องที่ติดตั้งอยู่)

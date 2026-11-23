@@ -388,6 +388,7 @@ public sealed partial class MainForm : Form
             return;
         }
         _dyno = DynoResult.From(_eng.Model, _eng.DynoTq, false);
+        AddDynoRun(_dyno);
         _cur.Hp = _dyno.PeakPs * EngineModel.PsToHp;
         _showDyno = true;
     }
