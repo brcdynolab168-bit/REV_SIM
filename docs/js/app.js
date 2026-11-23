@@ -34,6 +34,7 @@ const bestOf = (cur, v) => (v > 0 && (cur < 0 || v < cur) ? v : cur);
 let cur = newRun(), before = null;
 let last060 = -1, last100 = -1, last402 = -1, trap402 = 0, topSession = 0, peakRpm = 0;
 let runDist = -1, runTime = 0, runFull = true;      // ระยะ/เวลาที่ขับได้จากความเร็ว 0 (ค้างค่าไว้ถึงออกตัวรอบใหม่)
+let driveTab = 0;      // การ์ดขวาของหน้าทดสอบ: 0 = คลัตช์/ยาง, 1 = ข้อมูลสด (Live data)
 let dynoRes = null, dynoPrev = null;      // dynoPrev = ผลไดโนก่อนแก้ ใช้เทียบเส้นประในผลไดโน
 
 // ================================================================= เสียง / worklet
@@ -411,8 +412,23 @@ function drawDrive() {
   [['ราบ', 0], ['เนิน 6%', 6], ['ชัน 12%', 12], ['ลง −4%', -4]].forEach(([n, v], i) => ui.btn(R(px + 82 + i * 132, 576, 124, 44), n, slope === v, C.Blue, () => { slope = v; }, F.sm));
   ui.smallBtn(R(px + pw - 72, 576, 52, 44), '+', () => changeSlope(1));
 
-  ui.panelBox(R(px, 648, pw, 170), 'สถานะคลัตช์ / ยาง');
-  let ry = 690;
+  ui.panelBox(R(px, 648, pw, 170), null);
+  ui.btn(R(px + 16, 654, 150, 32), 'คลัตช์ / ยาง', driveTab === 0, C.Green, () => { driveTab = 0; }, F.cap);
+  ui.btn(R(px + 174, 654, 150, 32), 'Live data', driveTab === 1, C.Blue, () => { driveTab = 1; }, F.cap);
+  let ry = 698;
+  if (driveTab === 1) {
+    const lm = (S.ecuAfr ?? 14.7) / installed.Stoich, sy = mixSymptom(lm), adv = S.ecuAdv ?? 0, mbt = S.ecuMbt ?? 0, kn = S.knock ?? 0, egt = S.ecuEgt ?? 0;
+    const items = [
+      ['AFR', f1(S.ecuAfr ?? 14.7), sy ? sy[1] : C.Text],
+      ['จุดไฟ', `${f0(adv)}° / MBT ${f0(mbt)}°`, Math.abs(adv - mbt) > 8 ? C.Yellow : C.Text],
+      ['หัวฉีด', `${f0((S.ecuDuty ?? 0) * 100)}%  ${f2(S.ecuPw ?? 0)} ms`, (S.ecuDuty ?? 0) > 0.85 ? C.Red : C.Text],
+      ['EGT', `${f0(egt)} °C`, egt > 1050 ? C.Red : C.Text],
+      ['น็อก', `${f0(kn * 100)}%`, kn > 0.05 ? C.Red : C.Text],
+      ['โหลด', `${f0((S.load ?? 0) * 100)}%`, C.Text],
+    ];
+    items.forEach(([lb, val, col], i) => { const x = px + 20 + (i % 2) * (pw / 2), y = 696 + Math.floor(i / 2) * 32; ui.txt(lb, F.xs, C.Dim, x, y + 5); ui.txt(val, F.sm, col, x + 96, y); });
+    ui.txt(sy ? 'อาการ: ' + sy[0] : 'ส่วนผสมปกติ: ไม่มีอาการสะดุด/แห้ง', F.xs, sy ? sy[1] : C.Green, px + 20, 796);
+  } else {
   const srow = (label, frac, col, value) => {
     ui.txt(label, F.sm, C.Dim, px + 20, ry); ui.bar(R(px + 190, ry + 6, 250, 16), frac, col); ui.txt(value, F.sm, col, px + 456, ry); ry += 34;
   };
@@ -423,6 +439,7 @@ function drawDrive() {
   const tu = S.tracUse, tCol = S.spin ? C.Red : tu > 0.85 ? C.Yellow : C.Green;
   srow('แรงเกาะยาง', Math.min(tu, 1), tCol, `${f0(tu * 100)}%  ` + (S.spin ? 'ล้อฟรี! ยางลื่น' : tu > 0.85 ? 'ใกล้ลื่น' : 'ยางเกาะดี'));
   ui.txt(`แรงขับ ${fmtN(S.driveForce)} N / เกาะได้สูงสุด ${fmtN(S.gripMax)} N  •  ยาง ${tireCode(d)} ขอบ ${f2(d.RimW)}`, F.xs, C.Dim, px + 20, ry - 2);
+  }
 
   ui.panelBox(R(px, 834, pw, 216), 'สถิติ');
   const bf = before;
@@ -493,9 +510,6 @@ function drawGauge(cx, cy, r) {
   ui.txtC(`กม./ชม.     ${gear}`, F.sm, C.Text, cx, cy + 238 * k);
   ui.txt('ระยะจากจอด', F.xs, C.Dim, 262, 800);
   ui.txt(runDist < 0 ? '-' : `${runDist < 1000 ? f0(runDist) + ' ม.' : f2(runDist / 1000) + ' กม.'}`, F.num, C.Accent, 262, 826);
-  { const lm = (S.ecuAfr ?? 14.7) / installed.Stoich, sy = mixSymptom(lm);
-    ui.txt(`AFR ${f1(S.ecuAfr ?? 14.7)}  •  จุด ${f0(S.ecuAdv ?? 0)}° (MBT ${f0(S.ecuMbt ?? 0)})` + (sy ? '  •  ' + sy[0] : ''), F.xs, sy ? sy[1] : C.Dim, 262, 912); }
-  ui.txt(`หัวฉีด ${f0((S.ecuDuty ?? 0) * 100)}%  •  EGT ${f0(S.ecuEgt ?? 0)}°C  •  น็อก ${f0((S.knock ?? 0) * 100)}%`, F.xs, (S.knock ?? 0) > 0.05 || (S.ecuEgt ?? 0) > 1050 ? C.Red : C.Dim, 262, 934);
   ui.txt(runDist < 0 ? 'ออกตัวจากหยุดนิ่งเพื่อวัด' : `${f1(runTime)} วิ  ${runFull ? '• เต็มคันเร่ง' : '• ไม่เต็มคันเร่ง'}`, F.xs, runDist >= 0 && runFull ? C.Green : C.Dim, 262, 876);
   if (S.dynoPhase !== 0) ui.txtC('กำลังวัดไดโน...', F.btn, C.Green, cx, cy - 112 * k);
   else if (!S.running) ui.txtC(S.ignition ? 'กด S ค้างเพื่อสตาร์ท' : 'ดับเครื่องอยู่ - กด S ค้างเพื่อสตาร์ท', F.md, C.Accent, cx, cy - 112 * k);

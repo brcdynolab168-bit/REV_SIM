@@ -4,6 +4,7 @@ namespace RevGame;
 
 public sealed partial class MainForm
 {
+    private int _driveTab;   // การ์ดขวาหน้าทดสอบ: 0 = คลัตช์/ยาง, 1 = Live data
     private float _gaugeMax = 11000f;               // สเกลหน้าปัดตามรอบตัดของเครื่องที่ประกอบอยู่
 
     // ====================================================================
@@ -110,8 +111,30 @@ public sealed partial class MainForm
         SmallBtn(g, new RectangleF(px + pw - 72, 576, 52, 44), "+", () => ChangeSlope(+1));
 
         // สถานะคลัตช์ / ยาง
-        PanelBox(g, new RectangleF(px, 648, pw, 170), "สถานะคลัตช์ / ยาง");
-        float ry = 690;
+        PanelBox(g, new RectangleF(px, 648, pw, 170), null);
+        Btn(g, new RectangleF(px + 16, 654, 150, 32), "คลัตช์ / ยาง", _driveTab == 0, Palette.Green, () => _driveTab = 0, _fCap);
+        Btn(g, new RectangleF(px + 174, 654, 150, 32), "Live data", _driveTab == 1, Palette.Blue, () => _driveTab = 1, _fCap);
+        float ry = 698;
+        if (_driveTab == 1)
+        {
+            var ec = _eng.Ecu; var mx = MixSymptom(ec.Lambda); float kn = _eng.KnockNow;
+            var items = new (string lb, string val, Color col)[]
+            {
+                ("AFR", $"{ec.Afr:0.0}", mx.t != null ? mx.c : Palette.Text),
+                ("จุดไฟ", $"{ec.Adv:0}° / MBT {ec.Mbt:0}°", MathF.Abs(ec.Adv - ec.Mbt) > 8f ? Palette.Yellow : Palette.Text),
+                ("หัวฉีด", $"{ec.Duty * 100f:0}%  {ec.PulseMs:0.00} ms", ec.Duty > 0.85f ? Palette.Red : Palette.Text),
+                ("EGT", $"{ec.Egt:0} °C", ec.Egt > 1050f ? Palette.Red : Palette.Text),
+                ("น็อก", $"{kn * 100f:0}%", kn > 0.05f ? Palette.Red : Palette.Text),
+                ("โหลด", $"{_eng.LoadNow * 100f:0}%", Palette.Text),
+            };
+            for (int i = 0; i < items.Length; i++)
+            {
+                float x = px + 20 + (i % 2) * (pw / 2), y = 696 + (i / 2) * 32;
+                Txt(g, items[i].lb, _fXs, Palette.Dim, x, y + 5); Txt(g, items[i].val, _fSm, items[i].col, x + 96, y);
+            }
+            Txt(g, mx.t != null ? "อาการ: " + mx.t : "ส่วนผสมปกติ: ไม่มีอาการสะดุด/แห้ง", _fXs, mx.t != null ? mx.c : Palette.Green, px + 20, 796);
+        }
+        else {
         void SRow(string label, float frac, Color col, string value)
         {
             Txt(g, label, _fSm, Palette.Dim, px + 20, ry);
@@ -129,6 +152,7 @@ public sealed partial class MainForm
         Color tCol = _eng.WheelSpin ? Palette.Red : tu > 0.85f ? Palette.Yellow : Palette.Green;
         SRow("แรงเกาะยาง", MathF.Min(tu, 1f), tCol, $"{tu * 100f:0}%  " + (_eng.WheelSpin ? "ล้อฟรี! ยางลื่น" : tu > 0.85f ? "ใกล้ลื่น" : "ยางเกาะดี"));
         Txt(g, $"แรงขับ {_eng.DriveForce:N0} N / เกาะได้สูงสุด {_eng.GripMax:N0} N  •  ยาง {d.TireCode} ขอบ {d.RimW:0.00}", _fXs, Palette.Dim, px + 20, ry - 2);
+        }
 
         // สถิติ
         PanelBox(g, new RectangleF(px, 834, pw, 216), "สถิติ");
@@ -280,10 +304,6 @@ public sealed partial class MainForm
         Txt(g, "ระยะจากจอด", _fXs, Palette.Dim, 262, 800);
         Txt(g, _runDist < 0f ? "-" : (_runDist < 1000f ? $"{_runDist:0} ม." : $"{_runDist / 1000f:0.00} กม."), _fNum, Palette.Accent, 262, 826);
         Txt(g, _runDist < 0f ? "ออกตัวจากหยุดนิ่งเพื่อวัด" : $"{_runTime:0.0} วิ  " + (_runFull ? "• เต็มคันเร่ง" : "• ไม่เต็มคันเร่ง"), _fXs, _runDist >= 0f && _runFull ? Palette.Green : Palette.Dim, 262, 876);
-        var ec = _eng.Ecu;
-        var sy = MixSymptom(ec.Lambda);
-        Txt(g, $"AFR {ec.Afr:0.0}  •  จุด {ec.Adv:0}° (MBT {ec.Mbt:0})" + (sy.t != null ? "  •  " + sy.t : ""), _fXs, sy.t != null ? sy.c : Palette.Dim, 262, 912);
-        Txt(g, $"หัวฉีด {ec.Duty * 100f:0}%  •  EGT {ec.Egt:0}°C  •  น็อก {_eng.KnockNow * 100f:0}%", _fXs, _eng.KnockNow > 0.05f || ec.Egt > 1050f ? Palette.Red : Palette.Dim, 262, 934);
 
         // ข้อความสถานะ
         if (_eng.DynoRunning)
