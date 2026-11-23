@@ -415,8 +415,21 @@ function drawDrive() {
   ui.panelBox(R(px, 648, pw, 170), null);
   ui.btn(R(px + 16, 654, 150, 32), 'คลัตช์ / ยาง', driveTab === 0, C.Green, () => { driveTab = 0; }, F.cap);
   ui.btn(R(px + 174, 654, 150, 32), 'Live data', driveTab === 1, C.Blue, () => { driveTab = 1; }, F.cap);
+  ui.btn(R(px + 332, 654, 150, 32), 'ความร้อน / สึก', driveTab === 2, C.Red, () => { driveTab = 2; }, F.cap);
   let ry = 698;
-  if (driveTab === 1) {
+  const srow = (label, frac, col, value) => {
+    ui.txt(label, F.sm, C.Dim, px + 20, ry); ui.bar(R(px + 190, ry + 6, 250, 16), frac, col); ui.txt(value, F.sm, col, px + 456, ry); ry += 34;
+  };
+  if (driveTab === 2) {
+    const T = S.engT ?? 35, visc = S.oilVisc ?? 1, wear = S.wear ?? 0, oilT = S.oilT ?? 35;
+    const tCol = T > 170 ? C.Red : T > 135 ? C.Yellow : T < 60 ? C.Blue : C.Green, tTxt = T > 170 ? 'ร้อนจัด! ลูกเสี่ยงละลาย' : T > 135 ? 'ร้อน กำลังตก น็อกง่าย' : T < 60 ? 'เครื่องยังเย็น' : 'อุณหภูมิทำงาน';
+    const vCol = visc < 0.45 ? C.Red : visc < 0.7 ? C.Yellow : C.Green, vTxt = visc < 0.45 ? 'บางมาก ฟิล์มขาด' : visc < 0.7 ? 'บาง' : visc > 1.8 ? 'หนืด (เย็น)' : 'ปกติ';
+    const wCol = wear > 0.5 ? C.Red : wear > 0.2 ? C.Yellow : C.Green, wTxt = S.seized ? S.seizeCause : wear > 0.5 ? 'ลูกสึกหนัก ไม่ข้ามรอบ แก๊ก' : wear > 0.2 ? 'ลูกเริ่มสึก มีเสียงแก๊ก' : 'ปกติ';
+    ui.btn(R(px + pw - 196, 654, 180, 32), 'ซ่อม / เปลี่ยนน้ำมัน', !!S.seized, C.Green, () => send('repairNow', 1), F.cap);
+    srow('เครื่อง', clamp((T - 30) / 190, 0, 1), tCol, `${f0(T)} °C  ${tTxt}`);
+    srow('น้ำมัน', clamp(visc / 2.2, 0, 1), vCol, `${f0(oilT)}°C  ${visc.toFixed(1)}x  ${vTxt}`);
+    srow('ลูกสูบ', wear, wCol, `สึก ${f0(wear * 100)}%  ${wTxt}`);
+  } else if (driveTab === 1) {
     const lm = (S.ecuAfr ?? 14.7) / installed.Stoich, sy = mixSymptom(lm), adv = S.ecuAdv ?? 0, mbt = S.ecuMbt ?? 0, kn = S.knock ?? 0, egt = S.ecuEgt ?? 0;
     const items = [
       ['AFR', f1(S.ecuAfr ?? 14.7), sy ? sy[1] : C.Text],
@@ -512,6 +525,8 @@ function drawGauge(cx, cy, r) {
   ui.txt(runDist < 0 ? '-' : `${runDist < 1000 ? f0(runDist) + ' ม.' : f2(runDist / 1000) + ' กม.'}`, F.num, C.Accent, 262, 826);
   ui.txt(runDist < 0 ? 'ออกตัวจากหยุดนิ่งเพื่อวัด' : `${f1(runTime)} วิ  ${runFull ? '• เต็มคันเร่ง' : '• ไม่เต็มคันเร่ง'}`, F.xs, runDist >= 0 && runFull ? C.Green : C.Dim, 262, 876);
   if (S.dynoPhase !== 0) ui.txtC('กำลังวัดไดโน...', F.btn, C.Green, cx, cy - 112 * k);
+  else if (S.seized) ui.txtC('ลูกสูบล็อก! ' + S.seizeCause, F.btn, C.Red, cx, cy - 112 * k);
+  else if ((S.engT ?? 0) > 150) ui.txtC('เครื่องร้อนจัด! ปล่อยคันเร่ง ให้ลมระบาย', F.btn, C.Red, cx, cy - 112 * k);
   else if (!S.running) ui.txtC(S.ignition ? 'กด S ค้างเพื่อสตาร์ท' : 'ดับเครื่องอยู่ - กด S ค้างเพื่อสตาร์ท', F.md, C.Accent, cx, cy - 112 * k);
   const na = ang(needle);
   g.lineCap = 'round'; g.strokeStyle = C.Accent; g.lineWidth = 9 * k; g.beginPath();

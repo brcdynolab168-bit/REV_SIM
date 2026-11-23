@@ -42,6 +42,7 @@ export class EngineSim {
     this.model = new EngineModel(design); this.pending = null;
     // อินพุต
     this.idleBoost = 12;      // เสริมเสียงเดินเบา (ตั้งในหน้าตั้งค่า) x(1+k) ที่รอบเดินเบา
+    this.engT = 35; this.oilT = 35; this.oilVisc = 2.2; this.wear = 0; this.seized = false; this.seizeCause = ''; this._ambient = 30; this._thermMult = 1;
     this.throttleInput = 0; this.starterHeld = false; this.ignition = true; this.volume = 0.8;
     this.gearInput = 0; this.clutchInput = 0; this.clutchEnabled = true; this.slopePct = 0; this.brakeInput = 0;
     this._lever = 0; this._cfLock = 0;
@@ -62,6 +63,9 @@ export class EngineSim {
 
   set surface(i) { Veh.setSurface(i); }
   assemble(design) { this.pending = new EngineModel(design); this._roadReset = true; }
+  /** ซ่อมเครื่อง: เปลี่ยนลูก/น้ำมันใหม่ ความร้อนกลับเป็นอุณหภูมิห้อง */
+  set repairNow(v) { this.repair(); }
+  repair() { this.wear = 0; this.seized = false; this.seizeCause = ''; this.engT = this._ambient + 5; this.oilT = this._ambient + 5; }
   startDyno() { if (this.running && this.dynoPhase === 0) this._dynoRequest = true; }
   get running() { return this.ignition && this.rpm > 700; }
   get isAuto() { return this.model.D.Auto === 1; }
@@ -107,22 +111,43 @@ export class EngineSim {
     const ecu = m.EcuAt(rpm, eff);
     this.ecuMult = ecu.Mult; this.ecuAfr = ecu.Afr; this.ecuAdv = ecu.Adv; this.ecuDuty = ecu.Duty; this.ecuEgt = ecu.Egt; this.ecuMbt = ecu.Mbt; this.ecuPw = ecu.PulseMs; this.ecuEoi = ecu.Eoi; this.ecuDwell = ecu.DwellMs; this.ecuSpark = ecu.Spark; this.ecuMisfire = ecu.Misfire; this._lean = ecu.Lean || 0; this._rich = ecu.Rich || 0; this._surgePh = (this._surgePh || 0) + dt * 6.2832 * (2.2 + 1.5 * this._noise());
     this.knock = m.Knock(rpm, this.load, ecu.KnockShift);
+    // ---------------- ความร้อน / น้ำมัน / ลูกสูบสึก ----------------
+    {
+      const lim = m.D.Limiter, rr = clamp(rpm / lim, 0, 1.2), ldr = this.load, lam = ecu.Lambda;
+      const lean = clamp((lam - 1.0) / 0.35, 0, 1), rich = clamp((0.92 - lam) / 0.3, 0, 1), advK = clamp((ecu.Adv - ecu.Mbt) / 12, -0.5, 1), crK = clamp((m.CrDyn - 9.5) / 6, -0.3, 1);
+      const gen = 6.5 * 0.34 * (0.45 * (ign ? 1 : 0.1) + 0.9 * ldr * rr * (this._fuelOn ? 1 : 0.35)) * Math.pow(m.Cc / 125, 0.3) * (1 + 0.9 * lean - 0.25 * rich + 0.35 * Math.max(0, advK) + 0.3 * crK);
+      const cool = 6.5 * (0.0030 + 0.0035 * Math.min(1, Math.abs(this.speed) / 15));
+      this.engT += (gen - cool * (this.engT - this._ambient)) * dt;
+      this.oilT += (this.engT * 0.92 + 4 - this.oilT) * Math.min(1, 0.08 * dt);
+      this.oilVisc = clamp(Math.exp(-(this.oilT - 100) / 45), 0.25, 3);
+      const film = clamp(this.oilVisc / 0.6, 0, 1), hotK = clamp((this.engT - 150) / 40, 0, 1);
+      if (!this.seized) {
+        this.wear = clamp(this.wear + (0.012 * (1 - film) * rr * (0.4 + ldr) + 0.03 * hotK * (0.3 + ldr) + 0.05 * this.knock * ldr) * dt, 0, 1);
+        if (this.wear >= 1) { this.seized = true; this.seizeCause = this.engT > 185 ? 'ลูกละลาย (ร้อนจัด)' : 'ลูกล็อก (น้ำมันบาง/สึก)'; }
+      }
+      // ร้อน: กำลังตก + น็อกง่าย  ลูกสึก: แก๊ก (เสียงน็อก/สะบัด) กำลังตก ไม่ข้ามรอบสูง
+      this.knock = clamp(this.knock + 0.3 * clamp((this.engT - 125) / 45, 0, 1) + 0.14 * clamp((this.wear - 0.2) / 0.4, 0, 1), 0, 1);
+      this._thermMult = (1 - 0.2 * clamp((this.engT - 115) / 60, 0, 1)) * (1 - 0.45 * this.wear * (0.4 + 0.6 * rr * rr));
+      this._effLim = lim * (1 - 0.3 * clamp((this.wear - 0.35) / 0.65, 0, 1));
+    }
 
     const D = m.D;
-    if (rpm > D.Limiter) this.cut = true;
-    else if (rpm < D.Limiter - D.ResumeGap) this.cut = false;
+    const derate = D.Limiter - (this._effLim || D.Limiter);
+    if (rpm > D.Limiter - derate) this.cut = true;
+    else if (rpm < D.Limiter - D.ResumeGap - derate) this.cut = false;
     this.softK = D.SoftGap > 0 ? clamp((rpm - (D.Limiter - D.SoftGap)) / D.SoftGap, 0, 1) : 0;
     this._fuelOn = ign && !this.cut && rpm > 220;
     this._starterActive = this.starterHeld && rpm < 1000;
 
     let drive = 0;
-    if (this._fuelOn && this._cycleFiring) drive = m.TorqueInd(rpm) * this.load * this.ecuMult * (1 + 0.16 * (this._lean || 0) * Math.sin(this._surgePh || 0) - 0.10 * (this._rich || 0) * Math.max(0, Math.sin((this._surgePh || 0) * 0.5))) * this._cycleVar * (1 - 0.5 * this._cycKnock) * (1 - 0.4 * this.softK);
+    if (this._fuelOn && this._cycleFiring) drive = m.TorqueInd(rpm) * this.load * this.ecuMult * (this._thermMult || 1) * (1 + 0.16 * (this._lean || 0) * Math.sin(this._surgePh || 0) - 0.10 * (this._rich || 0) * Math.max(0, Math.sin((this._surgePh || 0) * 0.5))) * this._cycleVar * (1 - 0.5 * this._cycKnock) * (1 - 0.4 * this.softK);
     let torque = drive;
     if (this._starterActive) torque += 5.5 * Math.max(0, 1 - rpm / 650);
-    let friction = m.Friction(rpm) + m.PumpLoss(rpm, this.load);
+    let friction = (m.Friction(rpm) + m.PumpLoss(rpm, this.load)) * (1 + 0.10 * clamp(this.oilVisc - 1, -0.5, 1.5) + 0.5 * this.wear);
     // เครื่องสูบเดียว: ช่วงจังหวะอัดลูกสูบต้านแรง ช่วงขยายคืนแรง ทำให้เบรกเครื่องเป็นจังหวะหนืด ๆ (คาบ = 2 รอบเพลา) ยิ่งปิดคันเร่ง/อัดสูงยิ่งชัด
     this._brkPh = ((this._brkPh || 0) + dt * rpm / 60 * Math.PI) % (2 * Math.PI);
     friction *= 1 + 0.55 * (1 - this.load) * Math.min(1.4, m.CompDrag) * Math.sin(this._brkPh);
+    if (this.seized) { torque = 0; friction = 70; }       // ลูกสูบล็อก: เพลาข้อล็อก ไม่มีกำลัง
     if (rpm <= 0 && torque < friction) friction = torque;
 
     if (this.dynoPhase === 1 && rpm >= DynoStartRpm) { this.dynoPhase = 2; this._dynoRpm = DynoStartRpm; }

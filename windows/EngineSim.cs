@@ -97,6 +97,18 @@ public sealed class EngineSim
     private int _blockPos;
     private float _idleInt;
     private float _huntPh, _huntRate, _surgePh, _brkPh;
+    // ความร้อน / น้ำมัน / ลูกสูบสึก
+    private float _engT = 35f, _oilT = 35f, _oilVisc = 2.2f, _wear, _thermMult = 1f, _effLim;
+    private bool _seized; private string _seizeCause = "";
+    private const float AmbientC = 30f;
+    public float EngT => _engT;
+    public float OilT => _oilT;
+    public float OilVisc => _oilVisc;
+    public float Wear => _wear;
+    public bool Seized => _seized;
+    public string SeizeCause => _seizeCause;
+    /// <summary>ซ่อมเครื่อง: เปลี่ยนลูก/น้ำมันใหม่ ความร้อนกลับเป็นอุณหภูมิห้อง</summary>
+    public void Repair() { _wear = 0f; _seized = false; _seizeCause = ""; _engT = AmbientC + 5f; _oilT = AmbientC + 5f; }
     private float _idleWobble;                  // รอบเดินเบาที่เหวี่ยงขึ้นลงช้า ๆ (แคมโอเวอร์แลปมาก/กำลังอัดต่ำ)
     private float _load;                        // 0..1 ปริมาณไอดีต่อรอบ
     public float KnockNow => _knock;
@@ -238,11 +250,32 @@ public sealed class EngineSim
         _load = m.Load(eff, rpm);
         _ecu = m.EcuAt(rpm, eff);
         _knock = m.Knock(rpm, _load, _ecu.KnockShift);
+        // ---------------- ความร้อน / น้ำมัน / ลูกสูบสึก ----------------
+        {
+            float lim = m.D.Limiter, rr = Clamp(rpm / lim, 0f, 1.2f), ldr = _load, lam = _ecu.Lambda;
+            float lean = Clamp((lam - 1.0f) / 0.35f, 0f, 1f), rich = Clamp((0.92f - lam) / 0.3f, 0f, 1f), advK = Clamp((_ecu.Adv - _ecu.Mbt) / 12f, -0.5f, 1f), crK = Clamp((m.CrDyn - 9.5f) / 6f, -0.3f, 1f);
+            float gen = 6.5f * 0.34f * (0.45f * (ign ? 1f : 0.1f) + 0.9f * ldr * rr * (_fuelOn ? 1f : 0.35f)) * MathF.Pow(m.Cc / 125f, 0.3f) * (1f + 0.9f * lean - 0.25f * rich + 0.35f * MathF.Max(0f, advK) + 0.3f * crK);
+            float cool = 6.5f * (0.0030f + 0.0035f * MathF.Min(1f, MathF.Abs(_speed) / 15f));
+            _engT += (gen - cool * (_engT - AmbientC)) * dt;
+            _oilT += (_engT * 0.92f + 4f - _oilT) * MathF.Min(1f, 0.08f * dt);
+            _oilVisc = Clamp(MathF.Exp(-(_oilT - 100f) / 45f), 0.25f, 3f);
+            float film = Clamp(_oilVisc / 0.6f, 0f, 1f), hotK = Clamp((_engT - 150f) / 40f, 0f, 1f);
+            if (!_seized)
+            {
+                _wear = Clamp(_wear + (0.012f * (1f - film) * rr * (0.4f + ldr) + 0.03f * hotK * (0.3f + ldr) + 0.05f * _knock * ldr) * dt, 0f, 1f);
+                if (_wear >= 1f) { _seized = true; _seizeCause = _engT > 185f ? "ลูกละลาย (ร้อนจัด)" : "ลูกล็อก (น้ำมันบาง/สึก)"; }
+            }
+            // ร้อน: กำลังตก + น็อกง่าย  ลูกสึก: แก๊ก (เสียงน็อก/สะบัด) กำลังตก ไม่ข้ามรอบสูง
+            _knock = Clamp(_knock + 0.3f * Clamp((_engT - 125f) / 45f, 0f, 1f) + 0.14f * Clamp((_wear - 0.2f) / 0.4f, 0f, 1f), 0f, 1f);
+            _thermMult = (1f - 0.2f * Clamp((_engT - 115f) / 60f, 0f, 1f)) * (1f - 0.45f * _wear * (0.4f + 0.6f * rr * rr));
+            _effLim = lim * (1f - 0.3f * Clamp((_wear - 0.35f) / 0.65f, 0f, 1f));
+        }
         _surgePh += dt * 6.2832f * (2.2f + 1.5f * Noise());
 
         // ตัดรอบแบบ hard cut มี hysteresis ทำให้รอบเด้ง
-        if (rpm > m.D.Limiter) _cut = true;
-        else if (rpm < m.D.ResumeRpm) _cut = false;
+        float derate = _effLim > 0f ? m.D.Limiter - _effLim : 0f;
+        if (rpm > m.D.Limiter - derate) _cut = true;
+        else if (rpm < m.D.ResumeRpm - derate) _cut = false;
 
         // soft cut: ใต้ hard cut ลงมา ค่อย ๆ หน่วงไฟ/ข้ามจังหวะระเบิดมากขึ้นจนถึง hard cut
         _softK = m.D.SoftGap > 0f ? Clamp((rpm - m.D.SoftRpm) / m.D.SoftGap, 0f, 1f) : 0f;
@@ -250,15 +283,16 @@ public sealed class EngineSim
         _starterActive = StarterHeld && rpm < 1000f;
 
         float drive = 0f;
-        if (_fuelOn && _cycleFiring) drive = m.TorqueInd(rpm) * _load * _ecu.Mult * (1f + 0.16f * _ecu.Lean * MathF.Sin(_surgePh) - 0.10f * _ecu.Rich * MathF.Max(0f, MathF.Sin(_surgePh * 0.5f))) * _cycleVar * (1f - 0.5f * _cycKnock) * (1f - 0.4f * _softK);
+        if (_fuelOn && _cycleFiring) drive = m.TorqueInd(rpm) * _load * _ecu.Mult * _thermMult * (1f + 0.16f * _ecu.Lean * MathF.Sin(_surgePh) - 0.10f * _ecu.Rich * MathF.Max(0f, MathF.Sin(_surgePh * 0.5f))) * _cycleVar * (1f - 0.5f * _cycKnock) * (1f - 0.4f * _softK);
         float torque = drive;
         if (_starterActive) torque += 5.5f * MathF.Max(0f, 1f - rpm / 650f);
 
         // แรงเสียดทาน + pumping loss (ลิ้นปิด = เอนจินเบรก)
-        float friction = m.Friction(rpm) + m.PumpLoss(rpm, _load);
+        float friction = (m.Friction(rpm) + m.PumpLoss(rpm, _load)) * (1f + 0.10f * Clamp(_oilVisc - 1f, -0.5f, 1.5f) + 0.5f * _wear);
         // เครื่องสูบเดียว: จังหวะอัดต้าน จังหวะขยายคืนแรง เบรกเครื่องเป็นจังหวะหนืด ๆ (คาบ = 2 รอบเพลา)
         _brkPh = (_brkPh + dt * rpm / 60f * MathF.PI) % (2f * MathF.PI);
         friction *= 1f + 0.55f * (1f - _load) * MathF.Min(1.4f, m.CompDrag) * MathF.Sin(_brkPh);
+        if (_seized) { torque = 0f; friction = 70f; }       // ลูกสูบล็อก: เพลาข้อล็อก ไม่มีกำลัง
         if (rpm <= 0f && torque < friction) friction = torque;   // หยุดนิ่ง ไม่หมุนกลับ
 
         // ----- ไดโน: เบรกคุมรอบให้กวาดขึ้นคงที่ แล้ววัดแรงบิดที่เครื่องทำได้ -----

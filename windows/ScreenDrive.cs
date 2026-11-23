@@ -114,8 +114,30 @@ public sealed partial class MainForm
         PanelBox(g, new RectangleF(px, 648, pw, 170), null);
         Btn(g, new RectangleF(px + 16, 654, 150, 32), "คลัตช์ / ยาง", _driveTab == 0, Palette.Green, () => _driveTab = 0, _fCap);
         Btn(g, new RectangleF(px + 174, 654, 150, 32), "Live data", _driveTab == 1, Palette.Blue, () => _driveTab = 1, _fCap);
+        Btn(g, new RectangleF(px + 332, 654, 150, 32), "ความร้อน / สึก", _driveTab == 2, Palette.Red, () => _driveTab = 2, _fCap);
         float ry = 698;
-        if (_driveTab == 1)
+        if (_driveTab == 2)
+        {
+            float T = _eng.EngT, visc = _eng.OilVisc, wear = _eng.Wear, oilT = _eng.OilT;
+            Color tCol = T > 170f ? Palette.Red : T > 135f ? Palette.Yellow : T < 60f ? Palette.Blue : Palette.Green;
+            string tTxt = T > 170f ? "ร้อนจัด! ลูกเสี่ยงละลาย" : T > 135f ? "ร้อน กำลังตก น็อกง่าย" : T < 60f ? "เครื่องยังเย็น" : "อุณหภูมิทำงาน";
+            Color vCol = visc < 0.45f ? Palette.Red : visc < 0.7f ? Palette.Yellow : Palette.Green;
+            string vTxt = visc < 0.45f ? "บางมาก ฟิล์มขาด" : visc < 0.7f ? "บาง" : visc > 1.8f ? "หนืด (เย็น)" : "ปกติ";
+            Color wCol = wear > 0.5f ? Palette.Red : wear > 0.2f ? Palette.Yellow : Palette.Green;
+            string wTxt = _eng.Seized ? _eng.SeizeCause : wear > 0.5f ? "ลูกสึกหนัก ไม่ข้ามรอบ แก๊ก" : wear > 0.2f ? "ลูกเริ่มสึก มีเสียงแก๊ก" : "ปกติ";
+            Btn(g, new RectangleF(px + pw - 196, 654, 180, 32), "ซ่อม / เปลี่ยนน้ำมัน", _eng.Seized, Palette.Green, () => _eng.Repair(), _fCap);
+            void TRow(string label, float frac, Color col, string value)
+            {
+                Txt(g, label, _fSm, Palette.Dim, px + 20, ry);
+                Bar(g, new RectangleF(px + 190, ry + 6, 250, 16), frac, col);
+                Txt(g, value, _fSm, col, px + 456, ry);
+                ry += 34;
+            }
+            TRow("เครื่อง", Math.Clamp((T - 30f) / 190f, 0f, 1f), tCol, $"{T:0} °C  {tTxt}");
+            TRow("น้ำมัน", Math.Clamp(visc / 2.2f, 0f, 1f), vCol, $"{oilT:0}°C  {visc:0.0}x  {vTxt}");
+            TRow("ลูกสูบ", wear, wCol, $"สึก {wear * 100f:0}%  {wTxt}");
+        }
+        else if (_driveTab == 1)
         {
             var ec = _eng.Ecu; var mx = MixSymptom(ec.Lambda); float kn = _eng.KnockNow;
             var items = new (string lb, string val, Color col)[]
@@ -308,6 +330,10 @@ public sealed partial class MainForm
         // ข้อความสถานะ
         if (_eng.DynoRunning)
             TxtC(g, "กำลังวัดไดโน...", _fBtn, Palette.Green, cx, cy - 112 * k);
+        else if (_eng.Seized)
+            TxtC(g, "ลูกสูบล็อก! " + _eng.SeizeCause, _fBtn, Palette.Red, cx, cy - 112 * k);
+        else if (_eng.EngT > 150f)
+            TxtC(g, "เครื่องร้อนจัด! ปล่อยคันเร่ง ให้ลมระบาย", _fBtn, Palette.Red, cx, cy - 112 * k);
         else if (!_eng.Running)
             TxtC(g, _eng.Ignition ? "กด S ค้างเพื่อสตาร์ท" : "ดับเครื่องอยู่ - กด S ค้างเพื่อสตาร์ท", _fMd, Palette.Accent, cx, cy - 112 * k);
 

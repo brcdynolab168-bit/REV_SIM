@@ -18,6 +18,7 @@ class RevProcessor extends AudioWorkletProcessor {
       else if (m.type === 'set') this.sim[m.key] = m.value;
       else if (m.type === 'assemble') this.sim.assemble(m.design);
       else if (m.type === 'dyno') this.sim.startDyno();
+      else if (m.type === 'repair') this.sim.repair();
     };
   }
 
@@ -35,7 +36,7 @@ class RevProcessor extends AudioWorkletProcessor {
         clutchLock: sim.clutchLock, cfLock: sim._cfLock, lever: sim._lever, cvtS: sim.cvtS, running: sim.running, ignition: sim.ignition,
         dynoPhase: sim.dynoPhase, dynoVersion: sim.dynoVersion, dynoFailed: sim.dynoFailed,
         limiter: sim.model.D.Limiter, isAuto: sim.isAuto, scope: sim.scope.slice(), scopeW: sim.scopeW,
-        load: sim.load, thrEff: sim.thrEff, ecuMult: sim.ecuMult, knock: sim.knock, ecuAfr: sim.ecuAfr, ecuAdv: sim.ecuAdv, ecuMbt: sim.ecuMbt, ecuPw: sim.ecuPw, ecuEoi: sim.ecuEoi, ecuDwell: sim.ecuDwell, ecuSpark: sim.ecuSpark, ecuDuty: sim.ecuDuty, ecuEgt: sim.ecuEgt, slipRpm: sim.slipRpm, tracUse: sim.tracUse, spin: sim.spin, driveForce: sim.driveForce, gripMax: sim.gripMax,
+        load: sim.load, thrEff: sim.thrEff, ecuMult: sim.ecuMult, knock: sim.knock, ecuAfr: sim.ecuAfr, ecuAdv: sim.ecuAdv, ecuMbt: sim.ecuMbt, ecuPw: sim.ecuPw, ecuEoi: sim.ecuEoi, ecuDwell: sim.ecuDwell, ecuSpark: sim.ecuSpark, ecuDuty: sim.ecuDuty, ecuEgt: sim.ecuEgt, engT: sim.engT, oilT: sim.oilT, oilVisc: sim.oilVisc, wear: sim.wear, seized: sim.seized, seizeCause: sim.seizeCause, slipRpm: sim.slipRpm, tracUse: sim.tracUse, spin: sim.spin, driveForce: sim.driveForce, gripMax: sim.gripMax,
       };
       if (sim.dynoVersion !== this.lastVer) { this.lastVer = sim.dynoVersion; msg.dynoTq = Array.from(sim.dynoTq); }
       this.port.postMessage(msg);
