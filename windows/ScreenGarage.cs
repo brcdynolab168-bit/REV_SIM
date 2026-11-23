@@ -159,6 +159,7 @@ public sealed partial class MainForm
             case Keys.D7: case Keys.NumPad7: LoadPreset(6); break;
             case Keys.D8: case Keys.NumPad8: LoadPreset(7); break;
             case Keys.T: ToggleAdvisor(); break;
+            case Keys.R: OpenReport(); break;
             case Keys.C: CalibrateToReal(); break;
             case Keys.A: AutoTuneRollers(); break;
             case Keys.Enter: Assemble(); break;
@@ -245,6 +246,7 @@ public sealed partial class MainForm
         }
 
         if (!IsEcuTab || _advisor) DrawGarageStats(g);
+        if (_showReport) DrawReport(g);
     }
 
     private int _specScroll, _partScroll;       // แถวแรกที่เห็นในรายการ (เลื่อนเมื่อมีแถวเกินจอ จะได้ไม่เบียดกัน)
@@ -441,6 +443,7 @@ public sealed partial class MainForm
 
         // ตัวเลขใหญ่
         PanelBox(g, new RectangleF(X, 112, W, 200), "สมรรถนะ (คาดการณ์)");
+        Btn(g, new RectangleF(X + W - 232, 118, 216, 36), "R  สรุปการแก้ไข", false, Palette.Blue, OpenReport, _fCap);
         Txt(g, $"{m.PeakHp:0.0}", _fNumL, Palette.Accent, X + 24, 150);
         Txt(g, $"HP @ {m.PeakPsRpm:N0} rpm", _fSm, Palette.Dim, X + 28, 232);
         Txt(g, $"{m.PeakTq:0.0}", _fNumL, Palette.Blue, X + 360, 150);

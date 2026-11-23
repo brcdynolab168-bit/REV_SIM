@@ -64,7 +64,7 @@ public sealed partial class MainForm : Form
 
     // ผลไดโน
     private int _dynoVersionSeen;
-    private DynoResult? _dyno;
+    private DynoResult? _dyno, _dynoPrev;       // _dynoPrev = ผลไดโนก่อนแก้ ใช้เทียบเส้นประในผลไดโน
     private bool _showDyno;
 
     private string _toast = "";
@@ -167,6 +167,10 @@ public sealed partial class MainForm : Form
             else if (_showDyno)
             {
                 if (e.KeyCode == Keys.Enter || e.KeyCode == Keys.Escape) _showDyno = false;
+            }
+            else if (_showReport)
+            {
+                if (e.KeyCode == Keys.Enter || e.KeyCode == Keys.Escape || e.KeyCode == Keys.R) _showReport = false;
             }
             else if (_showEcuHelp)
             {
@@ -294,6 +298,7 @@ public sealed partial class MainForm : Form
             _last060 = _last100 = _last402 = -1f; _runDist = -1f;
             _peakRpm = 0f;
             _topSession = 0f;
+            if (_dyno != null) _dynoPrev = _dyno;
             _dyno = null;
         }
         _eng.Assemble(_draft);

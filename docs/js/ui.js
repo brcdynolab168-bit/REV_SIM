@@ -210,6 +210,13 @@ export class Ui {
       g.beginPath(); g.arc(X(i), Y(v[i]), 6, 0, 7); g.fillStyle = c; g.fill(); g.strokeStyle = '#fff'; g.lineWidth = 1.6; g.stroke();
     };
     mark(hp, Palette.Accent, hp0); mark(tq, Palette.Blue, tq0);
+    if (cmp) {      // ป้ายบอกช่วงรอบที่กำลังดีขึ้น (เขียว ▲) / แย่ลง (แดง ▼)
+      chartZones(rpm, hp, hp0).slice(0, 3).forEach((z, k) => {
+        const zc = z.good ? Palette.Green : Palette.Red, x0 = XS(z.lo), x1 = XS(z.hi), yl = py + 6 + k * 21;
+        this.line(x0, yl + 19, x1, yl + 19, zc, 2);
+        this.txtC(`${z.good ? '▲' : '▼'} ${z.peak >= 0 ? '+' : ''}${z.peak.toFixed(1)} HP`, Fonts.cap, zc, Math.min(Math.max((x0 + x1) / 2, px_ + 60), px_ + pw - 60), yl + 8);
+      });
+    }
     if (cmp) {      // แถบผลต่างกำลังรายรอบ
       const sy = py + ph + gap, sh = stripH, mid = sy + sh / 2;
       let maxD = 0.5; for (let i = 0; i < rpm.length; i++) if (!Number.isNaN(hp[i]) && !Number.isNaN(hp0[i])) maxD = Math.max(maxD, Math.abs(hp[i] - hp0[i]));
@@ -237,6 +244,23 @@ export class Ui {
       this.txt(`N·m ${tq[it].toFixed(1)} (${sg(dt)}) @${Math.round(rpm[it]).toLocaleString()}`, Fonts.cap, Palette.Blue, px_ + (pw > 560 ? 280 : 250), r.y + 38);
     }
   }
+}
+/** ช่วงรอบที่กำลัง (HP) ต่างจากก่อนชัดเจน: good = ดีขึ้น  คืนเรียงตามความต่างมากไปน้อย */
+export function chartZones(rpm, hp, hp0) {
+  const res = [];
+  if (!hp0) return res;
+  let mx = 1; for (const v of hp) if (!Number.isNaN(v)) mx = Math.max(mx, v);
+  const thr = Math.max(0.12, 0.025 * mx);
+  let start = -1, cls = 0, pk = 0;
+  const close = end => { if (start >= 0 && end - start + 1 >= 3) res.push({ lo: rpm[start], hi: rpm[end], peak: pk, good: cls > 0 }); start = -1; cls = 0; pk = 0; };
+  for (let i = 0; i < rpm.length; i++) {
+    let c = 0, d = 0;
+    if (!Number.isNaN(hp[i]) && !Number.isNaN(hp0[i])) { d = hp[i] - hp0[i]; c = d > thr ? 1 : d < -thr ? -1 : 0; }
+    if (c !== cls) { close(i - 1); if (c !== 0) { start = i; cls = c; pk = d; } }
+    else if (c !== 0 && Math.abs(d) > Math.abs(pk)) pk = d;
+  }
+  close(rpm.length - 1);
+  return res.sort((a, b) => Math.abs(b.peak) - Math.abs(a.peak));
 }
 export const inRect = (r, p) => p.x >= r.x && p.x < r.x + r.w && p.y >= r.y && p.y < r.y + r.h;
 export const R = (x, y, w, h) => ({ x, y, w, h });

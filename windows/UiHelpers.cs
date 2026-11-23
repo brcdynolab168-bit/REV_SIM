@@ -344,6 +344,19 @@ public sealed partial class MainForm
             g.DrawEllipse(Pn(Color.White, 1.6f), X(i) - 6, Y(v[i]) - 6, 12, 12);
         }
         Mark(hp, Palette.Accent, hp0); Mark(tq, Palette.Blue, tq0);
+        if (cmp)       // ป้ายบอกช่วงรอบที่กำลังดีขึ้น (เขียว ▲) / แย่ลง (แดง ▼)
+        {
+            var zs = ChartZones(rpm, hp, hp0);
+            for (int k = 0; k < Math.Min(3, zs.Count); k++)
+            {
+                var z = zs[k];
+                Color zc = z.Good ? Palette.Green : Palette.Red;
+                float x0 = XS(z.Lo), x1 = XS(z.Hi), yl = py + 6 + k * 21;
+                g.DrawLine(Pn(Color.FromArgb(200, zc), 2f), x0, yl + 19, x1, yl + 19);
+                string zt = $"{(z.Good ? "▲" : "▼")} {(z.Peak >= 0 ? "+" : "")}{z.Peak:0.0} HP";
+                TxtC(g, zt, _fCap, zc, Math.Clamp((x0 + x1) / 2f, px + 60, px + pw - 60), yl + 8);
+            }
+        }
 
         // แถบผลต่างกำลังรายรอบ
         if (cmp)

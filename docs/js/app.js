@@ -5,7 +5,7 @@ import {
   Veh, Cvt, clamp, Hp, Ps, PsToHp, calibrate, tireCode, MaxRpm,
 } from './engine.js';
 import * as Adv from './advisor.js';
-import { Ui, Palette as C, Fonts as F, VW, VH, R, inRect, rgbf } from './ui.js';
+import { Ui, Palette as C, Fonts as F, VW, VH, R, inRect, rgbf, chartZones } from './ui.js';
 
 const fmtN = v => Math.round(v).toLocaleString('en-US');
 const f1 = v => v.toFixed(1), f0 = v => v.toFixed(0), f2 = v => v.toFixed(2);
@@ -34,7 +34,7 @@ const bestOf = (cur, v) => (v > 0 && (cur < 0 || v < cur) ? v : cur);
 let cur = newRun(), before = null;
 let last060 = -1, last100 = -1, last402 = -1, trap402 = 0, topSession = 0, peakRpm = 0;
 let runDist = -1, runTime = 0, runFull = true;      // ระยะ/เวลาที่ขับได้จากความเร็ว 0 (ค้างค่าไว้ถึงออกตัวรอบใหม่)
-let dynoRes = null;
+let dynoRes = null, dynoPrev = null;      // dynoPrev = ผลไดโนก่อนแก้ ใช้เทียบเส้นประในผลไดโน
 
 // ================================================================= เสียง / worklet
 let ctx = null, node = null, ready = false;
@@ -145,6 +145,7 @@ window.addEventListener('keydown', e => {
   if (first) {
     if (k === 'f11') { e.preventDefault(); toggleFullscreen(); }
     else if (showDyno) { if (k === 'enter' || k === 'escape') showDyno = false; }
+    else if (showReport) { if (['enter', 'escape', 'r'].includes(k)) showReport = false; }
     else if (showEcuHelp) { if (['enter', 'escape', 'f1', '?', '/'].includes(k)) showEcuHelp = false; }
     else if (page === 'menu') { if (k === 'enter') goTo('drive'); else if (k === 'g') goTo('garage'); else if (k === 'escape') goTo(prevPage); }
     else if (page === 'settings') { if (k === 'escape') goTo('menu'); }
@@ -500,7 +501,13 @@ function drawDynoResult() {
   ui.fillRR(box, 4, 'rgba(17,20,25,0.99)'); ui.drawRR(box, 4, C.Accent, 2);
   ui.txt(`ผลวัดไดโน  (${f0(res.model.Cc)} cc)`, F.title, C.Accent, box.x + 40, box.y + 24);
   const rpm = res.curve.map((_, i) => i * 100), hp = res.curve.map((t, i) => (Number.isNaN(t) ? NaN : Hp(t, i * 100)));
-  ui.chart(R(box.x + 40, box.y + 110, box.w - 80, 460), rpm, res.curve, hp, res.model.D.Limiter);
+  let base = null;
+  if (dynoPrev) {      // เทียบผลไดโนครั้งก่อน (เส้นประ) + ป้ายช่วงรอบที่ดีขึ้น/แย่ลง
+    const tq0 = rpm.map((_, i) => (i < dynoPrev.curve.length ? dynoPrev.curve[i] : NaN)), hp0 = tq0.map((t, i) => (Number.isNaN(t) ? NaN : Hp(t, i * 100)));
+    base = { tq: tq0, hp: hp0 };
+    ui.txt(`เทียบกับผลไดโนครั้งก่อน (เส้นประ)   ก่อน ${f1(dynoPrev.ps * PsToHp)} HP → หลัง ${f1(res.ps * PsToHp)} HP`, F.sm, C.Yellow, box.x + 40, box.y + 76);
+  }
+  ui.chart(R(box.x + 40, box.y + 110, box.w - 80, 460), rpm, res.curve, hp, res.model.D.Limiter, base);
   const y = box.y + 600, m = res.model, rd = m.D;
   ui.txt(`กำลังสูงสุด  ${f1(res.ps * PsToHp)} HP @ ${fmtN(res.psRpm)} rpm`, F.lg, C.Accent, box.x + 40, y);
   ui.txt(`แรงบิดสูงสุด  ${f1(res.peakTq)} N·m @ ${fmtN(res.tqRpm)} rpm`, F.lg, C.Blue, box.x + 40, y + 52);
@@ -512,6 +519,87 @@ function drawDynoResult() {
     ui.txt(cmp, F.md, C.Yellow, box.x + 40, y + 160);
   }
   ui.txtR('คลิก / Enter เพื่อปิด', F.sm, C.Dim, box.x + box.w - 30, box.y + box.h - 46);
+}
+
+// ================================================================= สรุปการแก้ไข (เทียบเครื่องที่ติดตั้งอยู่)
+let showReport = false, repData = null;
+function openReport() {
+  const m0 = installed, m1 = preview, ch = [], notes = [];
+  for (const p of Params) {
+    if (p.key === 'seal' || p.key === 'gtop' || p.key === 'psi') continue;
+    const a = p.get(m0.D), b = p.get(m1.D);
+    if (typeof a === 'number' && Math.abs(a - b) > Math.max(1e-5, (p.step || 0) * 0.01)) ch.push([p.name, paramDisplay(p, m0.D), paramDisplay(p, m1.D)]);
+  }
+  const tab = (name, f0, f1, tol) => { let n = 0; for (let r = 0; r < EcuN; r++) for (let c = 0; c < EcuN; c++) if (Math.abs(f0(c, r) - f1(c, r)) > tol) n++; if (n) ch.push([name, 'ค่าเดิม', `แก้ ${n} ช่อง`]); };
+  tab('ตารางน้ำมัน (ms)', (c, r) => m0.CellMs(c, r), (c, r) => m1.CellMs(c, r), 0.005);
+  tab('ตารางองศาฉีด', (c, r) => m0.CellEoi(c, r), (c, r) => m1.CellEoi(c, r), 0.5);
+  tab('ตารางองศาจุด', (c, r) => m0.CellAdv(c, r), (c, r) => m1.CellAdv(c, r), 0.05);
+  tab('ตารางไทม์คอยล์', (c, r) => m0.CellDwell(c, r), (c, r) => m1.CellDwell(c, r), 0.005);
+  tab('ตาราง MAP', (c, r) => m0.CellMap(c, r), (c, r) => m1.CellMap(c, r), 0.5);
+  const p0 = Adv.predict(m0), p1 = Adv.predict(m1), auto = m1.D.Auto === 1;
+  const ra = Math.round(m1.D.Limiter * 0.35 / 100) * 100, rb = Math.round(m1.D.Limiter * 0.80 / 100) * 100;
+  const up0 = m0.RevUpTime(ra, rb), up1 = m1.RevUpTime(ra, rb), h0 = auto ? Cvt.holdRpm(m0) : 0, h1 = auto ? Cvt.holdRpm(m1) : 0;
+  const rpmA = [], hp = [], hp0 = [];
+  for (let r = 2000; r <= m1.D.Limiter; r += 100) { rpmA.push(r); hp.push(Math.max(0, Hp(m1.BrakeTorqueWot(r), r))); hp0.push(r <= m0.D.Limiter ? Math.max(0, Hp(m0.BrakeTorqueWot(r), r)) : NaN); }
+  const zones = chartZones(rpmA, hp, hp0); let maxD = 0; for (let i = 0; i < hp.length; i++) if (!Number.isNaN(hp0[i])) maxD = Math.max(maxD, Math.abs(hp[i] - hp0[i]));
+  if (!ch.length) notes.push(['ยังไม่ได้แก้อะไรจากเครื่องที่ติดตั้งอยู่', 0]);
+  else {
+    const dh = m1.PeakHp - m0.PeakHp, dt = m1.PeakTq - m0.PeakTq, sg = v => (v >= 0 ? '+' : '') + v.toFixed(1);
+    if (maxD < 0.05) notes.push(['กราฟแรงม้า/แรงบิดของตัวเครื่องไม่เปลี่ยน — สิ่งที่แก้อยู่ที่ชุดส่งกำลัง/ตัวรถ (ชามเม็ด เม็ด สปริง เฟือง ล้อ น้ำหนัก ฯลฯ) ผลจึงดูที่เวลาวิ่งและรอบที่ CVT ถือ', 0]);
+    else {
+      notes.push([`กำลังสูงสุด ${f1(m0.PeakHp)} → ${f1(m1.PeakHp)} HP (${sg(dh)}) @ ${fmtN(m1.PeakPsRpm)} rpm   แรงบิดสูงสุด ${f1(m0.PeakTq)} → ${f1(m1.PeakTq)} N·m (${sg(dt)})`, dh >= 0.05 ? 1 : dh < -0.05 ? 2 : 0]);
+      zones.slice(0, 3).forEach(z => notes.push([`ช่วง ${(z.lo / 1000).toFixed(1)}–${(z.hi / 1000).toFixed(1)}k rpm กำลัง${z.good ? 'เพิ่ม' : 'ลด'}สูงสุด ${sg(z.peak)} HP`, z.good ? 1 : 2]));
+      if (!zones.length) notes.push(['ต่างกันนิดเดียวทุกช่วงรอบ (ไม่ถึงเกณฑ์บอกเป็นช่วง)', 0]);
+      if (m1.PeakPsRpm !== m0.PeakPsRpm) notes.push([`พีคกำลังย้ายจาก ${fmtN(m0.PeakPsRpm)} ไป ${fmtN(m1.PeakPsRpm)} rpm (${m1.PeakPsRpm > m0.PeakPsRpm ? 'ไปรอบสูงขึ้น' : 'ลงมารอบต่ำ'})`, 0]);
+    }
+    const d402 = p1.t402 - p0.t402;
+    notes.push([`402 ม. ${p0.t402.toFixed(2)} → ${p1.t402.toFixed(2)} วิ (${d402 <= 0 ? 'เร็วขึ้น ' : 'ช้าลง '}${Math.abs(d402).toFixed(2)})   0–60 ${p0.t060.toFixed(2)} → ${p1.t060.toFixed(2)}   ท็อป ${f0(p0.top)} → ${f0(p1.top)} กม./ชม.`, d402 < -0.02 ? 1 : d402 > 0.02 ? 2 : 0]);
+    if (auto && Math.abs(h1 - h0) > 20) { const pk = m1.PeakPsRpm, nearer = Math.abs(h1 - pk) < Math.abs(h0 - pk); notes.push([`CVT ถือรอบ ${fmtN(h0)} → ${fmtN(h1)} rpm (พีคกำลัง ${fmtN(pk)}) = ${nearer ? 'ใกล้พีคขึ้น ดี' : 'ห่างพีคขึ้น แย่ลง'}`, nearer ? 1 : 2]); }
+    if (m1.KnockWot(3500) > 0.02 && m0.KnockWot(3500) <= 0.02) notes.push(['เริ่มน็อกที่โหลดสูง (กำลังอัดสูงเกินน้ำมัน) — ลด CR/องศาจุด หรือใช้ออกเทนสูงขึ้น', 2]);
+    if (m1.D.Limiter >= m1.FloatRpm && m0.D.Limiter < m0.FloatRpm) notes.push(['รอบตัดสูงกว่ารอบวาล์วลอยแล้ว กำลังจะตกที่ปลายรอบ', 2]);
+    if (Number.isFinite(up1) && Number.isFinite(up0) && Math.abs(up1 - up0) > 0.03) notes.push([`เร่งรอบเครื่องเปล่า ${up0.toFixed(2)} → ${up1.toFixed(2)} วิ (${up1 < up0 ? 'ไวขึ้น' : 'ยานขึ้น'})`, 0]);
+  }
+  repData = { m0, m1, ch, notes, p0, p1, up0, up1, h0, h1, auto };
+  showReport = true;
+}
+function drawReport() {
+  const g = ui.g, d = repData; g.fillStyle = 'rgba(6,8,11,0.91)'; g.fillRect(0, 0, VW, VH);
+  const box = R(200, 40, 1520, 1000);
+  ui.fillRR(box, 6, C.Panel); ui.drawRR(box, 6, C.Accent, 2);
+  ui.txt('สรุปการแก้ไข  (เทียบเครื่องที่ติดตั้งอยู่)', F.title, C.Accent, box.x + 36, box.y + 18);
+  ui.txtR('คลิกที่ไหนก็ได้ / Esc / R เพื่อปิด', F.xs, C.Dim, box.x + box.w - 36, box.y + 34);
+  const lx = box.x + 36, ly = box.y + 104, lw = 500;
+  ui.rect(lx, ly + 2, 4, 24, C.Yellow); ui.txt(`สิ่งที่เปลี่ยน (${d.ch.length} รายการ)`, F.md, C.Text, lx + 16, ly);
+  let y = ly + 50; const maxRows = 14;
+  d.ch.slice(0, maxRows).forEach(([n, a, b]) => { ui.txt(n, F.cap, C.Dim, lx, y); ui.txt(`${a}  →  ${b}`, F.xs, C.Accent, lx, y + 20); ui.line(lx, y + 50, lx + lw, y + 50, 'rgb(40,46,56)', 1); y += 58; });
+  if (d.ch.length > maxRows) ui.txt(`... และอีก ${d.ch.length - maxRows} รายการ`, F.xs, C.Dim, lx, y);
+  if (!d.ch.length) ui.txt('ไม่มี', F.sm, C.Dim, lx, y);
+  const rx = box.x + 580, rw = 900;
+  drawCompareChart(R(rx, box.y + 100, rw, 380), d.m1, d.m1.D.Limiter);
+  let ty = box.y + 500;
+  ui.txt('ผลเทียบ', F.cap, C.Dim, rx, ty); ui.txtR('ก่อน', F.cap, C.Dim, rx + 470, ty); ui.txtR('หลัง', F.cap, C.Dim, rx + 640, ty); ui.txtR('ต่าง', F.cap, C.Dim, rx + rw, ty);
+  ty += 26;
+  const row = (name, a, b, diff, lowerBetter, dec) => {
+    ui.txt(name, F.xs, C.Text, rx, ty); ui.txtR(a, F.xs, C.Dim, rx + 470, ty); ui.txtR(b, F.xs, C.Text, rx + 640, ty);
+    const same = Math.abs(diff) < 0.0049, good = lowerBetter ? diff < 0 : diff > 0;
+    ui.txtR(same ? '-' : (diff > 0 ? '▲ +' : '▼ ') + diff.toFixed(dec), F.xs, same ? C.Dim : good ? C.Green : C.Red, rx + rw, ty); ty += 28;
+  };
+  const { m0, m1, p0, p1 } = d;
+  row('กำลังสูงสุด (HP)', f1(m0.PeakHp), f1(m1.PeakHp), m1.PeakHp - m0.PeakHp, false, 1);
+  row('แรงบิดสูงสุด (N·m)', f1(m0.PeakTq), f1(m1.PeakTq), m1.PeakTq - m0.PeakTq, false, 1);
+  row('0–60 กม./ชม. (วิ)', p0.t060.toFixed(2), p1.t060.toFixed(2), p1.t060 - p0.t060, true, 2);
+  row('100 ม. (วิ)', p0.t100.toFixed(2), p1.t100.toFixed(2), p1.t100 - p0.t100, true, 2);
+  row('402 ม. (วิ)', p0.t402.toFixed(2), p1.t402.toFixed(2), p1.t402 - p0.t402, true, 2);
+  row('ความเร็วปลาย 402 ม.', f0(p0.trap), f0(p1.trap), p1.trap - p0.trap, false, 0);
+  row('ท็อปสปีด (กม./ชม.)', f0(p0.top), f0(p1.top), p1.top - p0.top, false, 0);
+  if (d.auto) row('CVT ถือรอบ (rpm)', fmtN(d.h0), fmtN(d.h1), d.h1 - d.h0, false, 0);
+  { const t = v => (Number.isFinite(v) ? v.toFixed(2) : '∞'); row('เร่งรอบเครื่องเปล่า (วิ)', t(d.up0), t(d.up1), Number.isFinite(d.up0) && Number.isFinite(d.up1) ? d.up1 - d.up0 : 0, true, 2); }
+  ty += 12; ui.rect(rx, ty + 2, 4, 22, C.Yellow); ui.txt('สรุป', F.md, C.Text, rx + 16, ty); ty += 40;
+  for (const [t, st] of d.notes) {
+    const col = st === 1 ? C.Green : st === 2 ? C.Red : C.Dim, yy = ui.wrap((st === 1 ? '▲ ' : st === 2 ? '▼ ' : '• ') + t, F.xs, col, rx, ty, rw);
+    ty = yy + 6; if (ty > box.y + box.h - 40) break;
+  }
+  ui.hit(R(0, 0, VW, VH), () => { showReport = false; });
 }
 
 // ================================================================= อู่
@@ -550,7 +638,7 @@ function assemble() {
   const changed = JSON.stringify(draft) !== JSON.stringify(design);
   if (changed) {
     if (runAny(cur)) before = cur;
-    cur = newRun(); last060 = last100 = last402 = -1; runDist = -1; peakRpm = 0; topSession = 0; dynoRes = null;
+    cur = newRun(); last060 = last100 = last402 = -1; runDist = -1; peakRpm = 0; topSession = 0; if (dynoRes) dynoPrev = dynoRes; dynoRes = null;
   }
   design = { ...draft }; save.design = design; persist();
   installed = new EngineModel(design);
@@ -571,6 +659,7 @@ function garageKey(k, shift) {
     case 'tab': setTab(gTab + (shift ? -1 : 1)); break;
     case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': loadPreset(+k - 1); break;
     case 't': advisorOn = !advisorOn; advKey = ''; break;
+    case 'r': openReport(); break;
     case 'c': calibrateToReal(); break;
     case 'a': autoTuneRollers(); break;
     case 'enter': assemble(); break;
@@ -893,6 +982,7 @@ function drawGarage() {
   else if (isEcuTab()) drawEcu();
   else { drawSpecRows(); if (GarageTabs[gTab][1].includes('realhp')) drawCalibrateButtons(); }
   if (!isEcuTab() || advisorOn) drawGarageStats();
+  if (showReport) drawReport();
 }
 
 function hintBox(text) {
@@ -997,6 +1087,7 @@ function drawParts() {
 function drawGarageStats() {
   const m = preview, d = draft, X = 1180, W = 700;
   ui.panelBox(R(X, 112, W, 200), 'สมรรถนะ (คาดการณ์)');
+  ui.btn(R(X + W - 232, 118, 216, 36), 'R  สรุปการแก้ไข', false, C.Blue, openReport, F.cap);
   ui.txt(f1(m.PeakHp), F.numL, C.Accent, X + 24, 150); ui.txt(`HP @ ${fmtN(m.PeakPsRpm)} rpm`, F.sm, C.Dim, X + 28, 232);
   ui.txt(f1(m.PeakTq), F.numL, C.Blue, X + 360, 150); ui.txt(`N·m @ ${fmtN(m.PeakTqRpm)} rpm`, F.sm, C.Dim, X + 364, 232);
   ui.txt(`${f1(m.Cc)} cc   •   ก้าน/ชัก ${f2(m.RodRatio)}   •   รถ+คน ${f0(Veh.mass(d))} กก.   •   ${f0(m.PeakHp / m.Cc * 1000)} HP/ลิตร`, F.xs, C.Dim, X + 28, 272);

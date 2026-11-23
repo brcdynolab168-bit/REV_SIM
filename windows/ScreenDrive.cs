@@ -321,7 +321,18 @@ public sealed partial class MainForm
             rpm[i] = i * 100f;
             ps[i] = float.IsNaN(res.Tq[i]) ? float.NaN : EngineModel.Hp(res.Tq[i], rpm[i]);
         }
-        DrawChart(g, new RectangleF(box.X + 40, box.Y + 110, box.Width - 80, 460), rpm, res.Tq, ps, res.Model.D.Limiter);
+        float[]? tq0 = null, ps0 = null;
+        if (_dynoPrev != null)      // เทียบผลไดโนครั้งก่อน (เส้นประ) + ป้ายช่วงรอบที่ดีขึ้น/แย่ลง
+        {
+            tq0 = new float[rpm.Length]; ps0 = new float[rpm.Length];
+            for (int i = 0; i < rpm.Length; i++)
+            {
+                float t0 = i < _dynoPrev.Tq.Length ? _dynoPrev.Tq[i] : float.NaN;
+                tq0[i] = t0; ps0[i] = float.IsNaN(t0) ? float.NaN : EngineModel.Hp(t0, rpm[i]);
+            }
+        }
+        DrawChart(g, new RectangleF(box.X + 40, box.Y + 110, box.Width - 80, 460), rpm, res.Tq, ps, res.Model.D.Limiter, tq0, ps0);
+        if (_dynoPrev != null) Txt(g, $"เทียบกับผลไดโนครั้งก่อน (เส้นประ)   ก่อน {_dynoPrev.PeakPs * EngineModel.PsToHp:0.0} HP → หลัง {res.PeakPs * EngineModel.PsToHp:0.0} HP", _fSm, Palette.Yellow, box.X + 40, box.Y + 76);
 
         float y = box.Y + 600;
         Txt(g, $"กำลังสูงสุด  {res.PeakPs * EngineModel.PsToHp:0.0} HP @ {res.PeakPsRpm:N0} rpm", _fLg, Palette.Accent, box.X + 40, y);
