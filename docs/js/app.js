@@ -1219,6 +1219,7 @@ function drawGarageStats() {
   const floatBad = d.Limiter >= m.FloatRpm; line(`วาล์วลอยที่ ${fmtN(m.FloatRpm)} rpm${floatBad ? '  รอบตัดสูงไป' : ''}`, floatBad ? 2 : 1);
   { const ra = Math.round(d.Limiter * 0.35 / 100) * 100, rb = Math.round(d.Limiter * 0.80 / 100) * 100, up = m.RevUpTime(ra, rb), dn = m.CoastTime(rb, ra);
     line(`เร่งรอบ ${fmtN(ra)}→${fmtN(rb)}: ${up.toFixed(2)} วิ  •  ปล่อยคันเร่งตก: ${dn.toFixed(2)} วิ  (เครื่องเปล่า)` + (up > 1.6 ? '  เร่งยาน' : up < 0.35 ? '  เร่งไวมาก' : ''), up > 1.6 ? 2 : 1); }
+  { const rb = Math.round(d.Limiter * 0.6 / 500) * 500; line(`เบรกเครื่อง @${fmtN(rb)} rpm: ${m.EngineBrake(rb).toFixed(1)} N·m (หนืดตามรอบ + แรงอัด ${m.CompDrag.toFixed(2)}x)`, 0); }
   const vpL = m.PistonSpeed(d.Limiter); line(`ลูกสูบเฉลี่ย ${f1(vpL)} ม./วิ ที่รอบตัด${vpL > 24 ? '  (ชักยาวเกิน กำลังตก)' : ''}`, vpL > 24 ? 2 : vpL > 22 ? 0 : 1);
   const kn = m.Knock(3500, m.Load(1, 3500)), margin = m.CrLimit - m.CrDyn, fuel = Fuels[clamp(d.Fuel, 0, 6)].name;
   line(kn > 0.02 ? `น็อก! CR ${f1(d.Cr)} (${f0(m.Psi)} psi) เกินพิกัด ${fuel} (${f1(m.CrLimit)})` : `CR ${f1(d.Cr)}  •  ${f0(m.Psi)} psi  •  พิกัด ${fuel} ${f1(m.CrLimit)} (เหลือ ${f1(margin)})`, kn > 0.02 || margin < 0.5 ? 2 : 1);

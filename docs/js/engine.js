@@ -356,7 +356,9 @@ export class EngineModel {
   Friction(rpm) { return lerpT(this._fric, rpm); }
   /** แรงฝืดจากการอัด (เบรกเครื่อง) : แรงดันอัดสูง/CR สูง ต้านตอนปิดคันเร่งมาก รอบตกเร็วขึ้น  อ้างอิง ~190 psi = 1.0 */
   get CompDrag() { return Math.pow(clamp(this.Psi / 190, 0.5, 2.2), 1.4); }
-  PumpLoss(rpm, load) { return (1 - load) * (0.30 + 0.00018 * rpm) * this.FrictionScale * this.CompDrag; }
+  PumpLoss(rpm, load) { return (1 - load) * (0.42 + 0.00026 * rpm) * this.FrictionScale * this.CompDrag; }
+  /** แรงบิดเบรกเครื่อง (N·m) ตอนปิดคันเร่ง: แรงเสียดทาน (หนืดตามรอบ) + ปั๊มอากาศสูญญากาศ + แรงอัดของลูกสูบ */
+  EngineBrake(rpm) { return this.Friction(rpm) + this.PumpLoss(rpm, 0.04); }
   /** เวลา (วิ) ที่เครื่องเปล่าเร่งเปิดคันเร่งสุดจากรอบ a ไป b */
   RevUpTime(a, b) { let t = 0; for (let r = a; r < b; r += 100) { const tq = this.BrakeTorqueWot(r + 50); if (tq < 0.05) return Infinity; t += this.Inertia * (100 * 2 * Math.PI / 60) / tq; } return t; }
   /** เวลา (วิ) ที่รอบตกจาก a ลง b ตอนปล่อยคันเร่ง */

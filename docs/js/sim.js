@@ -120,6 +120,9 @@ export class EngineSim {
     let torque = drive;
     if (this._starterActive) torque += 5.5 * Math.max(0, 1 - rpm / 650);
     let friction = m.Friction(rpm) + m.PumpLoss(rpm, this.load);
+    // เครื่องสูบเดียว: ช่วงจังหวะอัดลูกสูบต้านแรง ช่วงขยายคืนแรง ทำให้เบรกเครื่องเป็นจังหวะหนืด ๆ (คาบ = 2 รอบเพลา) ยิ่งปิดคันเร่ง/อัดสูงยิ่งชัด
+    this._brkPh = ((this._brkPh || 0) + dt * rpm / 60 * Math.PI) % (2 * Math.PI);
+    friction *= 1 + 0.55 * (1 - this.load) * Math.min(1.4, m.CompDrag) * Math.sin(this._brkPh);
     if (rpm <= 0 && torque < friction) friction = torque;
 
     if (this.dynoPhase === 1 && rpm >= DynoStartRpm) { this.dynoPhase = 2; this._dynoRpm = DynoStartRpm; }

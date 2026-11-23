@@ -602,7 +602,9 @@ public sealed class EngineModel
     /// <summary>แรงฝืดจากการอัด (เบรกเครื่อง) : แรงดันอัดสูง/CR สูง ลูกสูบต้านตอนปิดคันเร่งมาก รอบตกเร็วขึ้น  อ้างอิง ~190 psi = 1.0</summary>
     public float CompDrag => MathF.Pow(Math.Clamp(Psi / 190f, 0.5f, 2.2f), 1.4f);
     /// <summary>แรงต้านปั๊มอากาศ (pumping loss) ที่ภาระ load  ลิ้นปิด = มากสุด</summary>
-    public float PumpLoss(float rpm, float load) => (1f - load) * (0.30f + 0.00018f * rpm) * FrictionScale * CompDrag;
+    public float PumpLoss(float rpm, float load) => (1f - load) * (0.42f + 0.00026f * rpm) * FrictionScale * CompDrag;
+    /// <summary>แรงบิดเบรกเครื่อง (N·m) ตอนปิดคันเร่ง: แรงเสียดทาน (หนืดตามรอบ) + ปั๊มอากาศสูญญากาศ + แรงอัดของลูกสูบ</summary>
+    public float EngineBrake(float rpm) => Friction(rpm) + PumpLoss(rpm, 0.04f);
 
     /// <summary>เวลา (วิ) ที่เครื่องเปล่า (ไม่มีล้อ) เร่งเปิดคันเร่งสุดจากรอบ a ไป b : ความเฉื่อย (ข้อ/จานไฟ) และแรงบิดสุทธิ</summary>
     public float RevUpTime(float a, float b)

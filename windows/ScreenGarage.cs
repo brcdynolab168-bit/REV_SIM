@@ -486,6 +486,7 @@ public sealed partial class MainForm
             float up = m.RevUpTime(ra, rb), dn = m.CoastTime(rb, ra);
             Line($"เร่งรอบ {ra:N0}»{rb:N0}: {up:0.00} วิ  •  ปล่อยคันเร่งตก: {dn:0.00} วิ  (เครื่องเปล่า)" + (up > 1.6f ? "  เร่งยาน" : up < 0.35f ? "  เร่งไวมาก" : ""), up > 1.6f ? 2 : 1);
         }
+        { float rb = MathF.Round(d.Limiter * 0.6f / 500f) * 500f; Line($"เบรกเครื่อง @{rb:N0} rpm: {m.EngineBrake(rb):0.0} N·m (หนืดตามรอบ + แรงอัด {m.CompDrag:0.00}x)", 0); }
         Line($"ลูกสูบเฉลี่ย {vpL:0.0} ม./วิ ที่รอบตัด" + (vpL > 24f ? "  (ชักยาวเกิน กำลังตก)" : ""), vpL > 24f ? 2 : vpL > 22f ? 0 : 1);
 
         float kn = m.KnockWot(3500f);

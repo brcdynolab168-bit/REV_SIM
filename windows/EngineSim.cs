@@ -96,7 +96,7 @@ public sealed class EngineSim
     private const float BlockDt = Block / Fs;
     private int _blockPos;
     private float _idleInt;
-    private float _huntPh, _huntRate, _surgePh;
+    private float _huntPh, _huntRate, _surgePh, _brkPh;
     private float _idleWobble;                  // รอบเดินเบาที่เหวี่ยงขึ้นลงช้า ๆ (แคมโอเวอร์แลปมาก/กำลังอัดต่ำ)
     private float _load;                        // 0..1 ปริมาณไอดีต่อรอบ
     public float KnockNow => _knock;
@@ -256,6 +256,9 @@ public sealed class EngineSim
 
         // แรงเสียดทาน + pumping loss (ลิ้นปิด = เอนจินเบรก)
         float friction = m.Friction(rpm) + m.PumpLoss(rpm, _load);
+        // เครื่องสูบเดียว: จังหวะอัดต้าน จังหวะขยายคืนแรง เบรกเครื่องเป็นจังหวะหนืด ๆ (คาบ = 2 รอบเพลา)
+        _brkPh = (_brkPh + dt * rpm / 60f * MathF.PI) % (2f * MathF.PI);
+        friction *= 1f + 0.55f * (1f - _load) * MathF.Min(1.4f, m.CompDrag) * MathF.Sin(_brkPh);
         if (rpm <= 0f && torque < friction) friction = torque;   // หยุดนิ่ง ไม่หมุนกลับ
 
         // ----- ไดโน: เบรกคุมรอบให้กวาดขึ้นคงที่ แล้ววัดแรงบิดที่เครื่องทำได้ -----
