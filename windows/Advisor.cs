@@ -163,7 +163,7 @@ public static class Advisor
                 var pb = Predict(new EngineModel(d));
                 best.Add(new Suggestion
                 {
-                    Label = $"ตั้งรอบตัดตามเป้าหมาย:  {lim.Display(d0)}  →  {lim.Display(d)}",
+                    Label = $"ตั้งรอบตัดตามเป้าหมาย:  {lim.Display(d0)}  »  {lim.Display(d)}",
                     Design = d.Clone(), Before = pa, After = pb, Gain = 999f, Note = "ตั้งตามโจทย์ (ใช้เป็นฐานของข้อแนะนำด้านล่าง)",
                 });
             }
@@ -207,11 +207,11 @@ public static class Advisor
                 if (m1.Overlap > 40f && m0.Overlap <= 40f) notes.Add("เดินเบาสะดุดขึ้น");
                 if (m1.Hunt > 0.25f && m0.Hunt <= 0.25f) notes.Add("เดินหอบ");
                 if (m1.Psi > m0.Psi + 15f) notes.Add($"แรงดันอัดเพิ่มเป็น {m1.Psi:0} psi");
-                if (m1.PeakPs < m0.PeakPs * 0.97f) notes.Add($"แรงม้าสูงสุดลด {m0.PeakPs * EngineModel.PsToHp:0.0}→{m1.PeakPs * EngineModel.PsToHp:0.0} HP");
-                if (m1.PeakPs > m0.PeakPs * 1.02f) notes.Add($"แรงม้าสูงสุด {m0.PeakPs * EngineModel.PsToHp:0.0}→{m1.PeakPs * EngineModel.PsToHp:0.0} HP");
+                if (m1.PeakPs < m0.PeakPs * 0.97f) notes.Add($"แรงม้าสูงสุดลด {m0.PeakPs * EngineModel.PsToHp:0.0}»{m1.PeakPs * EngineModel.PsToHp:0.0} HP");
+                if (m1.PeakPs > m0.PeakPs * 1.02f) notes.Add($"แรงม้าสูงสุด {m0.PeakPs * EngineModel.PsToHp:0.0}»{m1.PeakPs * EngineModel.PsToHp:0.0} HP");
                 top = new Suggestion
                 {
-                    Label = $"{def.Name}:  {def.Display(d)}  →  {def.Display(d1)}",
+                    Label = $"{def.Name}:  {def.Display(d)}  »  {def.Display(d1)}",
                     Design = d1, Before = p0, After = p1, Gain = gain,
                     Note = string.Join("  •  ", notes),
                 };
@@ -233,11 +233,11 @@ public static class Advisor
         float cap = d.Limiter;
         float ps = EngineModel.PsToHp;
         if (m.PeakPsRpm > cap * 1.02f)
-            tips.Add(new Tip(2, $"โจทย์รอบ {cap:N0}: เครื่องนี้พีคกำลังที่ {m.PeakPsRpm:N0} สูงกว่ารอบที่ใช้ ใช้กำลังไม่เต็ม  → ลดองศา/ยกแคม หรือใช้ท่อเดิม/ผ่าหมก ให้พีคลงมาใกล้ {cap:N0}"));
+            tips.Add(new Tip(2, $"โจทย์รอบ {cap:N0}: เครื่องนี้พีคกำลังที่ {m.PeakPsRpm:N0} สูงกว่ารอบที่ใช้ ใช้กำลังไม่เต็ม  » ลดองศา/ยกแคม หรือใช้ท่อเดิม/ผ่าหมก ให้พีคลงมาใกล้ {cap:N0}"));
         else if (m.PeakPsRpm < cap - 1500f)
-            tips.Add(new Tip(2, $"โจทย์รอบ {cap:N0}: กำลังพีคที่ {m.PeakPsRpm:N0} ต่ำกว่ารอบที่ใช้มาก ลากเกินพีคเปลืองเปล่า  → เพิ่มองศา/ยกแคม เรือนใหญ่ขึ้น หรือท่อสูตรให้พีคขยับขึ้นไปหา {cap:N0}"));
+            tips.Add(new Tip(2, $"โจทย์รอบ {cap:N0}: กำลังพีคที่ {m.PeakPsRpm:N0} ต่ำกว่ารอบที่ใช้มาก ลากเกินพีคเปลืองเปล่า  » เพิ่มองศา/ยกแคม เรือนใหญ่ขึ้น หรือท่อสูตรให้พีคขยับขึ้นไปหา {cap:N0}"));
         else tips.Add(new Tip(1, $"โจทย์รอบ {cap:N0}: พีคกำลัง {m.PeakHp:0.0} HP @ {m.PeakPsRpm:N0} สัมพันธ์กับรอบที่ใช้ดี"));
-        if (p.TopRpm >= cap - 150f) tips.Add(new Tip(2, $"ท็อปสปีด {p.TopKmh:0} กม./ชม. ชนรอบ {cap:N0} ก่อนความเร็วจบ  → ทดท้ายให้ยาวขึ้นเล็กน้อยจะได้ท็อปมากกว่านี้"));
+        if (p.TopRpm >= cap - 150f) tips.Add(new Tip(2, $"ท็อปสปีด {p.TopKmh:0} กม./ชม. ชนรอบ {cap:N0} ก่อนความเร็วจบ  » ทดท้ายให้ยาวขึ้นเล็กน้อยจะได้ท็อปมากกว่านี้"));
         else tips.Add(new Tip(0, $"ท็อปสปีดประมาณ {p.TopKmh:0} กม./ชม. @ {p.TopRpm:N0} rpm (ใช้รอบไม่ถึง {cap:N0})"));
         return tips;
     }
@@ -259,30 +259,30 @@ public static class Advisor
         {
             float diff = t.Last402 - pred.T402;
             if (diff > pred.T402 * 0.06f)
-                tips.Add(new Tip(2, $"402 ม. วัดได้ {t.Last402:0.00} วิ ช้ากว่าที่เครื่องนี้ทำได้ ~{pred.T402:0.00} วิ  → ออกตัว/เปลี่ยนเกียร์ยังไม่ดี (ปล่อยคลัตช์ที่รอบแรงบิดสูงสุด ~{m.PeakTqRpm:N0}, ไล่เกียร์ที่ ~{m.PeakPsRpm * 1.05f:N0})"));
+                tips.Add(new Tip(2, $"402 ม. วัดได้ {t.Last402:0.00} วิ ช้ากว่าที่เครื่องนี้ทำได้ ~{pred.T402:0.00} วิ  » ออกตัว/เปลี่ยนเกียร์ยังไม่ดี (ปล่อยคลัตช์ที่รอบแรงบิดสูงสุด ~{m.PeakTqRpm:N0}, ไล่เกียร์ที่ ~{m.PeakPsRpm * 1.05f:N0})"));
             else tips.Add(new Tip(1, $"402 ม. วัดได้ {t.Last402:0.00} วิ ใกล้ค่าที่เครื่องนี้ทำได้ ~{pred.T402:0.00} วิ แล้ว ต่อไปต้องแก้ที่เครื่อง/อัตราทด"));
         }
         if (t.TopKmh > 0f)
         {
             float dv = t.TopKmh - pred.TopKmh;
             if (dv < -pred.TopKmh * 0.05f)
-                tips.Add(new Tip(2, $"ท็อปสปีดที่ทำได้ {t.TopKmh:0} กม./ชม. ต่ำกว่าศักยภาพ ~{pred.TopKmh:0} (@ {pred.TopRpm:N0} rpm)  → ลองลากให้นานขึ้น/ทางราบ หรือรอบถึงรอบตัดก่อน"));
+                tips.Add(new Tip(2, $"ท็อปสปีดที่ทำได้ {t.TopKmh:0} กม./ชม. ต่ำกว่าศักยภาพ ~{pred.TopKmh:0} (@ {pred.TopRpm:N0} rpm)  » ลองลากให้นานขึ้น/ทางราบ หรือรอบถึงรอบตัดก่อน"));
         }
 
         // รอบ
         if (t.PeakRpm >= lim - 100f)
-            tips.Add(new Tip(2, $"รอบชนรอบตัด ({t.PeakRpm:N0}) : ปลายสั้น/ล็อกรอบก่อนความเร็วสุด  → ทดท้ายให้ยาวขึ้น (สเตอร์หลังลด / เฟืองท้ายยาวขึ้น) หรือเพิ่มรอบตัดถ้าวาล์วไม่ลอย ({m.FloatRpm:N0})"));
+            tips.Add(new Tip(2, $"รอบชนรอบตัด ({t.PeakRpm:N0}) : ปลายสั้น/ล็อกรอบก่อนความเร็วสุด  » ทดท้ายให้ยาวขึ้น (สเตอร์หลังลด / เฟืองท้ายยาวขึ้น) หรือเพิ่มรอบตัดถ้าวาล์วไม่ลอย ({m.FloatRpm:N0})"));
         else if (t.PeakRpm > 0f && t.TopKmh > 0f && t.PeakRpm < m.PeakPsRpm * 0.9f)
-            tips.Add(new Tip(2, $"รอบสูงสุดที่ใช้ {t.PeakRpm:N0} ยังไม่ถึงพีคกำลัง ({m.PeakPsRpm:N0})  → ทดจัดขึ้นเพื่อให้ได้รอบพีคก่อนจบ (สเตอร์หลังเพิ่ม / เฟืองท้ายทดจัด)"));
+            tips.Add(new Tip(2, $"รอบสูงสุดที่ใช้ {t.PeakRpm:N0} ยังไม่ถึงพีคกำลัง ({m.PeakPsRpm:N0})  » ทดจัดขึ้นเพื่อให้ได้รอบพีคก่อนจบ (สเตอร์หลังเพิ่ม / เฟืองท้ายทดจัด)"));
 
         // ไดโน
         if (t.Dyno != null && t.Dyno.Completed)
         {
             var dy = t.Dyno;
             if (dy.PeakPsRpm >= lim - 400f)
-                tips.Add(new Tip(2, $"ไดโน: กำลังยังขึ้นไปจนถึงรอบตัด ({dy.PeakPs * ps:0.0} HP @ {dy.PeakPsRpm:N0})  → รอบตัดต่ำไปสำหรับเครื่องนี้ เพิ่มรอบตัดหรือใช้ทดท้ายยาวขึ้น"));
+                tips.Add(new Tip(2, $"ไดโน: กำลังยังขึ้นไปจนถึงรอบตัด ({dy.PeakPs * ps:0.0} HP @ {dy.PeakPsRpm:N0})  » รอบตัดต่ำไปสำหรับเครื่องนี้ เพิ่มรอบตัดหรือใช้ทดท้ายยาวขึ้น"));
             else if (dy.PeakPsRpm < lim - 2500f)
-                tips.Add(new Tip(2, $"ไดโน: กำลังตกหลัง {dy.PeakPsRpm:N0} ทั้งที่รอบตัด {lim:N0}  → ใช้งานเกินพีคเปลืองเปล่า ลดรอบตัด/จูนปลาย (เรือน, แคม EX, ยก, ท่อ) ให้ลากได้ไกลกว่านี้"));
+                tips.Add(new Tip(2, $"ไดโน: กำลังตกหลัง {dy.PeakPsRpm:N0} ทั้งที่รอบตัด {lim:N0}  » ใช้งานเกินพีคเปลืองเปล่า ลดรอบตัด/จูนปลาย (เรือน, แคม EX, ยก, ท่อ) ให้ลากได้ไกลกว่านี้"));
             else tips.Add(new Tip(1, $"ไดโน: พีค {dy.PeakPs * ps:0.0} HP @ {dy.PeakPsRpm:N0} สัมพันธ์กับรอบตัด {lim:N0} พอดี"));
             if (dy.PeakTqRpm > dy.PeakPsRpm * 0.85f)
                 tips.Add(new Tip(0, $"แรงบิดพีค {dy.PeakTq:0.0} N·m @ {dy.PeakTqRpm:N0} ใกล้พีคกำลัง: ช่วงกำลังแคบ ต้องไล่เกียร์/CVT ให้อยู่รอบสูงตลอด"));
@@ -297,14 +297,14 @@ public static class Advisor
             {
                 float after = sr * g[i + 1] / g[i];
                 if (after < m.PeakTqRpm * 0.85f)
-                    tips.Add(new Tip(2, $"เปลี่ยนเกียร์ {i + 1}→{i + 2} รอบตกเหลือ ~{after:N0} ต่ำกว่าพีคแรงบิด ({m.PeakTqRpm:N0}) ห่างเกียร์ไป  → ปรับเกียร์ {i + 2} ให้ทดจัดขึ้น หรือเปลี่ยนรอบเปลี่ยนเกียร์ให้สูงขึ้น"));
+                    tips.Add(new Tip(2, $"เปลี่ยนเกียร์ {i + 1}»{i + 2} รอบตกเหลือ ~{after:N0} ต่ำกว่าพีคแรงบิด ({m.PeakTqRpm:N0}) ห่างเกียร์ไป  » ปรับเกียร์ {i + 2} ให้ทดจัดขึ้น หรือเปลี่ยนรอบเปลี่ยนเกียร์ให้สูงขึ้น"));
             }
         }
         else
         {
             float hold = Cvt.HoldRpm(m);
-            if (hold < m.PeakPsRpm * 0.93f) tips.Add(new Tip(2, $"CVT ถือรอบ {hold:N0} ต่ำกว่าพีคกำลัง ({m.PeakPsRpm:N0})  → เม็ดเบาลง/สปริงแข็งขึ้น/องศาชามมากขึ้น (กด A ในอู่ให้จูนเม็ดอัตโนมัติ)"));
-            else if (hold > m.PeakPsRpm * 1.08f) tips.Add(new Tip(2, $"CVT ถือรอบ {hold:N0} เกินพีคกำลัง ({m.PeakPsRpm:N0})  → เม็ดหนักขึ้น/สปริงนิ่มลง"));
+            if (hold < m.PeakPsRpm * 0.93f) tips.Add(new Tip(2, $"CVT ถือรอบ {hold:N0} ต่ำกว่าพีคกำลัง ({m.PeakPsRpm:N0})  » เม็ดเบาลง/สปริงแข็งขึ้น/องศาชามมากขึ้น (กด A ในอู่ให้จูนเม็ดอัตโนมัติ)"));
+            else if (hold > m.PeakPsRpm * 1.08f) tips.Add(new Tip(2, $"CVT ถือรอบ {hold:N0} เกินพีคกำลัง ({m.PeakPsRpm:N0})  » เม็ดหนักขึ้น/สปริงนิ่มลง"));
             else tips.Add(new Tip(1, $"CVT ถือรอบ {hold:N0} ใกล้พีคกำลัง ({m.PeakPsRpm:N0}) ดีแล้ว"));
         }
 
@@ -313,7 +313,7 @@ public static class Advisor
         float ratio1 = d.Auto == 1 ? Cvt.RLow * Cvt.Final(d) : Vehicle.Total(d, 1);
         float fLaunch = MathF.Max(0f, m.BrakeTorqueWot(launchRpm)) * ratio1 * Vehicle.DriveEff / Vehicle.WheelRadius(d);
         if (fLaunch > Vehicle.TractionMax(d) * 1.05f)
-            tips.Add(new Tip(2, $"ออกตัวล้อฟรี: แรงขับ {fLaunch:0} N เกินที่ยางเกาะได้ {Vehicle.TractionMax(d):0} N  → หน้ายางกว้างขึ้น/ขอบให้พอดี หรือทดเกียร์ 1 ให้ยาวขึ้น"));
+            tips.Add(new Tip(2, $"ออกตัวล้อฟรี: แรงขับ {fLaunch:0} N เกินที่ยางเกาะได้ {Vehicle.TractionMax(d):0} N  » หน้ายางกว้างขึ้น/ขอบให้พอดี หรือทดเกียร์ 1 ให้ยาวขึ้น"));
 
         // สุขภาพเครื่อง
         if (Knocks(m)) tips.Add(new Tip(2, $"น็อก! แรงดันอัด {m.Psi:0} psi เกินพิกัดน้ำมัน ({m.CrLimit:0.0}) ลด CR/แรงดันอัด หรือเปลี่ยนน้ำมันออกเทนสูง"));
@@ -325,11 +325,11 @@ public static class Advisor
         {
             var b = t.Before; var c = t.Cur;
             var parts = new List<string>();
-            if (b.B402 > 0f && c.B402 > 0f) parts.Add($"402 ม. {b.B402:0.00}→{c.B402:0.00} วิ ({(b.B402 - c.B402 >= 0 ? "+" : "")}{b.B402 - c.B402:0.00})");
-            if (b.B060 > 0f && c.B060 > 0f) parts.Add($"0–60 {b.B060:0.00}→{c.B060:0.00} วิ");
-            if (b.Top > 0f && c.Top > 0f) parts.Add($"ท็อป {b.Top:0}→{c.Top:0} กม./ชม.");
-            if (b.Hp > 0f && c.Hp > 0f) parts.Add($"{b.Hp:0.0}→{c.Hp:0.0} HP");
-            if (parts.Count > 0) tips.Add(new Tip(0, "ผลเทียบก่อน→หลังแก้: " + string.Join("  •  ", parts)));
+            if (b.B402 > 0f && c.B402 > 0f) parts.Add($"402 ม. {b.B402:0.00}»{c.B402:0.00} วิ ({(b.B402 - c.B402 >= 0 ? "+" : "")}{b.B402 - c.B402:0.00})");
+            if (b.B060 > 0f && c.B060 > 0f) parts.Add($"0–60 {b.B060:0.00}»{c.B060:0.00} วิ");
+            if (b.Top > 0f && c.Top > 0f) parts.Add($"ท็อป {b.Top:0}»{c.Top:0} กม./ชม.");
+            if (b.Hp > 0f && c.Hp > 0f) parts.Add($"{b.Hp:0.0}»{c.Hp:0.0} HP");
+            if (parts.Count > 0) tips.Add(new Tip(0, "ผลเทียบก่อน»หลังแก้: " + string.Join("  •  ", parts)));
         }
         return tips;
     }

@@ -110,7 +110,7 @@ public sealed partial class MainForm
             if (row.Contains(_mouseV)) g.FillRectangle(Br(Color.FromArgb(24, 28, 35)), row);
             Txt(g, sug.Label, _fSm, Palette.Text, row.X + 10, row.Y + 2);
             var a = sug.After; var b = sug.Before;
-            string line = $"402 ม. {b.T402:0.00}→{a.T402:0.00} วิ  •  0–60 {b.T060:0.00}→{a.T060:0.00}  •  ท็อป {b.TopKmh:0}→{a.TopKmh:0} กม./ชม.";
+            string line = $"402 ม. {b.T402:0.00}»{a.T402:0.00} วิ  •  0–60 {b.T060:0.00}»{a.T060:0.00}  •  ท็อป {b.TopKmh:0}»{a.TopKmh:0} กม./ชม.";
             Txt(g, line, _fXs, Palette.Green, row.X + 10, row.Y + 30);
             Btn(g, new RectangleF(row.Right - 120, row.Y + 4, 112, row.Height - 8), "ใช้ค่านี้", false, Palette.Green, () =>
             {

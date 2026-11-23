@@ -259,7 +259,7 @@ public sealed partial class MainForm
         float ty = y0 + (height - th) * first / Math.Max(1, total - shown);
         g.FillRectangle(Br(Color.FromArgb(40, 46, 56)), GL + GW + 6, y0, 5, height);
         g.FillRectangle(Br(Palette.Accent), GL + GW + 6, ty, 5, th);
-        TxtR(g, $"แสดง {first + 1}–{first + shown} จาก {total}  (เลื่อนลูกกลิ้ง / ↑ ↓)", _fXs, Palette.Dim, GL + GW, y0 + height + 8);
+        TxtR(g, $"แสดง {first + 1}–{first + shown} จาก {total}  (ลูกกลิ้งเมาส์ หรือปุ่มลูกศรขึ้น/ลง)", _fXs, Palette.Dim, GL + GW, y0 + height + 8);
     }
 
     private void DrawSpecRows(Graphics g)
@@ -355,7 +355,7 @@ public sealed partial class MainForm
         float mx = bx + Math.Clamp((psi - lo) / (hi - lo), 0f, 1f) * bw;
         g.FillRectangle(Br(Palette.Text), mx - 2, by - 12, 4, 42);
         g.FillPolygon(Br(Palette.Text), new[] { new PointF(mx - 8, by - 20), new PointF(mx + 8, by - 20), new PointF(mx, by - 8) });
-        Txt(g, $"CR {_draft.Cr:0.0}:1 สถิต  →  {m.CrDyn:0.0}:1 จริงในกระบอก (แคม IN {_draft.Duration:0}° / EX {_draft.DurationEx:0}°)", _fXs, Palette.Dim, box.X + 24, box.Bottom - 30);
+        Txt(g, $"CR {_draft.Cr:0.0}:1 สถิต  »  {m.CrDyn:0.0}:1 จริงในกระบอก (แคม IN {_draft.Duration:0}° / EX {_draft.DurationEx:0}°)", _fXs, Palette.Dim, box.X + 24, box.Bottom - 30);
     }
 
     private void DrawParts(Graphics g)
@@ -442,34 +442,34 @@ public sealed partial class MainForm
         const float X = 1180, W = 700;
 
         // ตัวเลขใหญ่
-        PanelBox(g, new RectangleF(X, 112, W, 200), "สมรรถนะ (คาดการณ์)");
+        PanelBox(g, new RectangleF(X, 112, W, 214), "สมรรถนะ (คาดการณ์)");
         Btn(g, new RectangleF(X + W - 232, 118, 216, 36), "R  สรุปการแก้ไข", false, Palette.Blue, OpenReport, _fCap);
         Txt(g, $"{m.PeakHp:0.0}", _fNumL, Palette.Accent, X + 24, 150);
         Txt(g, $"HP @ {m.PeakPsRpm:N0} rpm", _fSm, Palette.Dim, X + 28, 232);
         Txt(g, $"{m.PeakTq:0.0}", _fNumL, Palette.Blue, X + 360, 150);
         Txt(g, $"N·m @ {m.PeakTqRpm:N0} rpm", _fSm, Palette.Dim, X + 364, 232);
         Txt(g, $"{m.Cc:0.0} cc   •   ก้าน/ชัก {m.RodRatio:0.00}   •   รถ+คน {Vehicle.Mass(d):0} กก.   •   {m.PeakHp / m.Cc * 1000f:0} HP/ลิตร",
-            _fXs, Palette.Dim, X + 28, 272);
+            _fXs, Palette.Dim, X + 28, 268);
         if (d.RealHp > 0f || d.RealTq > 0f)
         {
             var sbr = new System.Text.StringBuilder("รถจริง:  ");
             if (d.RealHp > 0f) sbr.Append($"{d.RealHp:0.0} HP{(d.RealHpRpm > 0f ? $" @ {d.RealHpRpm:N0}" : "")} (โมเดลต่าง {(m.PeakHp / d.RealHp - 1f) * 100f:+0;-0;0}%)   ");
             if (d.RealTq > 0f) sbr.Append($"{d.RealTq:0.0} N·m{(d.RealTqRpm > 0f ? $" @ {d.RealTqRpm:N0}" : "")} (ต่าง {(m.PeakTq / d.RealTq - 1f) * 100f:+0;-0;0}%)");
-            Txt(g, sbr.ToString(), _fXs, Math.Abs(d.CalK - 1f) > 0.005f ? Palette.Green : Palette.Yellow, X + 28, 292);
+            Txt(g, sbr.ToString(), _fXs, Math.Abs(d.CalK - 1f) > 0.005f ? Palette.Green : Palette.Yellow, X + 28, 298);
         }
 
         // กราฟ (เส้นทึบ = หลัง / เส้นประ = ก่อน)
-        DrawCompareChart(g, new RectangleF(X, 326, W, 250), m, d.Limiter);
+        DrawCompareChart(g, new RectangleF(X, 338, W, 246), m, d.Limiter);
 
         // ตรวจสภาพ
-        PanelBox(g, new RectangleF(X, 592, W, 378), "ตรวจสภาพเครื่อง");
+        PanelBox(g, new RectangleF(X, 598, W, 390), "ตรวจสภาพเครื่อง");
         float y = 640;
         void Line(string s, int state)
         {
             Color dot = state == 2 ? Palette.Yellow : state == 1 ? Palette.Green : Color.FromArgb(90, 98, 110);
-            g.FillEllipse(Br(dot), X + 22, y + 9, 12, 12);
-            Txt(g, s, _fSm, state == 2 ? Palette.Yellow : Palette.Text, X + 46, y);
-            y += 32;
+            g.FillEllipse(Br(dot), X + 22, y + 7, 12, 12);
+            Txt(g, s, _fXs, state == 2 ? Palette.Yellow : Palette.Text, X + 46, y);
+            y += 30;
         }
 
         Line($"เดินเบา ~{m.IdleRpm:N0} rpm  •  โอเวอร์แลป {m.Overlap:0}°" + (m.Overlap > 40f ? "  (สะดุด)" : ""), m.Overlap > 40f ? 2 : 1);
@@ -484,7 +484,7 @@ public sealed partial class MainForm
         {
             float ra = MathF.Round(d.Limiter * 0.35f / 100f) * 100f, rb = MathF.Round(d.Limiter * 0.80f / 100f) * 100f;
             float up = m.RevUpTime(ra, rb), dn = m.CoastTime(rb, ra);
-            Line($"เร่งรอบ {ra:N0}→{rb:N0}: {up:0.00} วิ  •  ปล่อยคันเร่งตก: {dn:0.00} วิ  (เครื่องเปล่า)" + (up > 1.6f ? "  เร่งยาน" : up < 0.35f ? "  เร่งไวมาก" : ""), up > 1.6f ? 2 : 1);
+            Line($"เร่งรอบ {ra:N0}»{rb:N0}: {up:0.00} วิ  •  ปล่อยคันเร่งตก: {dn:0.00} วิ  (เครื่องเปล่า)" + (up > 1.6f ? "  เร่งยาน" : up < 0.35f ? "  เร่งไวมาก" : ""), up > 1.6f ? 2 : 1);
         }
         Line($"ลูกสูบเฉลี่ย {vpL:0.0} ม./วิ ที่รอบตัด" + (vpL > 24f ? "  (ชักยาวเกิน กำลังตก)" : ""), vpL > 24f ? 2 : vpL > 22f ? 0 : 1);
 
@@ -527,10 +527,10 @@ public sealed partial class MainForm
         bool same = _save.Design.Serialize() == d.Serialize();
         if (d.Auto == 1)
         {
-            Btn(g, new RectangleF(X, 984, 230, 70), "A  จูนเม็ด", false, Palette.Blue, AutoTuneRollers, _fMd);
-            Btn(g, new RectangleF(X + 246, 984, W - 246, 70), same ? "Enter  ไปทดสอบ (ติดตั้งอยู่)" : "Enter  ประกอบแล้วไปทดสอบ", !same, Palette.Green, Assemble, _fMd);
+            Btn(g, new RectangleF(X, 1000, 230, 54), "A  จูนเม็ด", false, Palette.Blue, AutoTuneRollers, _fMd);
+            Btn(g, new RectangleF(X + 246, 1000, W - 246, 54), same ? "Enter  ไปทดสอบ (ติดตั้งอยู่)" : "Enter  ประกอบแล้วไปทดสอบ", !same, Palette.Green, Assemble, _fMd);
         }
         else
-            Btn(g, new RectangleF(X, 984, W, 70), same ? "Enter  ไปทดสอบ (แบบนี้ติดตั้งอยู่)" : "Enter  ประกอบแล้วไปทดสอบ", !same, Palette.Green, Assemble, _fMd);
+            Btn(g, new RectangleF(X, 1000, W, 54), same ? "Enter  ไปทดสอบ (แบบนี้ติดตั้งอยู่)" : "Enter  ประกอบแล้วไปทดสอบ", !same, Palette.Green, Assemble, _fMd);
     }
 }

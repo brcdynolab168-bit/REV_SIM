@@ -165,7 +165,7 @@ export class Ui {
       if (cmp && !Number.isNaN(tq0[i])) top = Math.max(top, tq0[i], hp0[i]);
     }
     const xMax = Math.max(maxRpm, 4000), xMin = rpm.length ? Math.floor(rpm[0] / 1000) * 1000 : 0, grid = 'rgb(36,42,51)', headH = cmp ? 62 : 40, stripH = cmp ? 30 : 0, gap = cmp ? 22 : 0;
-    const px_ = r.x + 56, pw = r.w - 76, py = r.y + headH, ph = r.h - headH - stripH - gap - 28;
+    const px_ = r.x + 56, pw = r.w - 76, py = r.y + headH, ph = r.h - headH - stripH - gap - 34;
     let stepV = top > 120 ? 20 : top > 60 ? 10 : top > 25 ? 5 : 2;
     while (ph / Math.max(1, top / stepV) < 26) stepV *= 2;
     top = Math.ceil(top * 1.12 / stepV) * stepV;
@@ -173,9 +173,9 @@ export class Ui {
     for (let k = Math.ceil(xMin / 1000) * 1000; k <= xMax; k += 1000) {
       const x = XS(k);
       this.line(x, py, x, py + ph + gap + stripH, k % 2000 === 0 ? 'rgb(48,55,66)' : grid, 1);
-      if (k % 2000 === 0) this.txtC(String(k / 1000), Fonts.xs, Palette.Dim, x, py + ph + gap + stripH + 14);
+      if (k % 2000 === 0 && x < r.x + r.w - 120) this.txtC(String(k / 1000), Fonts.xs, Palette.Dim, x, py + ph + gap + stripH + 16);
     }
-    this.txtR('x1000 rpm', Fonts.cap, Palette.Dim, r.x + r.w - 14, py + ph + gap + stripH + 6);
+    this.txtR('x1000 rpm', Fonts.cap, Palette.Dim, r.x + r.w - 14, py + ph + gap + stripH + 8);
     for (let v = 0; v <= top; v += stepV) {
       const y = py + ph - v / top * ph;
       this.line(px_, y, px_ + pw, y, grid, 1);

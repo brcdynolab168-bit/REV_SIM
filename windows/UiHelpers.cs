@@ -289,7 +289,7 @@ public sealed partial class MainForm
         float xMin = rpm.Length > 0 ? MathF.Floor(rpm[0] / 1000f) * 1000f : 0f;
         var grid = Pn(Color.FromArgb(36, 42, 51), 1f);
         float headH = cmp ? 62f : 40f, stripH = cmp ? 30f : 0f, gap = cmp ? 22f : 0f;
-        float px = r.X + 56, pw = r.Width - 76, py = r.Y + headH, ph = r.Height - headH - stripH - gap - 28;
+        float px = r.X + 56, pw = r.Width - 76, py = r.Y + headH, ph = r.Height - headH - stripH - gap - 34;
         float stepV = top > 120f ? 20f : top > 60f ? 10f : top > 25f ? 5f : 2f;
         while (ph / MathF.Max(1f, top / stepV) < 26f) stepV *= 2f;
         top = MathF.Ceiling(top * 1.12f / stepV) * stepV;
@@ -299,9 +299,9 @@ public sealed partial class MainForm
         {
             float x = XS(k);
             g.DrawLine(k % 2000f == 0 ? Pn(Color.FromArgb(48, 55, 66), 1f) : grid, x, py, x, py + ph + gap + stripH);
-            if (k % 2000f == 0) TxtC(g, (k / 1000f).ToString("0"), _fXs, Palette.Dim, x, py + ph + gap + stripH + 14);
+            if (k % 2000f == 0 && x < r.Right - 120) TxtC(g, (k / 1000f).ToString("0"), _fXs, Palette.Dim, x, py + ph + gap + stripH + 16);
         }
-        TxtR(g, "x1000 rpm", _fCap, Palette.Dim, r.Right - 14, py + ph + gap + stripH + 6);
+        TxtR(g, "x1000 rpm", _fCap, Palette.Dim, r.Right - 14, py + ph + gap + stripH + 8);
         for (float v = 0; v <= top; v += stepV)
         {
             float y = py + ph - v / top * ph;

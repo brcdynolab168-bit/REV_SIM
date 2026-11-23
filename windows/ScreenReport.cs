@@ -84,25 +84,25 @@ public sealed partial class MainForm
             _repNotes.Add(("กราฟแรงม้า/แรงบิดของตัวเครื่องไม่เปลี่ยน — สิ่งที่แก้อยู่ที่ชุดส่งกำลัง/ตัวรถ (ชามเม็ด เม็ด สปริง เฟือง ล้อ น้ำหนัก ฯลฯ) ผลจึงดูที่เวลาวิ่งและรอบที่ CVT ถือ", 0));
         else
         {
-            _repNotes.Add(($"กำลังสูงสุด {m0.PeakHp:0.0} → {m1.PeakHp:0.0} HP ({(dh >= 0 ? "+" : "")}{dh:0.0}) @ {m1.PeakPsRpm:N0} rpm   แรงบิดสูงสุด {m0.PeakTq:0.0} → {m1.PeakTq:0.0} N·m ({(dt >= 0 ? "+" : "")}{dt:0.0})", dh >= 0.05f ? 1 : dh < -0.05f ? 2 : 0));
+            _repNotes.Add(($"กำลังสูงสุด {m0.PeakHp:0.0} » {m1.PeakHp:0.0} HP ({(dh >= 0 ? "+" : "")}{dh:0.0}) @ {m1.PeakPsRpm:N0} rpm   แรงบิดสูงสุด {m0.PeakTq:0.0} » {m1.PeakTq:0.0} N·m ({(dt >= 0 ? "+" : "")}{dt:0.0})", dh >= 0.05f ? 1 : dh < -0.05f ? 2 : 0));
             foreach (var z in zones.Take(3))
                 _repNotes.Add(($"ช่วง {z.Lo / 1000f:0.0}–{z.Hi / 1000f:0.0}k rpm กำลัง{(z.Good ? "เพิ่ม" : "ลด")}สูงสุด {(z.Peak >= 0 ? "+" : "")}{z.Peak:0.0} HP", z.Good ? 1 : 2));
             if (zones.Count == 0) _repNotes.Add(("ต่างกันนิดเดียวทุกช่วงรอบ (ไม่ถึงเกณฑ์บอกเป็นช่วง)", 0));
             if (m1.PeakPsRpm != m0.PeakPsRpm) _repNotes.Add(($"พีคกำลังย้ายจาก {m0.PeakPsRpm:N0} ไป {m1.PeakPsRpm:N0} rpm ({(m1.PeakPsRpm > m0.PeakPsRpm ? "ไปรอบสูงขึ้น" : "ลงมารอบต่ำ")})", 0));
         }
         float dt402 = _repP1.T402 - _repP0.T402, dtop = _repP1.TopKmh - _repP0.TopKmh, d060 = _repP1.T060 - _repP0.T060;
-        _repNotes.Add(($"402 ม. {_repP0.T402:0.00} → {_repP1.T402:0.00} วิ ({(dt402 <= 0 ? "เร็วขึ้น " : "ช้าลง ")}{MathF.Abs(dt402):0.00})   0–60 {_repP0.T060:0.00} → {_repP1.T060:0.00}   ท็อป {_repP0.TopKmh:0} → {_repP1.TopKmh:0} กม./ชม.",
+        _repNotes.Add(($"402 ม. {_repP0.T402:0.00} » {_repP1.T402:0.00} วิ ({(dt402 <= 0 ? "เร็วขึ้น " : "ช้าลง ")}{MathF.Abs(dt402):0.00})   0–60 {_repP0.T060:0.00} » {_repP1.T060:0.00}   ท็อป {_repP0.TopKmh:0} » {_repP1.TopKmh:0} กม./ชม.",
             dt402 < -0.02f ? 1 : dt402 > 0.02f ? 2 : 0));
         if (m1.D.Auto == 1 && MathF.Abs(_repHold1 - _repHold0) > 20f)
         {
             float peak = m1.PeakPsRpm;
             bool nearer = MathF.Abs(_repHold1 - peak) < MathF.Abs(_repHold0 - peak);
-            _repNotes.Add(($"CVT ถือรอบ {_repHold0:N0} → {_repHold1:N0} rpm (พีคกำลัง {peak:N0}) = {(nearer ? "ใกล้พีคขึ้น ดี" : "ห่างพีคขึ้น แย่ลง")}", nearer ? 1 : 2));
+            _repNotes.Add(($"CVT ถือรอบ {_repHold0:N0} » {_repHold1:N0} rpm (พีคกำลัง {peak:N0}) = {(nearer ? "ใกล้พีคขึ้น ดี" : "ห่างพีคขึ้น แย่ลง")}", nearer ? 1 : 2));
         }
         if (m1.KnockWot(3500f) > 0.02f && m0.KnockWot(3500f) <= 0.02f) _repNotes.Add(("เริ่มน็อกที่โหลดสูง (กำลังอัดสูงเกินน้ำมัน) — ลด CR/องศาจุด หรือใช้ออกเทนสูงขึ้น", 2));
         if (m1.D.Limiter >= m1.FloatRpm && m0.D.Limiter < m0.FloatRpm) _repNotes.Add(("รอบตัดสูงกว่ารอบวาล์วลอยแล้ว กำลังจะตกที่ปลายรอบ", 2));
         if (float.IsFinite(_repUp1) && float.IsFinite(_repUp0) && MathF.Abs(_repUp1 - _repUp0) > 0.03f)
-            _repNotes.Add(($"เร่งรอบเครื่องเปล่า {_repUp0:0.00} → {_repUp1:0.00} วิ ({(_repUp1 < _repUp0 ? "ไวขึ้น" : "ยานขึ้น")})", 0));
+            _repNotes.Add(($"เร่งรอบเครื่องเปล่า {_repUp0:0.00} » {_repUp1:0.00} วิ ({(_repUp1 < _repUp0 ? "ไวขึ้น" : "ยานขึ้น")})", 0));
         _showReport = true;
     }
 
@@ -124,7 +124,7 @@ public sealed partial class MainForm
         {
             var c = _repChanges[i];
             Txt(g, c.Name, _fCap, Palette.Dim, lx, y);
-            Txt(g, $"{c.Old}  →  {c.New}", _fXs, Palette.Accent, lx, y + 20);
+            Txt(g, $"{c.Old}  »  {c.New}", _fXs, Palette.Accent, lx, y + 20);
             g.DrawLine(Pn(Color.FromArgb(40, 46, 56), 1f), lx, y + 50, lx + lw, y + 50);
             y += 58;
         }

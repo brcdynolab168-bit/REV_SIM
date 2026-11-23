@@ -909,7 +909,7 @@ function heat(t) {
 }
 function drawEcu() {
   const m = preview, g = ui.g, bench = benchOn && benchApplied;
-  const LX = 252, labW = 56, cw = 46, cellH = 30, gridY = 256, hdrY = 232, gx = LX + labW, RX = 1264, RW = 616;
+  const LX = 252, labW = 56, cw = 46, cellH = 28, gridY = 256, hdrY = 232, gx = LX + labW, RX = 1264, RW = 616;
   const modeCol = [C.Blue, C.Accent, C.Red, C.Yellow, C.Green, 'rgb(150,120,255)'];
   EcuModeNames.forEach((n, i) => ui.btn(R(LX + i * 142, 176, 134, 44), n, ecuMode === i, modeCol[i], () => { ecuMode = i; }, F.xs));
   ui.btn(R(gx + EcuN * cw - 90, 176, 90, 44), '? ศัพท์', false, C.Yellow, () => { showEcuHelp = true; }, F.xs);
@@ -967,7 +967,7 @@ function drawEcu() {
           : ecuMode === 5 ? 'แก้ได้ = MAP เป้าหมายต่อ TPS x รอบ (ลิ้นเร่งไฟฟ้า)  •  0 = ไม่มีอากาศ'
             : 'ฟ้า = หนา  •  เขียว = แรงสุด  •  เหลือง = บาง  •  แดง = บางเกิน', F.cap, C.Dim, gx + EcuN * cw, ly);
 
-  let bx = LX; const by = 902;
+  let bx = LX; const by = 866;
   const B = (t, w, fn, col = C.Accent) => { ui.btn(R(bx, by, w, 44), t, false, col, fn, F.xs); bx += w + 10; };
   B('−−', 50, () => ecuAdjust(-1, true)); B('−', 50, () => ecuAdjust(-1, false)); B('+', 50, () => ecuAdjust(1, false)); B('++', 50, () => ecuAdjust(1, true));
   B('เกลี่ย', 66, ecuSmooth, C.Blue); B('เท่ากัน', 76, ecuEqualize, C.Blue);
@@ -976,11 +976,11 @@ function drawEcu() {
 
   // ซ้ายล่าง: ช่องที่เลือก
   const prpm = m.EcuRpmAt(ecuC1), ptps = EngineModel.TpsAxis(ecuR1), pload = m._loadOf(ptps, prpm), s = m.EcuAt(prpm, ptps, {}), dl2 = s.Adv - s.Mbt;
-  ui.fillRR(R(LX, 956, 976, 84), 4, C.Panel); ui.drawRR(R(LX, 956, 976, 84), 4, C.Border, 1); ui.rect(LX + 14, 965, 4, 18, C.Accent);
-  ui.txt(`ช่องที่เลือก   ${fmtN(prpm)} rpm  •  TPS ${f0(ptps * 100)}%  •  โหลด ${f0(pload * 100)}%`, F.cap, C.Dim, LX + 28, 963);
+  ui.fillRR(R(LX, 928, 976, 116), 4, C.Panel); ui.drawRR(R(LX, 928, 976, 116), 4, C.Border, 1); ui.rect(LX + 14, 940, 4, 18, C.Accent);
+  ui.txt(`ช่องที่เลือก   ${fmtN(prpm)} rpm  •  TPS ${f0(ptps * 100)}%  •  โหลด ${f0(pload * 100)}%`, F.cap, C.Dim, LX + 28, 938);
   const warn = s.Egt > 1050 ? 'ไอเสียร้อนจัด! เสี่ยงลูกสูบพัง' : m.KnockWot(prpm) > 0.02 && pload > 0.7 ? 'น็อกที่ช่องนี้' : dl2 < -10 ? 'ไฟอ่อนมาก แรงตก' : s.Lambda > 1.35 || s.Lambda < 0.6 ? 'ส่วนผสมนอกช่วงจุดติด' : '';
-  ui.txt(`AFR ${s.Afr >= 90 ? '∞ ตัดน้ำมัน' : f1(s.Afr)} (λ ${f2(s.Lambda)})   ฉีด ${s.PulseMs.toFixed(2)} ms (${f0(s.Duty * 100)}%)   จบฉีด ${f0(s.Eoi)}°   MAP ${f0(m.MapKpa(pload))} kPa`, F.xs, s.Lambda > 1.12 ? C.Red : s.Lambda < 0.7 ? C.Blue : s.Lambda > 0.97 ? C.Yellow : C.Green, LX + 28, 985);
-  ui.txt(`จุด ${f1(s.Adv)}° / MBT ${f1(s.Mbt)}°   คอยล์ ${s.DwellMs.toFixed(2)} ms (ประกาย ${f0(s.Spark * 100)}%)   แรงบิด x${s.Mult.toFixed(3)}   EGT ${f0(s.Egt)}°C` + (warn ? '   ⚠ ' + warn : ''), F.xs, warn ? C.Yellow : dl2 > 1.5 || s.Spark < 0.95 ? C.Red : C.Dim, LX + 28, 1011);
+  ui.txt(`AFR ${s.Afr >= 90 ? '∞ ตัดน้ำมัน' : f1(s.Afr)} (λ ${f2(s.Lambda)})   ฉีด ${s.PulseMs.toFixed(2)} ms (${f0(s.Duty * 100)}%)   จบฉีด ${f0(s.Eoi)}°   MAP ${f0(m.MapKpa(pload))} kPa`, F.xs, s.Lambda > 1.12 ? C.Red : s.Lambda < 0.7 ? C.Blue : s.Lambda > 0.97 ? C.Yellow : C.Green, LX + 28, 972);
+  ui.txt(`จุด ${f1(s.Adv)}° / MBT ${f1(s.Mbt)}°   คอยล์ ${s.DwellMs.toFixed(2)} ms (ประกาย ${f0(s.Spark * 100)}%)   แรงบิด x${s.Mult.toFixed(3)}   EGT ${f0(s.Egt)}°C` + (warn ? '   ⚠ ' + warn : ''), F.xs, warn ? C.Yellow : dl2 > 1.5 || s.Spark < 0.95 ? C.Red : C.Dim, LX + 28, 1008);
 
   // ขวา: เครื่องจูนสด
   const ix = RX + 28, iw = RW - 56;
@@ -1047,7 +1047,7 @@ function drawEcu() {
     ui.txt(`ใส่ค่าในช่องที่เลือก ${(ic1 - ic0 + 1) * (ir1 - ir0 + 1)} ช่อง`, F.cap, C.Dim, ib.x + 20, ib.y + 14);
     ui.txt(ecuInput + (Math.floor(Date.now() / 500) % 2 === 0 ? '▮' : ' '), F.numL, C.Accent, ib.x + 20, ib.y + 30);
     ui.txt('Enter = ใช้ค่า  •  Esc = ยกเลิก  •  Backspace = ลบ', F.cap, C.Dim, ib.x + 20, ib.y + ib.h - 26);
-  } else ui.txtR('คลุมช่อง แล้วพิมพ์เลข + Enter เพื่อใส่ค่า', F.cap, C.Dim, LX + 960, 963);
+  } else ui.txtR('คลุมช่อง แล้วพิมพ์เลข + Enter เพื่อใส่ค่า', F.cap, C.Dim, LX + 960, 938);
   if (showEcuHelp) drawEcuHelp();
 }
 function drawEcuHelp() {
@@ -1195,24 +1195,24 @@ function drawParts() {
 
 function drawGarageStats() {
   const m = preview, d = draft, X = 1180, W = 700;
-  ui.panelBox(R(X, 112, W, 200), 'สมรรถนะ (คาดการณ์)');
+  ui.panelBox(R(X, 112, W, 214), 'สมรรถนะ (คาดการณ์)');
   ui.btn(R(X + W - 232, 118, 216, 36), 'R  สรุปการแก้ไข', false, C.Blue, openReport, F.cap);
   ui.txt(f1(m.PeakHp), F.numL, C.Accent, X + 24, 150); ui.txt(`HP @ ${fmtN(m.PeakPsRpm)} rpm`, F.sm, C.Dim, X + 28, 232);
   ui.txt(f1(m.PeakTq), F.numL, C.Blue, X + 360, 150); ui.txt(`N·m @ ${fmtN(m.PeakTqRpm)} rpm`, F.sm, C.Dim, X + 364, 232);
-  ui.txt(`${f1(m.Cc)} cc   •   ก้าน/ชัก ${f2(m.RodRatio)}   •   รถ+คน ${f0(Veh.mass(d))} กก.   •   ${f0(m.PeakHp / m.Cc * 1000)} HP/ลิตร`, F.xs, C.Dim, X + 28, 272);
+  ui.txt(`${f1(m.Cc)} cc   •   ก้าน/ชัก ${f2(m.RodRatio)}   •   รถ+คน ${f0(Veh.mass(d))} กก.   •   ${f0(m.PeakHp / m.Cc * 1000)} HP/ลิตร`, F.xs, C.Dim, X + 28, 268);
   if (d.RealHp > 0 || d.RealTq > 0) {
     let s = 'รถจริง:  ';
     if (d.RealHp > 0) s += `${f1(d.RealHp)} HP${d.RealHpRpm > 0 ? ' @ ' + fmtN(d.RealHpRpm) : ''} (โมเดลต่าง ${((m.PeakHp / d.RealHp - 1) * 100).toFixed(0)}%)   `;
     if (d.RealTq > 0) s += `${f1(d.RealTq)} N·m${d.RealTqRpm > 0 ? ' @ ' + fmtN(d.RealTqRpm) : ''} (ต่าง ${((m.PeakTq / d.RealTq - 1) * 100).toFixed(0)}%)`;
-    ui.txt(s, F.xs, Math.abs(d.CalK - 1) > 0.005 ? C.Green : C.Yellow, X + 28, 292);
+    ui.txt(s, F.xs, Math.abs(d.CalK - 1) > 0.005 ? C.Green : C.Yellow, X + 28, 298);
   }
-  drawCompareChart(R(X, 326, W, 250), m, d.Limiter);
+  drawCompareChart(R(X, 338, W, 246), m, d.Limiter);
 
-  ui.panelBox(R(X, 592, W, 378), 'ตรวจสภาพเครื่อง');
+  ui.panelBox(R(X, 598, W, 390), 'ตรวจสภาพเครื่อง');
   let y = 640;
   const line = (s, st) => {
-    ui.g.beginPath(); ui.g.arc(X + 28, y + 15, 6, 0, 7); ui.g.fillStyle = st === 2 ? C.Yellow : st === 1 ? C.Green : 'rgb(90,98,110)'; ui.g.fill();
-    ui.txt(s, F.sm, st === 2 ? C.Yellow : C.Text, X + 46, y); y += 32;
+    ui.g.beginPath(); ui.g.arc(X + 28, y + 13, 6, 0, 7); ui.g.fillStyle = st === 2 ? C.Yellow : st === 1 ? C.Green : 'rgb(90,98,110)'; ui.g.fill();
+    ui.txt(s, F.xs, st === 2 ? C.Yellow : C.Text, X + 46, y); y += 30;
   };
   line(`เดินเบา ~${fmtN(m.IdleRpm)} rpm  •  โอเวอร์แลป ${f0(m.Overlap)}°${m.Overlap > 40 ? '  (สะดุด)' : ''}`, m.Overlap > 40 ? 2 : 1);
   const flowLimit = m.RpmFlow < m.PeakPsRpm; line(`ไอดีเริ่มอั้นที่ ${fmtN(m.RpmFlow)} rpm${flowLimit ? '  (เรือน/วาล์วเล็กไป)' : ''}`, flowLimit ? 2 : 1);
@@ -1242,9 +1242,9 @@ function drawGarageStats() {
   }
   const same = JSON.stringify(design) === JSON.stringify(d);
   if (d.Auto === 1) {
-    ui.btn(R(X, 984, 230, 70), 'A  จูนเม็ด', false, C.Blue, autoTuneRollers, F.md);
-    ui.btn(R(X + 246, 984, W - 246, 70), same ? 'Enter  ไปทดสอบ (ติดตั้งอยู่)' : 'Enter  ประกอบแล้วไปทดสอบ', !same, C.Green, assemble, F.md);
-  } else ui.btn(R(X, 984, W, 70), same ? 'Enter  ไปทดสอบ (แบบนี้ติดตั้งอยู่)' : 'Enter  ประกอบแล้วไปทดสอบ', !same, C.Green, assemble, F.md);
+    ui.btn(R(X, 1000, 230, 54), 'A  จูนเม็ด', false, C.Blue, autoTuneRollers, F.md);
+    ui.btn(R(X + 246, 1000, W - 246, 54), same ? 'Enter  ไปทดสอบ (ติดตั้งอยู่)' : 'Enter  ประกอบแล้วไปทดสอบ', !same, C.Green, assemble, F.md);
+  } else ui.btn(R(X, 1000, W, 54), same ? 'Enter  ไปทดสอบ (แบบนี้ติดตั้งอยู่)' : 'Enter  ประกอบแล้วไปทดสอบ', !same, C.Green, assemble, F.md);
 }
 
 // ================================================================= ที่ปรึกษาจูน
