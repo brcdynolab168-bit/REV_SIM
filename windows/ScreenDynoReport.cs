@@ -69,12 +69,12 @@ public sealed partial class MainForm
         TxtR(g, last.When.ToString("yyyy-MM-dd  HH:mm"), _fSm, Palette.Dim, box.Right - 36, box.Y + 48);
 
         // ---------- ข้อมูลรถ ----------
-        float ix = box.X + 36, iy = box.Y + 100;
+        float ix = box.X + 48, iy = box.Y + 112;
         void Info(string label, string val, float x, float w)
         {
             Txt(g, label, _fCap, Palette.Dim, x, iy);
-            Txt(g, val, _fSm, Palette.Text, x, iy + 22);
-            g.DrawLine(Pn(Palette.Border, 1f), x, iy + 56, x + w, iy + 56);
+            Txt(g, val, _fSm, Palette.Text, x, iy + 26);
+            g.DrawLine(Pn(Palette.Border, 1f), x, iy + 64, x + w, iy + 64);
         }
         Info("VEHICLE", last.Vehicle, ix, 520);
         Info("ENGINE", last.Spec, ix + 560, 560);
@@ -84,7 +84,7 @@ public sealed partial class MainForm
         // ---------- การ์ดพีค ----------
         var newest = runs.OrderBy(r => r.N).Last();
         var oldest = runs.OrderBy(r => r.N).First();
-        float cy = box.Y + 170, ch = 112, cw = 410;
+        float cy = box.Y + 200, ch = 120, cw = 404;
         void Card(float x, string title, string big, string unit, string sub, Color accent, Color bigCol)
         {
             var r = new RectangleF(x, cy, cw, ch);
@@ -92,20 +92,20 @@ public sealed partial class MainForm
             g.FillRectangle(Br(accent), r.X, r.Y + 8, 5, r.Height - 16);
             Txt(g, title, _fCap, Palette.Dim, r.X + 24, r.Y + 10);
             Txt(g, big, _fNumL, bigCol, r.X + 22, r.Y + 20);
-            Txt(g, unit, _fSm, Palette.Dim, r.X + 22 + 40 * Math.Max(3, big.Length) * 0.95f, r.Y + 62);
+            Txt(g, unit, _fSm, Palette.Dim, r.X + 30 + 40 * big.Length, r.Y + 62);
             Txt(g, sub, _fCap, Palette.Dim, r.X + 24, r.Bottom - 26);
         }
         float hpN = newest.R.PeakPs * EngineModel.PsToHp, hpO = oldest.R.PeakPs * EngineModel.PsToHp;
-        Card(box.X + 36, "PEAK POWER", $"{hpN:0.0}", "HP", $"@ {newest.R.PeakPsRpm:N0} rpm  (Run {newest.N})", Palette.Green, Palette.Green);
-        Card(box.X + 36 + 436, "PEAK TORQUE", $"{newest.R.PeakTq:0.0}", "N·m", $"@ {newest.R.PeakTqRpm:N0} rpm  (Run {newest.N})", Palette.Red, Palette.Red);
+        Card(box.X + 48, "PEAK POWER", $"{hpN:0.0}", "HP", $"@ {newest.R.PeakPsRpm:N0} rpm  (Run {newest.N})", Palette.Green, Palette.Green);
+        Card(box.X + 48 + 436, "PEAK TORQUE", $"{newest.R.PeakTq:0.0}", "N·m", $"@ {newest.R.PeakTqRpm:N0} rpm  (Run {newest.N})", Palette.Red, Palette.Red);
         bool two = oldest.N != newest.N;
         float dP = hpN - hpO, dT = newest.R.PeakTq - oldest.R.PeakTq;
         Color gc = Color.FromArgb(40, 170, 90);
-        Card(box.X + 36 + 872, two ? $"Run {newest.N} vs Run {oldest.N}  POWER" : "POWER (เทียบ)", two ? $"{(dP >= 0 ? "+" : "")}{dP:0.0}" : "-", two ? "HP" : "", two ? $"{(dP >= 0 ? "ดีขึ้น" : "แย่ลง")} {(hpO > 0 ? dP / hpO * 100f : 0f):+0.0;-0.0}%" : "เปิดอย่างน้อย 2 รอบ", Palette.Border, two ? (dP >= 0 ? gc : Palette.Red) : Palette.Dim);
-        Card(box.X + 36 + 1308, "TORQUE", two ? $"{(dT >= 0 ? "+" : "")}{dT:0.0}" : "-", two ? "N·m" : "", two ? $"{(dT >= 0 ? "ดีขึ้น" : "แย่ลง")} {(oldest.R.PeakTq > 0 ? dT / oldest.R.PeakTq * 100f : 0f):+0.0;-0.0}%" : "", Palette.Border, two ? (dT >= 0 ? gc : Palette.Red) : Palette.Dim);
+        Card(box.X + 48 + 872, two ? $"Run {newest.N} vs Run {oldest.N}  POWER" : "POWER (เทียบ)", two ? $"{(dP >= 0 ? "+" : "")}{dP:0.0}" : "-", two ? "HP" : "", two ? $"{(dP >= 0 ? "ดีขึ้น" : "แย่ลง")} {(hpO > 0 ? dP / hpO * 100f : 0f):+0.0;-0.0}%" : "เปิดอย่างน้อย 2 รอบ", Palette.Border, two ? (dP >= 0 ? gc : Palette.Red) : Palette.Dim);
+        Card(box.X + 48 + 1308, "TORQUE", two ? $"{(dT >= 0 ? "+" : "")}{dT:0.0}" : "-", two ? "N·m" : "", two ? $"{(dT >= 0 ? "ดีขึ้น" : "แย่ลง")} {(oldest.R.PeakTq > 0 ? dT / oldest.R.PeakTq * 100f : 0f):+0.0;-0.0}%" : "", Palette.Border, two ? (dT >= 0 ? gc : Palette.Red) : Palette.Dim);
 
         // ---------- กราฟแกนคู่ ----------
-        var plot = new RectangleF(box.X + 90, box.Y + 322, box.Width - 180, 300);
+        var plot = new RectangleF(box.X + 100, box.Y + 392, box.Width - 200, 236);
         int iMin = int.MaxValue, iMax = -1;
         float maxHp = 1f, maxTq = 1f;
         foreach (var run in runs)
@@ -169,18 +169,18 @@ public sealed partial class MainForm
         Txt(g, "N·m", _fXs, Palette.Dim, lx + 162, ly - 13);
 
         // ---------- ตารางรอบวัด ----------
-        float ty = plot.Bottom + 58;
-        g.FillRectangle(Br(Color.FromArgb(24, 28, 37)), box.X + 36, ty, box.Width - 72, 30);
-        float[] cx = { box.X + 70, box.X + 520, box.X + 860, box.X + 1160, box.X + 1500, box.X + 1700 };
+        float ty = plot.Bottom + 72;
+        g.FillRectangle(Br(Color.FromArgb(24, 28, 37)), box.X + 48, ty, box.Width - 96, 30);
+        float[] cx = { box.X + 90, box.X + 540, box.X + 860, box.X + 1150, box.X + 1490, box.X + 1660 };
         string[] hd = { "RUN", "PEAK POWER (HP)", "@ RPM", "PEAK TORQUE (N·m)", "@ RPM", "SAMPLES" };
         for (int i = 0; i < hd.Length; i++) Txt(g, hd[i], _fCap, Palette.Dim, cx[i], ty + 5);
-        ty += 32;
+        ty += 36;
         foreach (var run in _dynoRuns.OrderBy(r => r.N))
         {
             var rr = run; Color c = RunColors[(run.N - 1) % RunColors.Length];
-            var row = new RectangleF(box.X + 36, ty, box.Width - 72, 28);
+            var row = new RectangleF(box.X + 48, ty, box.Width - 96, 30);
             if (!run.Visible) g.FillRectangle(Br(Color.FromArgb(14, 16, 21)), row);
-            g.FillRectangle(Br(run.Visible ? c : Color.FromArgb(70, 76, 88)), box.X + 44, ty + 6, 16, 16);
+            g.FillRectangle(Br(run.Visible ? c : Color.FromArgb(70, 76, 88)), box.X + 60, ty + 7, 16, 16);
             Color tc = run.Visible ? Palette.Text : Palette.Dim;
             Txt(g, $"Run {run.N}   {(run.Vehicle)}", _fXs, tc, cx[0], ty + 3);
             Txt(g, $"{run.R.PeakPs * EngineModel.PsToHp:0.0}", _fXs, tc, cx[1], ty + 3);
@@ -190,13 +190,13 @@ public sealed partial class MainForm
             Txt(g, $"{run.R.Tq.Count(t => !float.IsNaN(t))}", _fXs, Palette.Dim, cx[5], ty + 3);
             g.DrawLine(Pn(Palette.Border, 1f), row.X, row.Bottom, row.Right, row.Bottom);
             AddHit(row, _ => { rr.Visible = !rr.Visible; if (!_dynoRuns.Any(q => q.Visible)) rr.Visible = true; });
-            ty += 29;
+            ty += 31;
         }
-        Btn(g, new RectangleF(box.Right - 36 - 190, ty + 4, 190, 34), "ล้างประวัติรอบวัด", false, Palette.Red, () => { var keep = _dynoRuns[^1]; _dynoRuns.Clear(); _dynoRuns.Add(keep); keep.Visible = true; }, _fCap);
-        Txt(g, "คลิกแถวในตารางเพื่อเปิด/ปิดเส้นของรอบนั้น  •  เส้นทึบ = HP  เส้นประ = N·m", _fCap, Palette.Dim, box.X + 40, ty + 12);
+        Btn(g, new RectangleF(box.Right - 48 - 190, ty + 6, 190, 34), "ล้างประวัติรอบวัด", false, Palette.Red, () => { var keep = _dynoRuns[^1]; _dynoRuns.Clear(); _dynoRuns.Add(keep); keep.Visible = true; }, _fCap);
+        Txt(g, "คลิกแถวในตารางเพื่อเปิด/ปิดเส้นของรอบนั้น  •  เส้นทึบ = HP  เส้นประ = N·m", _fCap, Palette.Dim, box.X + 52, ty + 14);
 
         // ---------- NOTES ----------
-        float ny = ty + 48;
+        float ny = ty + 58;
         g.FillRectangle(Br(Palette.Yellow), box.X + 40, ny + 2, 4, 20);
         Txt(g, "NOTES", _fCap, Palette.Dim, box.X + 56, ny);
         var notes = new List<(string, Color)>();
@@ -223,8 +223,9 @@ public sealed partial class MainForm
             if (rd.RealTq > 0f) cmp += $"แรงบิด เกม {newest.R.PeakTq:0.0} / จริง {rd.RealTq:0.0} N·m ({(newest.R.PeakTq / rd.RealTq - 1f) * 100f:+0;-0;0}%)";
             notes.Add((cmp, Palette.Yellow));
         }
-        float nyy = ny + 28;
-        foreach (var (t, c) in notes.Take(3)) { Txt(g, t, _fXs, c, box.X + 56, nyy); nyy += 26; }
+        float nyy = ny + 30;
+        int nMax = Math.Max(1, Math.Min(3, (int)((box.Bottom - 52 - nyy) / 28)));
+        foreach (var (t, c) in notes.Take(nMax)) { Txt(g, t, _fXs, c, box.X + 60, nyy); nyy += 28; }
         TxtR(g, "Generated by REV LAB (simulated dyno)  •  Enter / Esc / คลิกนอกรายงานเพื่อปิด", _fCap, Palette.Dim, box.Right - 36, box.Bottom - 28);
     }
 }
