@@ -26,7 +26,7 @@ export function newDesign(o = {}) {
     RampDeg: 13.5, RampOutDeg: 13.5, Rollers: 6, RollerG: 8.5, RollerG2: 8.5, GearF: 13, GearR: 40, FirstRed: 3.0,
     BikeKg: 107, CdA: 0.415, RimInch: 17, RimW: 1.4, TireW: 80, TireAsp: 90,
     Inj: 0, EcuAx: 0, EcuMs: null, EcuMap: null, EcuEoi: null, EcuDwell: null, EcuIgn: null,
-    SpringK: 20, Primary: 3.35, Gear1: 2.5, Gear2: 1.55, Gear3: 1.15, Gear4: 0.923, Gears: 4, Gear5: 0.8, Gear6: 0.72, Pipe: 0, Fuel: 1,
+    ClutchBite: 0, ClutchCap: 1, SpringK: 20, Primary: 3.35, Gear1: 2.5, Gear2: 1.55, Gear3: 1.15, Gear4: 0.923, Gears: 4, Gear5: 0.8, Gear6: 0.72, Pipe: 0, Fuel: 1,
   }, o);
   if (r.EcuAx !== 2) { r.EcuMs = r.EcuEoi = r.EcuIgn = r.EcuDwell = r.EcuMap = null; }      // ตารางจูนเก่าใช้แกนโหลด: ทิ้ง ใช้ค่าโรงงานแกน TPS
   return r;
@@ -151,6 +151,8 @@ export const Params = [
   num('fdf', 'เฟืองท้าย ตัวหน้า', 'ฟัน', 10, 20, 1, '0', 'GearF', 'ฟันหน้าน้อย/ฟันหลังมาก = ทดจัด ออกตัวแรง ท็อปสปีดลด', { visible: auto }),
   num('fdr', 'เฟืองท้าย ตัวหลัง', 'ฟัน', 28, 50, 1, '0', 'GearR', 'ฟันมาก = ทดจัดขึ้น  ฟันน้อย = ปลายยาว', { visible: auto }),
   num('firstred', 'ลดขั้นแรก (ในเรือนเกียร์)', ':1', 2, 4, 0.01, '0.000', 'FirstRed', 'ตายตัวตามรถ (XMAX 300 = 48/18 = 2.667)', { visible: auto }),
+  num('clbite', 'จุดจับครัช (เลื่อนรอบ)', 'rpm', -800, 2500, 100, '0', 'ClutchBite', 'บวก = ครัชจับที่รอบสูงขึ้น (สปริงแข็ง/ผ้าครัชหนัก) ออกตัวต้องปั่นรอบก่อน  ลบ = จับไวที่รอบต่ำ แต่รถคลานและเครื่องดับง่าย', { text: v => (v === 0 ? 'ตามโรงงาน' : (v > 0 ? '+' : '') + v + ' rpm') }),
+  num('clcap', 'กำลังส่งของครัช (ความจุทอร์ก)', 'x', 0.6, 2.4, 0.05, '0.00', 'ClutchCap', 'คูณแรงบิดสูงสุดที่ครัชส่งได้ ต่ำ = ลื่นง่ายพอกำลังสูง  สูง = ไม่ลื่น ส่งแรงตรง แต่ออกตัวกระชากและเสียงเครื่องรถสะดุดง่าย', { text: v => v.toFixed(2) + 'x' }),
   num('spring', 'สปริงทอค (ความแข็ง)', 'N/มม.', 10, 40, 1, '0', 'SpringK', 'แข็ง = CVT ไล่รอบช้า ถือรอบสูง  นิ่ม = ไล่รอบไว ถือรอบต่ำ', { visible: auto }),
   num('realhp', 'แรงม้ารถจริง (อ้างอิง)', 'HP', 0, 500, 0.5, '0.0', 'RealHp', 'ใส่แรงม้าสูงสุดจากรถจริง (0 = ไม่ระบุ) แล้วกดปรับเทียบ', { text: v => (v <= 0 ? 'ไม่ระบุ' : v.toFixed(1) + ' HP') }),
   num('realhprpm', 'รอบที่ได้แรงม้าสูงสุด', 'rpm', 0, 16000, 100, '0', 'RealHpRpm', 'รอบของแรงม้าสูงสุดรถจริง (ใช้เทียบ)', { text: v => (v <= 0 ? 'ไม่ระบุ' : Math.round(v) + ' rpm') }),
@@ -178,7 +180,7 @@ export const GarageTabs = [
   ['เครื่องยนต์', ['bore', 'stroke', 'rod', 'crank', 'fly', 'valves']],
   ['ไอดี·แคม·ท่อ', ['throttle', 'lsa', 'duration', 'durationex', 'lift', 'liftex', 'pipe']],
   ['อัด·น้ำมัน', ['cr', 'psi', 'fuel', 'inj', 'limiter', 'resume', 'softcut']],
-  ['ส่งกำลัง', ['auto', 'prim', 'gears', 'g1', 'g2', 'g3', 'g4', 'g5', 'g6', 'sprf', 'sprr', 'ramp', 'rampout', 'rollers', 'rollerg', 'rollerg2', 'fdf', 'fdr', 'firstred', 'spring']],
+  ['ส่งกำลัง', ['auto', 'prim', 'gears', 'g1', 'g2', 'g3', 'g4', 'g5', 'g6', 'sprf', 'sprr', 'ramp', 'rampout', 'rollers', 'rollerg', 'rollerg2', 'fdf', 'fdr', 'firstred', 'spring', 'clbite', 'clcap']],
   ['ตัวรถ', ['rider', 'bikekg', 'rim', 'rimw', 'tirew', 'tireasp', 'cda']],
   ['จูนกล่อง', []],
   ['รถจริง', ['realhp', 'realhprpm', 'realtq', 'realtqrpm', 'calk']],
@@ -225,6 +227,8 @@ export const PartCats = [
         d => d.Gears === gs.length && near(d.Primary, p, 0.006) && gs.every((x, i) => near(d['Gear' + (i + 1)], x, 0.006)))) },
   { name: 'ชามเม็ด (องศาใน/นอก)', hint: 'ชามแต่งมี 2 องศา: ใบใน (ออกตัว) / ใบนอก (ปลายทาง)  ใบนอกน้อยกว่า = ปลายไล่ไว  ใบนอกมากกว่า = ปลายถือรอบสูง (ใช้กับรถออโต้)',
     items: [[13.5, 13.5], [13, 12], [14, 12], [12, 14], [15, 11], [12, 12], [14, 14], [11, 13], [16, 12]].map(([i, o]) => item(`ชาม ${i}° / ${o}°`, d => { d.RampDeg = i; d.RampOutDeg = o; }, d => near(d.RampDeg, i, 0.05) && near(d.RampOutDeg, o, 0.05))) },
+  { name: 'ชุดครัช (ผ้าครัช/สปริง)', hint: "ครัชเดิม = จับตามรอบมาตรฐาน | ผ้าแต่ง = จับไว ออกตัวรอบต่ำ | สปริงแข็ง = จับรอบสูง ออกตัวพุ่ง | ครัชแข่ง = ส่งแรงบิดสูงไม่ลื่น แต่ต้องปั่นรอบก่อนออกตัว",
+    items: [["ครัชเดิมโรงงาน",0,1],["ผ้าครัชแต่ง จับไว",-500,1.25],["สปริงครัชแข็ง จับสูง",900,1.1],["ครัชแต่ง แรงส่งสูง",300,1.6],["ครัชแข่ง ทนทอร์กสูง",1500,2.2]].map(([n, b, c]) => item(`${n}  ${b === 0 ? 'จับตามโรงงาน' : (b > 0 ? '+' : '') + b + ' rpm'} / ${c.toFixed(2)}x`, d => { d.ClutchBite = b; d.ClutchCap = c; }, d => near(d.ClutchBite, b, 25) && near(d.ClutchCap, c, 0.03))) },
   { name: 'ท่อไอเสีย', hint: 'เดิม = เงียบ / ผ่าหมก / ผ่าเปิด / ท่อสูตร = พีคแรงเฉพาะรอบ',
     items: PipeNames.map((n, i) => item(n, d => { d.Pipe = i; }, d => d.Pipe === i)) },
   { name: 'รอบตัด (hard cut)', hint: 'ตั้งสูงเกินที่วาล์ว/ลูกสูบรับไหว = กำลังตก',

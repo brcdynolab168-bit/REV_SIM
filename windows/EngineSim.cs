@@ -381,14 +381,15 @@ public sealed class EngineSim
         {
             // คลัตช์แรงเหวี่ยง: แรงจับขึ้นตามรอบกำลังสอง (แรงเหวี่ยง ∝ ω²) เริ่มจับที่ start เต็มที่ราว full
             // รถออโต้จับที่รอบสูงกว่า (~3,200) เวฟจับตามรอบเดินเบา แต่ไม่ต่ำกว่า 2,600
-            float start = auto ? 3200f : MathF.Max(2600f, m.IdleRpm + 900f);
-            float full = auto ? 7500f : 7000f;
+            float bite = m.D.ClutchBite;
+            float start = MathF.Max(m.IdleRpm + 250f, (auto ? 3200f : MathF.Max(2600f, m.IdleRpm + 900f)) + bite);
+            float full = MathF.Max(start + 1500f, (auto ? 7500f : 7000f) + bite);
             lock01 = Clamp((rpm * rpm - start * start) / (full * full - start * start), 0f, 1f);
             _cfLock = lock01;
             lock01 *= 1f - _lever * _lever * (3f - 2f * _lever) * 1f;      // กำคันครัตช์ = แรงจับลดลงนุ่ม ๆ (smoothstep)
             float omegaIn = v / r * ratio;
             float slip = omegaE - omegaIn;
-            tc = Clamp(slip / SlipScale, -1f, 1f) * ClutchTorque * lock01;
+            tc = Clamp(slip / SlipScale, -1f, 1f) * ClutchTorque * m.D.ClutchCap * lock01;
 
             // แรงเกาะยางหลัง: เกินแล้วล้อฟรี เครื่องรอบพุ่ง
             float fmax = Vehicle.TractionMax(d);

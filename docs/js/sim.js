@@ -180,12 +180,12 @@ export class EngineSim {
     const omegaE = rpm / 9.5493;
     let tc = 0, lock01 = 0, slipRpm = 0, tracUse = 0, spin = false;
     if (ratio > 0 && this._shiftT <= 0) {
-      const start = auto ? 3200 : Math.max(2600, m.IdleRpm + 900), full = auto ? 7500 : 7000;
+      const bite = d.ClutchBite || 0, start = Math.max(m.IdleRpm + 250, (auto ? 3200 : Math.max(2600, m.IdleRpm + 900)) + bite), full = Math.max(start + 1500, (auto ? 7500 : 7000) + bite);
       lock01 = clamp((rpm * rpm - start * start) / (full * full - start * start), 0, 1);
       this._cfLock = lock01;
       lock01 *= 1 - this._lever * this._lever * (3 - 2 * this._lever);
       const omegaIn = v / r * ratio, slip = omegaE - omegaIn;
-      tc = clamp(slip / SlipScale, -1, 1) * ClutchTorque * lock01;
+      tc = clamp(slip / SlipScale, -1, 1) * ClutchTorque * (d.ClutchCap || 1) * lock01;
       const tcMax = Veh.tractionMax(d) * r / (ratio * Veh.DriveEff);
       slipRpm = slip * 9.5493; tracUse = tcMax > 0 ? Math.abs(tc) / tcMax : 0; spin = Math.abs(tc) > tcMax;
       tc = clamp(tc, -tcMax, tcMax);
