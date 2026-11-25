@@ -87,12 +87,12 @@ public static class Advisor
                 ratio = Vehicle.Total(d, gear);
                 float wr = v / r * ratio * 9.5493f;
                 rpm = MathF.Max(wr, gear == 1 ? launch : 2500f);
-                if (rpm >= shiftRpm && gear < 4 && shift <= 0f) { gear++; shift = 0.2f; }
+                if (rpm >= shiftRpm && gear < d.Gears && shift <= 0f) { gear++; shift = 0.2f; }
                 wheelRpmFactor = wr;
                 rpm = MathF.Min(rpm, lim);
             }
             float tq = MathF.Max(0f, m.BrakeTorqueWot(rpm));
-            float f = shift > 0f ? 0f : MathF.Min(tq * ratio * Vehicle.DriveEff / r, fmax);
+            float f = shift > 0f ? 0f : MathF.Min(tq * ratio * Vehicle.Eff(d) / r, fmax);
             if (!auto && wheelRpmFactor > lim) f = 0f;
             float net = f - Vehicle.Resist(d, v, 0f);
             v = MathF.Max(0f, v + net / mEff * dt);
@@ -311,7 +311,7 @@ public static class Advisor
         // ออกตัว: แรงเกาะ
         float launchRpm = Math.Clamp(m.PeakTqRpm * 1.1f, 3000f, lim);
         float ratio1 = d.Auto == 1 ? Cvt.RLow * Cvt.Final(d) : Vehicle.Total(d, 1);
-        float fLaunch = MathF.Max(0f, m.BrakeTorqueWot(launchRpm)) * ratio1 * Vehicle.DriveEff / Vehicle.WheelRadius(d);
+        float fLaunch = MathF.Max(0f, m.BrakeTorqueWot(launchRpm)) * ratio1 * Vehicle.Eff(d) / Vehicle.WheelRadius(d);
         if (fLaunch > Vehicle.TractionMax(d) * 1.05f)
             tips.Add(new Tip(2, $"ออกตัวล้อฟรี: แรงขับ {fLaunch:0} N เกินที่ยางเกาะได้ {Vehicle.TractionMax(d):0} N  » หน้ายางกว้างขึ้น/ขอบให้พอดี หรือทดเกียร์ 1 ให้ยาวขึ้น"));
 

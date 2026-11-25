@@ -35,11 +35,11 @@ export function predict(m) {
       ratio = Veh.total(d, gear);
       wr = v / r * ratio * 9.5493;
       rpm = Math.max(wr, gear === 1 ? launch : 2500);
-      if (rpm >= shiftRpm && gear < 4 && shift <= 0) { gear++; shift = 0.2; }
+      if (rpm >= shiftRpm && gear < d.Gears && shift <= 0) { gear++; shift = 0.2; }
       rpm = Math.min(rpm, lim);
     }
     const tq = Math.max(0, m.BrakeTorqueWot(rpm));
-    let f = shift > 0 ? 0 : Math.min(tq * ratio * Veh.DriveEff / r, fmax);
+    let f = shift > 0 ? 0 : Math.min(tq * ratio * Veh.eff(d) / r, fmax);
     if (!auto && wr > lim) f = 0;
     v = Math.max(0, v + (f - Veh.resist(d, v, 0)) / mEff * dt);
     x += v * dt; t += dt; shift -= dt;
@@ -163,7 +163,7 @@ export function observe(m, t) {
   }
   const launchRpm = clamp(m.PeakTqRpm * 1.1, 3000, lim);
   const ratio1 = d.Auto === 1 ? Cvt.RLow * Cvt.final(d) : Veh.total(d, 1);
-  const fL = Math.max(0, m.BrakeTorqueWot(launchRpm)) * ratio1 * Veh.DriveEff / Veh.wheelRadius(d);
+  const fL = Math.max(0, m.BrakeTorqueWot(launchRpm)) * ratio1 * Veh.eff(d) / Veh.wheelRadius(d);
   if (fL > Veh.tractionMax(d) * 1.05) tips.push([2, `ออกตัวล้อฟรี: แรงขับ ${fL.toFixed(0)} N เกินที่ยางเกาะได้ ${Veh.tractionMax(d).toFixed(0)} N  → หน้ายางกว้างขึ้น/ขอบให้พอดี หรือทดเกียร์ 1 ให้ยาวขึ้น`]);
   if (knocks(m)) tips.push([2, `น็อก! แรงดันอัด ${m.Psi.toFixed(0)} psi เกินพิกัดน้ำมัน (${m.CrLimit.toFixed(1)}) ลด CR/แรงดันอัด หรือเปลี่ยนน้ำมันออกเทนสูง`]);
   if (lim >= m.FloatRpm) tips.push([2, `รอบตัด ${lim.toLocaleString()} สูงเกินรอบวาล์วลอย (${Math.round(m.FloatRpm).toLocaleString()}) ลดรอบตัด/ลดยก/เพิ่ม 4 วาล์ว`]);

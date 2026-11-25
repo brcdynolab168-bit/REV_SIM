@@ -11,7 +11,7 @@ public static class Vehicle
     public static readonly float[] GearRatio = { 2.500f, 1.550f, 1.150f, 0.923f };
     public const float Primary = 3.350f;
     public const float WheelInertia = 0.9f;      // ล้อหน้า+หลัง รวมที่ผิวยาง (kg·m²) ของชุดล้อเวฟ แปลงเป็นมวลเทียบเท่า (ปรับตามขนาดล้อ ดู WheelInertiaFor)
-    public const float DriveEff = 0.93f;         // ประสิทธิภาพขับเคลื่อน (เกียร์/สายพาน + โซ่)
+    public static float Eff(EngineDesign d) => d.Auto == 1 ? 0.85f : 0.92f;      // ประสิทธิภาพขับเคลื่อน: CVT (สายพาน+ลดขั้น) ~85%  โซ่+เกียร์ ~92%  //         // ประสิทธิภาพขับเคลื่อน (เกียร์/สายพาน + โซ่)
     public const float Crr = 0.012f;             // แรงต้านการกลิ้ง (ยางมอเตอร์ไซค์บนถนนแห้ง)
     public const float CdA = 0.42f;              // พื้นที่ลม × สัมประสิทธิ์ลม (ตัวรถ + คนขี่) m²
     public const float AirRho = 1.18f;           // ความหนาแน่นอากาศ ที่ ~30°C
@@ -114,7 +114,7 @@ public static class Vehicle
             float rpm = v / r * ratio * 9.5493f;
             if (rpm > d.Limiter) break;
             if (rpm < 2500f) continue;
-            float fav = MathF.Max(0f, m.BrakeTorqueWot(rpm)) * ratio * DriveEff / r;
+            float fav = MathF.Max(0f, m.BrakeTorqueWot(rpm)) * ratio * Eff(d) / r;
             if (fav >= Resist(d, v, slopePct)) { best = v; bestRpm = rpm; }
         }
         return (best * 3.6f, bestRpm);
@@ -133,7 +133,7 @@ public static class Vehicle
             float rpm = MathF.Max(hold, rpmHi);
             if (rpm > d.Limiter) break;
             float ratio = rpm / 9.5493f * r / v;                                    // อัตราทดรวมที่ใช้
-            float fav = MathF.Max(0f, m.BrakeTorqueWot(rpm)) * ratio * DriveEff / r;
+            float fav = MathF.Max(0f, m.BrakeTorqueWot(rpm)) * ratio * Eff(d) / r;
             if (fav >= Resist(d, v, slopePct)) { best = v; bestRpm = rpm; }
         }
         return (best * 3.6f, bestRpm);

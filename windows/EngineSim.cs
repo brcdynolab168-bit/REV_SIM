@@ -393,7 +393,7 @@ public sealed class EngineSim
 
             // แรงเกาะยางหลัง: เกินแล้วล้อฟรี เครื่องรอบพุ่ง
             float fmax = Vehicle.TractionMax(d);
-            float tcMax = fmax * r / (ratio * Vehicle.DriveEff);
+            float tcMax = fmax * r / (ratio * Vehicle.Eff(d));
             slipRpm = slip * 9.5493f;
             tracUse = tcMax > 0f ? MathF.Abs(tc) / tcMax : 0f;
             spin = MathF.Abs(tc) > tcMax * 1.0f;
@@ -421,7 +421,7 @@ public sealed class EngineSim
         rpm = newOmega * 9.5493f;
 
         // ----- รถ -----
-        float fDrive = ratio > 0f ? tc * ratio * Vehicle.DriveEff / r : 0f;
+        float fDrive = ratio > 0f ? tc * ratio * Vehicle.Eff(d) / r : 0f;
         _driveForce = MathF.Max(0f, fDrive);
         float fRes = Vehicle.Resist(d, v, SlopePct);
         float fBrake = Clamp(BrakeInput, 0f, 1f) * Vehicle.BrakeDecel * mass;

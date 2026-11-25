@@ -186,7 +186,7 @@ export class EngineSim {
       lock01 *= 1 - this._lever * this._lever * (3 - 2 * this._lever);
       const omegaIn = v / r * ratio, slip = omegaE - omegaIn;
       tc = clamp(slip / SlipScale, -1, 1) * ClutchTorque * (d.ClutchCap || 1) * lock01;
-      const tcMax = Veh.tractionMax(d) * r / (ratio * Veh.DriveEff);
+      const tcMax = Veh.tractionMax(d) * r / (ratio * Veh.eff(d));
       slipRpm = slip * 9.5493; tracUse = tcMax > 0 ? Math.abs(tc) / tcMax : 0; spin = Math.abs(tc) > tcMax;
       tc = clamp(tc, -tcMax, tcMax);
     }
@@ -202,7 +202,7 @@ export class EngineSim {
     const newOmega = omegaE + (netEngine - tc) / inertia * dt;
     rpm = newOmega * 9.5493;
 
-    const fDrive = ratio > 0 ? tc * ratio * Veh.DriveEff / r : 0;
+    const fDrive = ratio > 0 ? tc * ratio * Veh.eff(d) / r : 0;
     this.driveForce = Math.max(0, fDrive);
     const fRes = Veh.resist(d, v, this.slopePct);
     const fBrake = clamp(this.brakeInput, 0, 1) * Veh.BrakeDecel * mass;

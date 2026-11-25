@@ -146,7 +146,7 @@ public sealed class EngineDesign
             Bore = 70f, Stroke = 75.9f, Rod = 118f, CrankKg = 4.7f, FlywheelKg = 0.8f, Valves = 4, Throttle = 32f,
             Lsa = 110f, Duration = 225f, DurationEx = 225f, Lift = 7.5f, LiftEx = 7.5f, Cr = 10.9f, Limiter = 8800f,
             Auto = 1, RampDeg = 13.5f, RampOutDeg = 13.5f, Rollers = 6, RollerG = 13.5f, RollerG2 = 13.5f, SpringK = 20f,
-            GearF = 13, GearR = 37, FirstRed = 48f / 18f, BikeKg = 180f, RimInch = 14f, RimW = 3.50f, TireW = 140f, TireAsp = 70f, RiderKg = 75f, CdA = 0.32f,
+            GearF = 13, GearR = 37, FirstRed = 48f / 18f, BikeKg = 180f, RimInch = 14f, RimW = 3.50f, TireW = 140f, TireAsp = 70f, RiderKg = 75f, CdA = 0.38f,
             RealHp = 27.6f, RealHpRpm = 7250f, RealTq = 29f, RealTqRpm = 5750f, CalK = 0.975f,
         }),
         // Honda Forza 350: 330cc 77.0x70.8 CR 10.5 4V  21.5 kW (28.8 HP)/7,500  31.5 N·m/5,250  หนัก ~186 กก. ยางหลัง 140/70-14
@@ -155,7 +155,7 @@ public sealed class EngineDesign
             Bore = 77f, Stroke = 70.8f, Rod = 115f, CrankKg = 4.9f, FlywheelKg = 0.85f, Valves = 4, Throttle = 34f,
             Lsa = 110f, Duration = 225f, DurationEx = 225f, Lift = 7.5f, LiftEx = 7.5f, Cr = 10.5f, Limiter = 8800f,
             Auto = 1, RampDeg = 13.5f, RampOutDeg = 13.5f, Rollers = 6, RollerG = 14f, RollerG2 = 14f, SpringK = 20f,
-            GearF = 13, GearR = 37, FirstRed = 48f / 18f, BikeKg = 186f, RimInch = 14f, RimW = 3.50f, TireW = 140f, TireAsp = 70f, RiderKg = 75f, CdA = 0.32f,
+            GearF = 13, GearR = 37, FirstRed = 48f / 18f, BikeKg = 186f, RimInch = 14f, RimW = 3.50f, TireW = 140f, TireAsp = 70f, RiderKg = 75f, CdA = 0.38f,
             RealHp = 28.8f, RealHpRpm = 7500f, RealTq = 31.5f, RealTqRpm = 5250f, CalK = 0.95f,
         }),
         // Honda Giorno+ 125: 125cc 53.5x55.5 CR 11.5 2V  8.49 kW (11.4 HP)/8,750  11.6 N·m/5,250  หนัก ~116 กก. ยาง 100/90-12 หน้า-หลัง
@@ -240,7 +240,7 @@ public sealed class EngineDesign
         if (!s.Contains("fly="))
         { d.FlywheelKg = 0.6f; d.CrankKg = MathF.Max(1.2f, d.CrankKg - 0.6f); }   // เซฟเก่า: นน.เดิมรวมจานไฟ
         if (!hasNew && d.Auto == 1 && MathF.Abs(d.Bore - 70f) < 0.3f && MathF.Abs(d.Stroke - 75.8f) < 0.3f)
-        { d.FirstRed = 48f / 18f; d.CdA = 0.32f; }      // เซฟ XMAX 300 เก่าที่ยังไม่เก็บลดขั้นแรก/CdA
+        { d.FirstRed = 48f / 18f; d.CdA = 0.38f; }      // เซฟ XMAX 300 เก่าที่ยังไม่เก็บลดขั้นแรก/CdA
         return d;
     }
 

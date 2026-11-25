@@ -63,11 +63,11 @@ export const Presets = [
   // รถจริง: ตัวเลขที่ผู้ผลิตประกาศ (ซีซี ลูก x ชัก CR กำลัง แรงบิด น้ำหนัก ยาง) ส่วน เรือน/แคม/ก้านสูบ/เม็ด/องศาชาม/สปริง ผู้ผลิตไม่เปิดเผย เป็นค่าประมาณ แล้วปรับ CalK ให้พีคตรงรถจริง
   // Yamaha XMAX 300: 292cc 70.0x75.9 CR 10.9 4V  20.6 kW (27.6 HP)/7,250  29 N·m/5,750  หนัก ~180 กก. ยางหลัง 140/70-14
   ['XMAX 300 (CVT)', newDesign({ Bore: 70, Stroke: 75.9, Rod: 118, CrankKg: 4.7, FlywheelKg: 0.8, Valves: 4, Throttle: 32, Lsa: 110, Duration: 225, DurationEx: 225, Lift: 7.5, LiftEx: 7.5, Cr: 10.9, Limiter: 8800,
-    Auto: 1, RampDeg: 13.5, RampOutDeg: 13.5, Rollers: 6, RollerG: 13.5, RollerG2: 13.5, SpringK: 20, GearF: 13, GearR: 37, FirstRed: 48 / 18, BikeKg: 180, RimInch: 14, RimW: 3.5, TireW: 140, TireAsp: 70, RiderKg: 75, CdA: 0.32,
+    Auto: 1, RampDeg: 13.5, RampOutDeg: 13.5, Rollers: 6, RollerG: 13.5, RollerG2: 13.5, SpringK: 20, GearF: 13, GearR: 37, FirstRed: 48 / 18, BikeKg: 180, RimInch: 14, RimW: 3.5, TireW: 140, TireAsp: 70, RiderKg: 75, CdA: 0.38,
     RealHp: 27.6, RealHpRpm: 7250, RealTq: 29, RealTqRpm: 5750, CalK: 0.975 })],
   // Honda Forza 350: 330cc 77.0x70.8 CR 10.5 4V  21.5 kW (28.8 HP)/7,500  31.5 N·m/5,250  หนัก ~186 กก. ยางหลัง 140/70-14
   ['Forza 350 (CVT)', newDesign({ Bore: 77, Stroke: 70.8, Rod: 115, CrankKg: 4.9, FlywheelKg: 0.85, Valves: 4, Throttle: 34, Lsa: 110, Duration: 225, DurationEx: 225, Lift: 7.5, LiftEx: 7.5, Cr: 10.5, Limiter: 8800,
-    Auto: 1, RampDeg: 13.5, RampOutDeg: 13.5, Rollers: 6, RollerG: 14, RollerG2: 14, SpringK: 20, GearF: 13, GearR: 37, FirstRed: 48 / 18, BikeKg: 186, RimInch: 14, RimW: 3.5, TireW: 140, TireAsp: 70, RiderKg: 75, CdA: 0.32,
+    Auto: 1, RampDeg: 13.5, RampOutDeg: 13.5, Rollers: 6, RollerG: 14, RollerG2: 14, SpringK: 20, GearF: 13, GearR: 37, FirstRed: 48 / 18, BikeKg: 186, RimInch: 14, RimW: 3.5, TireW: 140, TireAsp: 70, RiderKg: 75, CdA: 0.38,
     RealHp: 28.8, RealHpRpm: 7500, RealTq: 31.5, RealTqRpm: 5250, CalK: 0.95 })],
   // Honda Giorno+ 125: 125cc 53.5x55.5 CR 11.5 2V  8.49 kW (11.4 HP)/8,750  11.6 N·m/5,250  หนัก ~116 กก. ยาง 100/90-12 หน้า-หลัง
   ['Giorno+ 125 (CVT)', newDesign({ Bore: 53.5, Stroke: 55.5, Rod: 90, CrankKg: 2.4, FlywheelKg: 0.6, Valves: 2, Throttle: 24, Lsa: 110, Duration: 232, DurationEx: 232, Lift: 7.5, LiftEx: 7.5, Cr: 11.5, Limiter: 9800,
@@ -532,7 +532,7 @@ export const Surfaces = [
 export const Veh = {
   surface: 0,
   setSurface(i) { Veh.surface = clamp(Math.round(i), 0, Surfaces.length - 1); },
-  DriveEff: 0.93, Crr: 0.012, AirRho: 1.18, Mu: 0.95, CgRear: 0.5, CgHeight: 0.4, G: 9.81, BrakeDecel: 7.0, WheelInertia: 0.9,
+  eff: d => (d.Auto === 1 ? 0.85 : 0.92), Crr: 0.012, AirRho: 1.18, Mu: 0.95, CgRear: 0.5, CgHeight: 0.4, G: 9.81, BrakeDecel: 7.0, WheelInertia: 0.9,
   mass: d => d.BikeKg + d.RiderKg,
   wheelRadius: d => (d.RimInch * 12.7 + d.TireW * d.TireAsp / 100) * 0.992 / 1000,
   idealRim: tw => 0.000125 * tw * tw + 0.0075 * tw,
@@ -556,7 +556,7 @@ export const Veh = {
       const rpm = v / r * ratio * 9.5493;
       if (rpm > d.Limiter) break;
       if (rpm < 2500) continue;
-      const fav = Math.max(0, m.BrakeTorqueWot(rpm)) * ratio * Veh.DriveEff / r;
+      const fav = Math.max(0, m.BrakeTorqueWot(rpm)) * ratio * Veh.eff(d) / r;
       if (fav >= Veh.resist(d, v, slope)) { best = v; bestRpm = rpm; }
     }
     return { kmh: best * 3.6, rpm: bestRpm };
@@ -569,7 +569,7 @@ export const Veh = {
       const rpm = Math.max(hold, rpmHi);
       if (rpm > d.Limiter) break;
       const ratio = rpm / 9.5493 * r / v;
-      const fav = Math.max(0, m.BrakeTorqueWot(rpm)) * ratio * Veh.DriveEff / r;
+      const fav = Math.max(0, m.BrakeTorqueWot(rpm)) * ratio * Veh.eff(d) / r;
       if (fav >= Veh.resist(d, v, slope)) { best = v; bestRpm = rpm; }
     }
     return { kmh: best * 3.6, rpm: bestRpm };
