@@ -150,14 +150,6 @@ public sealed partial class MainForm
             case Keys.Left: if (parts) PartStep(_partRow, -1); else Nudge(_sel, -1, shift); break;
             case Keys.Right: if (parts) PartStep(_partRow, +1); else Nudge(_sel, +1, shift); break;
             case Keys.Tab: SetTab(_tab + (shift ? -1 : 1)); break;
-            case Keys.D1: case Keys.NumPad1: LoadPreset(0); break;
-            case Keys.D2: case Keys.NumPad2: LoadPreset(1); break;
-            case Keys.D3: case Keys.NumPad3: LoadPreset(2); break;
-            case Keys.D4: case Keys.NumPad4: LoadPreset(3); break;
-            case Keys.D5: case Keys.NumPad5: LoadPreset(4); break;
-            case Keys.D6: case Keys.NumPad6: LoadPreset(5); break;
-            case Keys.D7: case Keys.NumPad7: LoadPreset(6); break;
-            case Keys.D8: case Keys.NumPad8: LoadPreset(7); break;
             case Keys.T: ToggleAdvisor(); break;
             case Keys.R: OpenReport(); break;
             case Keys.C: CalibrateToReal(); break;
@@ -219,7 +211,7 @@ public sealed partial class MainForm
     private void DrawGarage(Graphics g)
     {
         DrawTopBar(g, "อู่ออกแบบเครื่อง",
-            "↑ ↓ เลือก  •  ← → ปรับ (Shift = เร็ว)  •  Tab เปลี่ยนหมวด  •  1-6 แบบเดิม  •  A จูนเม็ด  •  T ที่ปรึกษาจูน  •  Enter ประกอบแล้วไปทดสอบ");
+            "↑ ↓ เลือก  •  ← → ปรับ (Shift = เร็ว)  •  Tab เปลี่ยนหมวด  •  A จูนเม็ด  •  T ที่ปรึกษาจูน  •  Enter ประกอบแล้วไปทดสอบ");
 
         // แท็บ
         float tw = (GW - 136) / GarageTabs.Length;
@@ -249,16 +241,18 @@ public sealed partial class MainForm
         if (_showReport) DrawReport(g);
     }
 
-    private int _specScroll, _partScroll;       // แถวแรกที่เห็นในรายการ (เลื่อนเมื่อมีแถวเกินจอ จะได้ไม่เบียดกัน)
+    private int _specScroll, _partScroll, _specSelSeen = -1, _partSelSeen = -1;       // แถวแรกที่เห็นในรายการ (เลื่อนเมื่อมีแถวเกินจอ จะได้ไม่เบียดกัน)
 
     /// <summary>แถบเลื่อนบาง ๆ ขวาสุดของรายการ + ข้อความ "แสดง x–y จาก n"</summary>
-    private void DrawListScroll(Graphics g, float y0, float height, int first, int shown, int total)
+    private void DrawListScroll(Graphics g, float y0, float height, int first, int shown, int total, Action<int> setFirst)
     {
         if (total <= shown) return;
+        void Jump(PointF p) => setFirst(Math.Clamp((int)MathF.Round((p.Y - y0 - 20f) / MathF.Max(1f, height - 40f) * (total - shown)), 0, total - shown));
+        AddHit(new RectangleF(GL + GW + 2, y0, 24, height), down: Jump, drag: Jump);      // คลิก/ลากแถบเลื่อนด้านขวา
         float th = Math.Max(30f, height * shown / total);
         float ty = y0 + (height - th) * first / Math.Max(1, total - shown);
-        g.FillRectangle(Br(Color.FromArgb(40, 46, 56)), GL + GW + 6, y0, 5, height);
-        g.FillRectangle(Br(Palette.Accent), GL + GW + 6, ty, 5, th);
+        g.FillRectangle(Br(Color.FromArgb(40, 46, 56)), GL + GW + 6, y0, 9, height);
+        g.FillRectangle(Br(Palette.Accent), GL + GW + 6, ty, 9, th);
         TxtR(g, $"แสดง {first + 1}–{first + shown} จาก {total}  (ลูกกลิ้งเมาส์ หรือปุ่มลูกศรขึ้น/ลง)", _fXs, Palette.Dim, GL + GW, y0 + height + 8);
     }
 
@@ -269,10 +263,9 @@ public sealed partial class MainForm
         var ps = EngineDesign.Params;
         int total = _vis.Count;
         _specScroll = Math.Clamp(_specScroll, 0, Math.Max(0, total - visible));
-        if (_sel < _specScroll) _specScroll = _sel;
-        if (_sel >= _specScroll + visible) _specScroll = _sel - visible + 1;
+        if (_sel != _specSelSeen) { _specSelSeen = _sel; if (_sel < _specScroll) _specScroll = _sel; if (_sel >= _specScroll + visible) _specScroll = _sel - visible + 1; }      // ตามแถวที่เลือกเฉพาะตอนเลือกใหม่
         int shown = Math.Min(visible, total - _specScroll);
-        AddHit(new RectangleF(GL, y0, GW, listH), wheel: dir => _specScroll = Math.Clamp(_specScroll - dir, 0, Math.Max(0, total - visible)));
+        AddHit(new RectangleF(GL, y0, GW, listH), wheel: dir => _specScroll = Math.Clamp(_specScroll - dir * 2, 0, Math.Max(0, total - visible)));
         for (int k = 0; k < shown; k++)
         {
             int i = _specScroll + k;
@@ -294,7 +287,6 @@ public sealed partial class MainForm
             float frac = (v - def.Min) / (def.Max - def.Min);
             var d0 = def;
             var sliderRect = new RectangleF(GL + 70, sy - 2, GW - 140, 34);
-            AddHit(sliderRect, wheel: dir => { _sel = row; Nudge(row, dir, ModifierKeys.HasFlag(Keys.Shift)); });   // ลูกกลิ้งบนแถบ = ปรับค่า
             Slider(g, sliderRect, frac, selected ? Palette.Accent : Color.FromArgb(150, 100, 25), f =>
             {
                 _sel = row;
@@ -305,7 +297,7 @@ public sealed partial class MainForm
             });
             SmallBtn(g, new RectangleF(GL + GW - 56, sy, 40, 30), "+", () => { _sel = row; Nudge(row, +1, ModifierKeys.HasFlag(Keys.Shift)); });
         }
-        DrawListScroll(g, y0, listH - 8, _specScroll, shown, total);
+        DrawListScroll(g, y0, listH - 8, _specScroll, shown, total, v => _specScroll = v);
 
         if (_vis.Count > 0)
         {
@@ -364,10 +356,9 @@ public sealed partial class MainForm
         int rows = Parts.Categories.Length + 1;
         int visible = (int)(listH / rowH);
         _partScroll = Math.Clamp(_partScroll, 0, Math.Max(0, rows - visible));
-        if (_partRow < _partScroll) _partScroll = _partRow;
-        if (_partRow >= _partScroll + visible) _partScroll = _partRow - visible + 1;
+        if (_partRow != _partSelSeen) { _partSelSeen = _partRow; if (_partRow < _partScroll) _partScroll = _partRow; if (_partRow >= _partScroll + visible) _partScroll = _partRow - visible + 1; }
         int shown = Math.Min(visible, rows - _partScroll);
-        AddHit(new RectangleF(GL, y0, GW, listH), wheel: dir => _partScroll = Math.Clamp(_partScroll - dir, 0, Math.Max(0, rows - visible)));
+        AddHit(new RectangleF(GL, y0, GW, listH), wheel: dir => _partScroll = Math.Clamp(_partScroll - dir * 2, 0, Math.Max(0, rows - visible)));
         for (int k = 0; k < shown; k++)
         {
             int r = _partScroll + k;
@@ -401,7 +392,7 @@ public sealed partial class MainForm
             TxtC(g, shownTxt, _fSm, selected ? Palette.Accent : Palette.Text, GL + 600, cy);
             SmallBtn(g, new RectangleF(GL + 848, y + 4, 40, rowH - 16), "▶", () => PartStep(row, +1));
         }
-        DrawListScroll(g, y0, listH - 8, _partScroll, shown, rows);
+        DrawListScroll(g, y0, listH - 8, _partScroll, shown, rows, v => _partScroll = v);
         string hint = _partRow == 0
             ? "เลือกเช็ตเครื่องทั้งชุด (* = ตัวอย่างสมมติ ไม่ใช่สเปกรถจริง) แล้วสลับอะไหล่ทีละชิ้นต่อได้"
             : Parts.Categories[_partRow - 1].Name + ": " + Parts.Categories[_partRow - 1].Hint;
@@ -463,13 +454,13 @@ public sealed partial class MainForm
 
         // ตรวจสภาพ
         PanelBox(g, new RectangleF(X, 598, W, 390), "ตรวจสภาพเครื่อง");
-        float y = 640;
+        float y = 636;
         void Line(string s, int state)
         {
             Color dot = state == 2 ? Palette.Yellow : state == 1 ? Palette.Green : Color.FromArgb(90, 98, 110);
             g.FillEllipse(Br(dot), X + 22, y + 7, 12, 12);
             Txt(g, s, _fXs, state == 2 ? Palette.Yellow : Palette.Text, X + 46, y);
-            y += 30;
+            y += 28.5f;
         }
 
         Line($"เดินเบา ~{m.IdleRpm:N0} rpm  •  โอเวอร์แลป {m.Overlap:0}°" + (m.Overlap > 40f ? "  (สะดุด)" : ""), m.Overlap > 40f ? 2 : 1);

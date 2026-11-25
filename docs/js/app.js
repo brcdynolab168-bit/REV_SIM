@@ -782,7 +782,6 @@ function garageKey(k, shift) {
     case 'arrowleft': if (parts) partStep(gPartRow, -1); else nudgeRow(gSel, -1, shift); break;
     case 'arrowright': if (parts) partStep(gPartRow, 1); else nudgeRow(gSel, 1, shift); break;
     case 'tab': setTab(gTab + (shift ? -1 : 1)); break;
-    case '1': case '2': case '3': case '4': case '5': case '6': case '7': case '8': loadPreset(+k - 1); break;
     case 't': advisorOn = !advisorOn; advKey = ''; break;
     case 'r': openReport(); break;
     case 'c': calibrateToReal(); break;
@@ -1092,7 +1091,7 @@ function drawCompareChart(rect, m, limiter) {
 }
 
 function drawGarage() {
-  drawTopBar('อู่ออกแบบเครื่อง', '↑ ↓ เลือก  •  ← → ปรับ (Shift = เร็ว)  •  Tab เปลี่ยนหมวด  •  1-6 แบบเดิม  •  A จูนเม็ด  •  T ที่ปรึกษาจูน  •  C ปรับเทียบรถจริง  •  Enter ประกอบแล้วไปทดสอบ');
+  drawTopBar('อู่ออกแบบเครื่อง', '↑ ↓ เลือก  •  ← → ปรับ (Shift = เร็ว)  •  Tab เปลี่ยนหมวด  •  A จูนเม็ด  •  T ที่ปรึกษาจูน  •  C ปรับเทียบรถจริง  •  Enter ประกอบแล้วไปทดสอบ');
   const tw = (GW - 136) / GarageTabs.length;
   GarageTabs.forEach(([name], i) => {
     const r = R(GL + i * tw, 112, tw - 4, 52), act = i === gTab && !advisorOn, hov = inRect(r, ui.mouse);
@@ -1117,21 +1116,22 @@ function hintBox(text) {
   ui.wrap(text, F.sm, C.Yellow, box.x + 20, box.y + 42, box.w - 40, box.h - 46);
 }
 
-let specScroll = 0, partScroll = 0;     // แถวแรกที่เห็นในรายการ (เลื่อนเมื่อมีแถวเกินจอ จะได้ไม่เบียดกัน)
-function drawListScroll(y0, height, first, shown, total) {
+let specScroll = 0, partScroll = 0, specSelSeen = -1, partSelSeen = -1;     // แถวแรกที่เห็นในรายการ (เลื่อนเมื่อมีแถวเกินจอ จะได้ไม่เบียดกัน)
+function drawListScroll(y0, height, first, shown, total, setFirst) {
   if (total <= shown) return;
+  const jump = p => setFirst(clamp(Math.round((p.y - y0 - 20) / Math.max(1, height - 40) * (total - shown)), 0, total - shown));
+  ui.hit(R(GL + GW + 2, y0, 24, height), jump, jump);      // คลิก/ลากแถบเลื่อนด้านขวา
   const th = Math.max(30, height * shown / total), ty = y0 + (height - th) * first / Math.max(1, total - shown);
-  ui.rect(GL + GW + 6, y0, 5, height, 'rgb(40,46,56)'); ui.rect(GL + GW + 6, ty, 5, th, C.Accent);
-  ui.txtR(`แสดง ${first + 1}–${first + shown} จาก ${total}  (เลื่อนลูกกลิ้ง / ↑ ↓)`, F.xs, C.Dim, GL + GW, y0 + height + 8);
+  ui.rect(GL + GW + 6, y0, 9, height, 'rgb(40,46,56)'); ui.rect(GL + GW + 6, ty, 9, th, C.Accent);
+  ui.txtR(`แสดง ${first + 1}–${first + shown} จาก ${total}  (ลูกกลิ้งเมาส์ / ลากแถบขวา / ↑ ↓)`, F.xs, C.Dim, GL + GW, y0 + height + 8);
 }
 
 function drawSpecRows() {
   const y0 = 184, rowH = 84, listH = 672, visible = 8, vs = vis(), total = vs.length;
   specScroll = clamp(specScroll, 0, Math.max(0, total - visible));
-  if (gSel < specScroll) specScroll = gSel;
-  if (gSel >= specScroll + visible) specScroll = gSel - visible + 1;
+  if (gSel !== specSelSeen) { specSelSeen = gSel; if (gSel < specScroll) specScroll = gSel; if (gSel >= specScroll + visible) specScroll = gSel - visible + 1; }      // ตามแถวที่เลือกเฉพาะตอนเลือกใหม่ (ไม่ดีดกลับตอนเลื่อนลูกกลิ้ง)
   const shown = Math.min(visible, total - specScroll);
-  ui.hit(R(GL, y0, GW, listH), null, null, null, dir => { specScroll = clamp(specScroll - dir, 0, Math.max(0, total - visible)); });
+  ui.hit(R(GL, y0, GW, listH), null, null, null, dir => { specScroll = clamp(specScroll - dir * 2, 0, Math.max(0, total - visible)); });
   for (let k = 0; k < shown; k++) {
     const i = specScroll + k, def = vs[i], v = def.get(draft), y = y0 + k * rowH, rowRect = R(GL, y, GW, rowH - 8), selected = i === gSel;
     if (selected) { ui.rect(rowRect.x, rowRect.y, rowRect.w, rowRect.h, C.PanelHi); ui.rect(rowRect.x, rowRect.y, 4, rowRect.h, C.Accent); }
@@ -1142,14 +1142,13 @@ function drawSpecRows() {
     const sy = y + 40;
     ui.smallBtn(R(GL + 16, sy, 40, 30), '−', () => { gSel = i; nudgeRow(i, -1, keys.has('shift')); });
     const frac = (v - def.min) / (def.max - def.min), sr = R(GL + 70, sy - 2, GW - 140, 34);
-    ui.hit(sr, null, null, null, dir => { gSel = i; nudgeRow(i, dir, keys.has('shift')); });      // ลูกกลิ้งบนแถบ = ปรับค่า
     ui.slider(sr, frac, selected ? C.Accent : 'rgb(150,100,25)', f => {
       gSel = i; let nv = def.min + f * (def.max - def.min); nv = Math.round(nv / def.step) * def.step;
       def.set(draft, clamp(+nv.toFixed(6), def.min, def.max)); draftChanged();
     });
     ui.smallBtn(R(GL + GW - 56, sy, 40, 30), '+', () => { gSel = i; nudgeRow(i, 1, keys.has('shift')); });
   }
-  drawListScroll(y0, listH - 8, specScroll, shown, total);
+  drawListScroll(y0, listH - 8, specScroll, shown, total, v => { specScroll = v; });
   if (total > 0) hintBox(vs[gSel].name + ': ' + vs[gSel].hint);
   if (gTab === 3) drawPsiScale(184 + total * rowH + 10);
 }
@@ -1180,10 +1179,9 @@ function drawCalibrateButtons() {
 function drawParts() {
   const y0 = 184, rowH = 64, listH = 640, rows = PartCats.length + 1, visible = Math.floor(listH / rowH);
   partScroll = clamp(partScroll, 0, Math.max(0, rows - visible));
-  if (gPartRow < partScroll) partScroll = gPartRow;
-  if (gPartRow >= partScroll + visible) partScroll = gPartRow - visible + 1;
+  if (gPartRow !== partSelSeen) { partSelSeen = gPartRow; if (gPartRow < partScroll) partScroll = gPartRow; if (gPartRow >= partScroll + visible) partScroll = gPartRow - visible + 1; }
   const shown = Math.min(visible, rows - partScroll);
-  ui.hit(R(GL, y0, GW, listH), null, null, null, dir => { partScroll = clamp(partScroll - dir, 0, Math.max(0, rows - visible)); });
+  ui.hit(R(GL, y0, GW, listH), null, null, null, dir => { partScroll = clamp(partScroll - dir * 2, 0, Math.max(0, rows - visible)); });
   for (let k = 0; k < shown; k++) {
     const r = partScroll + k, row = r, y = y0 + k * rowH, rowRect = R(GL, y, GW, rowH - 8), selected = r === gPartRow;
     if (selected) { ui.rect(rowRect.x, rowRect.y, rowRect.w, rowRect.h, C.PanelHi); ui.rect(rowRect.x, rowRect.y, 4, rowRect.h, C.Accent); }
@@ -1205,7 +1203,7 @@ function drawParts() {
     ui.txtC(shownTxt, F.sm, selected ? C.Accent : C.Text, GL + 600, cy);
     ui.smallBtn(R(GL + 848, y + 4, 40, rowH - 16), '▶', () => partStep(row, 1));
   }
-  drawListScroll(y0, listH - 8, partScroll, shown, rows);
+  drawListScroll(y0, listH - 8, partScroll, shown, rows, v => { partScroll = v; });
   hintBox(gPartRow === 0 ? 'เลือกเช็ตเครื่องทั้งชุด (* = ตัวอย่างสมมติ ไม่ใช่สเปกรถจริง) แล้วสลับอะไหล่ทีละชิ้นต่อได้' : PartCats[gPartRow - 1].name + ': ' + PartCats[gPartRow - 1].hint);
 }
 
@@ -1225,10 +1223,10 @@ function drawGarageStats() {
   drawCompareChart(R(X, 338, W, 246), m, d.Limiter);
 
   ui.panelBox(R(X, 598, W, 390), 'ตรวจสภาพเครื่อง');
-  let y = 640;
+  let y = 636;
   const line = (s, st) => {
     ui.g.beginPath(); ui.g.arc(X + 28, y + 13, 6, 0, 7); ui.g.fillStyle = st === 2 ? C.Yellow : st === 1 ? C.Green : 'rgb(90,98,110)'; ui.g.fill();
-    ui.txt(s, F.xs, st === 2 ? C.Yellow : C.Text, X + 46, y); y += 30;
+    ui.txt(s, F.xs, st === 2 ? C.Yellow : C.Text, X + 46, y); y += 28.5;
   };
   line(`เดินเบา ~${fmtN(m.IdleRpm)} rpm  •  โอเวอร์แลป ${f0(m.Overlap)}°${m.Overlap > 40 ? '  (สะดุด)' : ''}`, m.Overlap > 40 ? 2 : 1);
   const flowLimit = m.RpmFlow < m.PeakPsRpm; line(`ไอดีเริ่มอั้นที่ ${fmtN(m.RpmFlow)} rpm${flowLimit ? '  (เรือน/วาล์วเล็กไป)' : ''}`, flowLimit ? 2 : 1);
