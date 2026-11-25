@@ -28,6 +28,7 @@ export function newDesign(o = {}) {
     Inj: 0, EcuAx: 0, EcuMs: null, EcuMap: null, EcuEoi: null, EcuDwell: null, EcuIgn: null,
     ClutchBite: 0, ClutchCap: 1, SpringK: 20, Primary: 3.35, Gear1: 2.5, Gear2: 1.55, Gear3: 1.15, Gear4: 0.923, Gears: 4, Gear5: 0.8, Gear6: 0.72, Pipe: 0, Fuel: 1,
   }, o);
+  r.Lift = Math.min(r.Lift, 8); r.LiftEx = Math.min(r.LiftEx, 8);      // ยกแคมสูงสุด 8 มม.
   if (r.EcuAx !== 2) { r.EcuMs = r.EcuEoi = r.EcuIgn = r.EcuDwell = r.EcuMap = null; }      // ตารางจูนเก่าใช้แกนโหลด: ทิ้ง ใช้ค่าโรงงานแกน TPS
   return r;
 }
@@ -58,7 +59,7 @@ export const Presets = [
   ['Wave 125i เดิม', newDesign()],
   ['เวฟ 110 เดิม*', newDesign({ Bore: 50, Stroke: 55.6, Rod: 89, CrankKg: 2.6, FlywheelKg: 0.6, Throttle: 22, Cr: 9.0, Limiter: 9000 })],
   ['ลูก 53 แคมแต่ง*', newDesign({ Bore: 53, Stroke: 55.6, Rod: 89, CrankKg: 2.2, FlywheelKg: 0.5, Throttle: 26, Lsa: 108, Duration: 245, DurationEx: 245, Lift: 7, LiftEx: 7, Cr: 10, Limiter: 10500 })],
-  ['ลูก 67 ซิ่ง*', newDesign({ Bore: 67, Stroke: 55.6, Rod: 89, CrankKg: 1.4, FlywheelKg: 0.4, Throttle: 34, Lsa: 104, Duration: 290, DurationEx: 290, Lift: 9, LiftEx: 9, Cr: 11.5, ValveSpring: 1.7, Limiter: 12800 })],
+  ['ลูก 67 ซิ่ง*', newDesign({ Bore: 67, Stroke: 55.6, Rod: 89, CrankKg: 1.4, FlywheelKg: 0.4, Throttle: 34, Lsa: 104, Duration: 290, DurationEx: 290, Lift: 8, LiftEx: 8, Cr: 11.5, ValveSpring: 1.7, Limiter: 12800 })],
   ['ออโต้ 125 (CVT)*', newDesign(CVT125)],
   // รถจริง: ตัวเลขที่ผู้ผลิตประกาศ (ซีซี ลูก x ชัก CR กำลัง แรงบิด น้ำหนัก ยาง) ส่วน เรือน/แคม/ก้านสูบ/เม็ด/องศาชาม/สปริง ผู้ผลิตไม่เปิดเผย เป็นค่าประมาณ แล้วปรับ CalK ให้พีคตรงรถจริง
   // Yamaha XMAX 300: 292cc 70.0x75.9 CR 10.9 4V  20.6 kW (27.6 HP)/7,250  29 N·m/5,750  หนัก ~180 กก. ยางหลัง 140/70-14
@@ -79,13 +80,13 @@ export const Presets = [
     SprocketF: 15, SprocketR: 42, Primary: 3.05, Gear1: 2.833, Gear2: 1.875, Gears: 6, Gear3: 1.364, Gear4: 1.087, Gear5: 0.92, Gear6: 0.815, BikeKg: 119, RiderKg: 65, CdA: 0.40, RimInch: 17, RimW: 1.6, TireW: 90, TireAsp: 80,
     RealHp: 15.9, RealHpRpm: 9000, RealTq: 14.2, RealTqRpm: 6500, CalK: 0.842 })],
   // สเต็ป: ลูก 65 มม. ชัก +5 มม. (58.7 -> 63.7) = 211cc  แคม/กำลังอัด/รอบตัด แต่งเพิ่ม  ชุดเดียวกับเดิม ค่า CalK เดิม
-  ['MX King สเต็ป ลูก 65 ชัก+5*', newDesign({ Bore: 65, Stroke: 63.7, Rod: 110, CrankKg: 2.8, FlywheelKg: 0.45, Valves: 4, Throttle: 30, Lsa: 110, Duration: 256, DurationEx: 256, Lift: 8.8, LiftEx: 8.8, Cr: 12.0, Limiter: 11500, Fuel: 3,
+  ['MX King สเต็ป ลูก 65 ชัก+5*', newDesign({ Bore: 65, Stroke: 63.7, Rod: 110, CrankKg: 2.8, FlywheelKg: 0.45, Valves: 4, Throttle: 30, Lsa: 110, Duration: 256, DurationEx: 256, Lift: 8, LiftEx: 8, Cr: 12.0, Limiter: 11500, Fuel: 3,
     SprocketF: 15, SprocketR: 42, Primary: 3.05, Gear1: 2.833, Gear2: 1.875, Gears: 6, Gear3: 1.364, Gear4: 1.087, Gear5: 0.92, Gear6: 0.815, BikeKg: 119, RiderKg: 65, CdA: 0.40, RimInch: 17, RimW: 1.6, TireW: 90, TireAsp: 80,
     RealHp: 15.9, RealHpRpm: 9000, RealTq: 14.2, RealTqRpm: 6500, CalK: 0.842 })],
   ['สตรีท 150 ลูก 58*', newDesign({ Bore: 58, Stroke: 57.9, Rod: 90, CrankKg: 2.5, FlywheelKg: 0.5, Throttle: 28, Lsa: 110, Duration: 240, DurationEx: 240, Lift: 8, LiftEx: 8, Cr: 10.5, Limiter: 10500, Fuel: 2 })],
-  ['เดี่ยว 300 ลูก 80*', newDesign({ Bore: 80, Stroke: 60, Rod: 100, CrankKg: 4.8, FlywheelKg: 0.7, Valves: 4, Throttle: 38, Lsa: 108, Duration: 255, DurationEx: 255, Lift: 9.5, LiftEx: 9.5, Cr: 11.5, Limiter: 11000, Fuel: 3, BikeKg: 120 })],
-  ['เดี่ยว 600 ลูก 100*', newDesign({ Bore: 100, Stroke: 76.5, Rod: 125, CrankKg: 7.2, FlywheelKg: 1.3, Valves: 4, Throttle: 46, Lsa: 108, Duration: 250, DurationEx: 250, Lift: 10.5, LiftEx: 10.5, Cr: 12.5, Limiter: 10500, Fuel: 3, BikeKg: 140 })],
-  ['ดรักเมทานอล 1000 ลูก 120*', newDesign({ Bore: 120, Stroke: 88, Rod: 150, CrankKg: 10, FlywheelKg: 2.0, Valves: 4, Throttle: 60, Lsa: 106, Duration: 270, DurationEx: 270, Lift: 13, LiftEx: 13, Cr: 14.5, Limiter: 9500, Fuel: 5, BikeKg: 160 })],
+  ['เดี่ยว 300 ลูก 80*', newDesign({ Bore: 80, Stroke: 60, Rod: 100, CrankKg: 4.8, FlywheelKg: 0.7, Valves: 4, Throttle: 38, Lsa: 108, Duration: 255, DurationEx: 255, Lift: 8, LiftEx: 8, Cr: 11.5, Limiter: 11000, Fuel: 3, BikeKg: 120 })],
+  ['เดี่ยว 600 ลูก 100*', newDesign({ Bore: 100, Stroke: 76.5, Rod: 125, CrankKg: 7.2, FlywheelKg: 1.3, Valves: 4, Throttle: 46, Lsa: 108, Duration: 250, DurationEx: 250, Lift: 8, LiftEx: 8, Cr: 12.5, Limiter: 10500, Fuel: 3, BikeKg: 140 })],
+  ['ดรักเมทานอล 1000 ลูก 120*', newDesign({ Bore: 120, Stroke: 88, Rod: 150, CrankKg: 10, FlywheelKg: 2.0, Valves: 4, Throttle: 60, Lsa: 106, Duration: 270, DurationEx: 270, Lift: 8, LiftEx: 8, Cr: 14.5, Limiter: 9500, Fuel: 5, BikeKg: 160 })],
 ];
 
 /** ขนาดวาล์วไอดีที่ "ตามรถ" (มม. ต่อตัว) และไอเสียที่ตามไอดี */
@@ -116,8 +117,8 @@ export const Params = [
   num('valvein', 'ขนาดวาล์วไอดี (ต่อตัว)', 'มม.', 0, 70, 0.5, '0.0', 'ValveIn', "ขนาดหัวจานวาล์วไอดีต่อ 1 ตัว (ตามรถ = สัดส่วนกระบอก: 2 วาล์ว ~0.52 / 4 วาล์ว ~0.40 ของเส้นผ่านกระบอก)  ใหญ่ขึ้น = ไหลมากขึ้นที่รอบสูง ค่าพีคย้ายไปรอบสูง แต่วาล์วหนักขึ้น ลอยง่าย  รวมวาล์วแล้วต้องไม่เกินที่หัวสูบจุได้", { auto: autoValveIn, text: (v, d) => (v <= 0 ? 'ตามรถ ' + autoValveIn(d).toFixed(1) + ' มม.' : v.toFixed(1) + ' มม.') }),
   num('valveex', 'ขนาดวาล์วไอเสีย (ต่อตัว)', 'มม.', 0, 70, 0.5, '0.0', 'ValveEx', "ขนาดวาล์วไอเสียต่อ 1 ตัว (ตามรถ = 85% ของไอดี ตามจริงไอเสียเล็กกว่าเพราะแรงดันในกระบอกช่วยไล่)  เล็กไป = ไอเสียอั้น ปลายตก  ใหญ่เกินไอดี ได้ผลเล็กน้อยแต่ลอยง่าย", { auto: autoValveEx, text: (v, d) => (v <= 0 ? 'ตามรถ ' + autoValveEx(d).toFixed(1) + ' มม.' : v.toFixed(1) + ' มม.') }),
   num('valvespring', 'สปริงวาล์ว (ความแข็ง)', 'x', 0.8, 3.5, 0.05, '0.00', 'ValveSpring', "ความแข็งสปริงวาล์ว (เท่าของโรงงาน)  แข็งขึ้น = วาล์วไม่ลอยจนรอบสูงขึ้น (รอบลอยเพิ่มตามรากที่สองของความแข็ง) แต่ฝืดเพิ่ม กินกำลังที่รอบต่ำ  สปริงเดิมของ 2 วาล์วลอยราว 11,000 รอบ", { text: v => v.toFixed(2) + 'x ' + (v < 1.15 ? 'เดิม' : v < 1.5 ? 'แต่งเบา' : v < 2 ? 'แข่ง' : 'แข่งหนัก') }),
-  num('lift', 'ระยะยกแคม ไอดี (IN)', 'มม.', 5, 16, 0.1, '0.0', 'Lift', "ยกสูง = ไอดีไหลดี แต่ได้ผลจริงถึงราว 0.30 เท่าของเส้นผ่านวาล์วเท่านั้น (เกินนั้นไหลไม่เพิ่ม สปริงหนัก วาล์วลอยง่าย เสี่ยงชนลูกสูบ)"),
-  num('liftex', 'ระยะยกแคม ไอเสีย (EX)', 'มม.', 5, 16, 0.1, '0.0', 'LiftEx', 'ยกไอเสียน้อยกว่าไอดีมาก = ไอเสียอั้น ปลายตก  ยกมากกว่า = ไหลดีขึ้นเล็กน้อย แต่วาล์วลอยง่ายขึ้น'),
+  num('lift', 'ระยะยกแคม ไอดี (IN)', 'มม.', 5, 8, 0.1, '0.0', 'Lift', "ยกสูง = ไอดีไหลดี แต่ได้ผลจริงถึงราว 0.30 เท่าของเส้นผ่านวาล์วเท่านั้น (เกินนั้นไหลไม่เพิ่ม สปริงหนัก วาล์วลอยง่าย เสี่ยงชนลูกสูบ)"),
+  num('liftex', 'ระยะยกแคม ไอเสีย (EX)', 'มม.', 5, 8, 0.1, '0.0', 'LiftEx', 'ยกไอเสียน้อยกว่าไอดีมาก = ไอเสียอั้น ปลายตก  ยกมากกว่า = ไหลดีขึ้นเล็กน้อย แต่วาล์วลอยง่ายขึ้น'),
   P('cr', 'อัตราส่วนกำลังอัด (CR)', ':1', 7, 20, 0.1, '0.0', ...pr('cr', 'Cr'),
     'ค่าเรขาคณิต สูง = ประสิทธิภาพเชิงความร้อนดี เสียงแผด  แยกจากแรงดันอัด (psi) ที่ปรับอีกบรรทัด', { text: v => v.toFixed(1) + ' : 1' }),
   P('psi', 'แรงดันอัด (วัดจริง)', 'psi', 100, 480, 5, '0', d => psiOf(d), (d, v) => { d.Seal = clamp(v / crankPsi(crDynamic(d)), 0.6, 1.5); },
@@ -216,12 +217,12 @@ export const PartCats = [
     items: [["สปริงเดิมโรงงาน",1],["สปริงแต่งเบา",1.3],["สปริงแข่ง",1.7],["สปริงแข่งแข็ง",2.2],["สปริงแข่งหนัก (ชุดแข่งเต็ม)",3]].map(([n, k]) => item(`${n}  ${k.toFixed(2)}x`, d => { d.ValveSpring = k; }, d => near(d.ValveSpring, k, 0.03))) },
   { name: 'แคมชาฟท์ (IN=EX)', hint: 'LSA / องศา / ยก  องศามาก = แรงย้ายไปรอบสูง เดินเบาสะดุด',
     items: [['แคมเดิมโรงงาน', 114, 225, 7.5], ['แคมแต่งเบา', 112, 235, 8], ['แคมแต่งถนน', 108, 245, 8.5], ['แคมแข่ง', 106, 270, 9.5], ['แคมซิ่ง', 104, 290, 10], ['แคมสายแข่งหนัก', 102, 310, 12]]
-      .map(([n, l, du, h]) => item(`${n}  ${l}°/${du}°/${h} มม.`, d => { d.Lsa = l; d.Duration = du; d.DurationEx = du; d.Lift = h; d.LiftEx = h; },
-        d => near(d.Lsa, l, 0.6) && near(d.Duration, du, 1.1) && near(d.DurationEx, du, 1.1) && near(d.Lift, h, 0.06) && near(d.LiftEx, h, 0.06))) },
+      .map(([n, l, du, h0]) => { const h = Math.min(h0, 8); return item(`${n}  ${l}°/${du}°/${h} มม.`, d => { d.Lsa = l; d.Duration = du; d.DurationEx = du; d.Lift = h; d.LiftEx = h; },
+        d => near(d.Lsa, l, 0.6) && near(d.Duration, du, 1.1) && near(d.DurationEx, du, 1.1) && near(d.Lift, h, 0.06) && near(d.LiftEx, h, 0.06)); }) },
   { name: 'แคมไอเสีย (EX) แยก', hint: 'องศาไอเสียแยกจากไอดี',
     items: [215, 225, 235, 245, 255, 270, 290, 310].map(x => item(`ไอเสีย ${x}°`, d => { d.DurationEx = x; }, d => near(d.DurationEx, x, 1.1))) },
   { name: 'ยกไอเสีย (EX) แยก', hint: 'ระยะยกไอเสียแยกจากไอดี',
-    items: [6, 7, 7.5, 8, 8.5, 9, 9.5, 10, 11, 12, 13].map(x => item(`ยกไอเสีย ${x} มม.`, d => { d.LiftEx = x; }, d => near(d.LiftEx, x, 0.06))) },
+    items: [5, 5.5, 6, 6.5, 7, 7.5, 8].map(x => item(`ยกไอเสีย ${x} มม.`, d => { d.LiftEx = x; }, d => near(d.LiftEx, x, 0.06))) },
   { name: 'เรือนลิ้นเร่ง', hint: 'เรือนใหญ่ = ปลายไหล แต่ต้องมีวาล์ว/แคมรองรับ',
     items: [20, 22, 24, 26, 28, 30, 32, 34, 38, 42, 46, 50, 54, 60].map(t => item(`เรือน ${t} มม.`, d => { d.Throttle = t; }, d => near(d.Throttle, t, 0.5))) },
   { name: 'อัตราส่วนกำลังอัด (CR)', hint: 'ค่าเรขาคณิต: สูง = ประสิทธิภาพดี แต่ต้องใช้น้ำมันออกเทนสูง',

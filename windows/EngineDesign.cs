@@ -129,12 +129,12 @@ public sealed class EngineDesign
         ("ลูก 53 แคมแต่ง*", new EngineDesign
         {
             Bore = 53f, Stroke = 55.6f, Rod = 89f, CrankKg = 2.2f, FlywheelKg = 0.5f, Valves = 2, Throttle = 26f,
-            Lsa = 108f, Duration = 245f, DurationEx = 245f, Lift = 7.0f, LiftEx = 7.0f, Cr = 10.0f, Limiter = 10500f,
+            Lsa = 108f, Duration = 245f, DurationEx = 245f, Lift = 7f, LiftEx = 7f, Cr = 10.0f, Limiter = 10500f,
         }),
         ("ลูก 67 ซิ่ง*", new EngineDesign
         {
             Bore = 67f, Stroke = 55.6f, Rod = 89f, CrankKg = 1.4f, FlywheelKg = 0.4f, Valves = 2, Throttle = 34f,
-            Lsa = 104f, Duration = 290f, DurationEx = 290f, Lift = 9.0f, LiftEx = 9.0f, Cr = 11.5f, ValveSpring = 1.7f, Limiter = 12800f,
+            Lsa = 104f, Duration = 290f, DurationEx = 290f, Lift = 8f, LiftEx = 8f, Cr = 11.5f, ValveSpring = 1.7f, Limiter = 12800f,
             SprocketF = 14f, SprocketR = 36f,
         }),
         ("ออโต้ 125 (CVT)*", new EngineDesign
@@ -184,7 +184,7 @@ public sealed class EngineDesign
         ("MX King สเต็ป ลูก 65 ชัก+5*", new EngineDesign
         {
             Bore = 65f, Stroke = 63.7f, Rod = 110f, CrankKg = 2.8f, FlywheelKg = 0.45f, Valves = 4, Throttle = 30f,
-            Lsa = 110f, Duration = 256f, DurationEx = 256f, Lift = 8.8f, LiftEx = 8.8f, Cr = 12.0f, Limiter = 11500f, Fuel = 3,
+            Lsa = 110f, Duration = 256f, DurationEx = 256f, Lift = 8f, LiftEx = 8f, Cr = 12.0f, Limiter = 11500f, Fuel = 3,
             SprocketF = 15f, SprocketR = 42f, Primary = 3.05f, Gears = 6, Gear1 = 2.833f, Gear2 = 1.875f, Gear3 = 1.364f, Gear4 = 1.087f, Gear5 = 0.920f, Gear6 = 0.815f,
             BikeKg = 119f, RiderKg = 65f, CdA = 0.40f, RimInch = 17f, RimW = 1.6f, TireW = 90f, TireAsp = 80f,
             RealHp = 15.9f, RealHpRpm = 9000f, RealTq = 14.2f, RealTqRpm = 6500f, CalK = 0.842f,
@@ -296,9 +296,9 @@ public sealed class EngineDesign
         new("valvespring", "สปริงวาล์ว (ความแข็ง)", "x", 0.8f, 3.5f, 0.05f, "0.00", d => d.ValveSpring, (d, v) => d.ValveSpring = v,
             "ความแข็งสปริงวาล์ว (เท่าของโรงงาน)  แข็งขึ้น = วาล์วไม่ลอยจนรอบสูงขึ้น (รอบลอยเพิ่มตามรากที่สองของความแข็ง) แต่ฝืดเพิ่ม กินกำลังที่รอบต่ำ  สปริงเดิมของ 2 วาล์วลอยราว 11,000 รอบ",
             text: v => $"{v:0.00}x " + (v < 1.15f ? "เดิม" : v < 1.5f ? "แต่งเบา" : v < 2f ? "แข่ง" : "แข่งหนัก")),
-        new("lift", "ระยะยกแคม ไอดี (IN)", "มม.", 5f, 16f, 0.1f, "0.0", d => d.Lift, (d, v) => d.Lift = v,
+        new("lift", "ระยะยกแคม ไอดี (IN)", "มม.", 5f, 8f, 0.1f, "0.0", d => d.Lift, (d, v) => d.Lift = v,
             "ยกสูง = ไอดีไหลดี แต่ได้ผลจริงถึงราว 0.30 เท่าของเส้นผ่านวาล์วเท่านั้น (เกินนั้นไหลไม่เพิ่ม สปริงหนัก วาล์วลอยง่าย เสี่ยงชนลูกสูบ)"),
-        new("liftex", "ระยะยกแคม ไอเสีย (EX)", "มม.", 5f, 16f, 0.1f, "0.0", d => d.LiftEx, (d, v) => d.LiftEx = v,
+        new("liftex", "ระยะยกแคม ไอเสีย (EX)", "มม.", 5f, 8f, 0.1f, "0.0", d => d.LiftEx, (d, v) => d.LiftEx = v,
             "ยกไอเสียน้อยกว่าไอดีมาก = ไอเสียอั้น ปลายตก  ยกมากกว่า = ไอเสียไหลดีขึ้นเล็กน้อย แต่วาล์วลอยง่ายขึ้น"),
         new("cr", "อัตราส่วนกำลังอัด (CR)", ":1", 7f, 20f, 0.1f, "0.0", d => d.Cr, (d, v) => d.Cr = v,
             "ค่าเรขาคณิต (ปริมาตรห้องเผาไหม้) สูง = ประสิทธิภาพเชิงความร้อนดี เสียงแผด  แยกจากแรงดันอัด (psi) ที่ปรับอีกบรรทัด",

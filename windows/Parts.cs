@@ -66,7 +66,7 @@ public static class Parts
             {
                 ("แคมเดิมโรงงาน", 114f, 225f, 7.5f), ("แคมแต่งเบา", 112f, 235f, 8.0f), ("แคมแต่งถนน", 108f, 245f, 8.5f),
                 ("แคมแข่ง", 106f, 270f, 9.5f), ("แคมซิ่ง", 104f, 290f, 10.0f), ("แคมสายแข่งหนัก", 102f, 310f, 12.0f),
-            }.Select(c => new PartItem($"{c.N}  {c.L:0}°/{c.D:0}°/{c.H:0.#} มม.",
+            }.Select(c => (c.N, c.L, c.D, H: MathF.Min(c.H, 8f))).Select(c => new PartItem($"{c.N}  {c.L:0}°/{c.D:0}°/{c.H:0.#} มม.",
                 d => { d.Lsa = c.L; d.Duration = c.D; d.DurationEx = c.D; d.Lift = c.H; d.LiftEx = c.H; },
                 d => Near(d.Lsa, c.L, 0.6f) && Near(d.Duration, c.D, 1.1f) && Near(d.DurationEx, c.D, 1.1f) && Near(d.Lift, c.H, 0.06f) && Near(d.LiftEx, c.H, 0.06f))).ToArray()),
 
@@ -75,7 +75,7 @@ public static class Parts
                 .Select(x => new PartItem($"ไอเสีย {x:0}°", d => d.DurationEx = x, d => Near(d.DurationEx, x, 1.1f))).ToArray()),
 
         new("ยกไอเสีย (EX) แยก", "ปรับระยะยกไอเสียแยกจากไอดี (IN)  น้อยกว่าไอดีมาก = ไอเสียอั้น  มากกว่า = ปลายไหลดี",
-            new[] { 6f, 7f, 7.5f, 8f, 8.5f, 9f, 9.5f, 10f, 11f, 12f, 13f }
+            new[] { 5f, 5.5f, 6f, 6.5f, 7f, 7.5f, 8f }
                 .Select(x => new PartItem($"ยกไอเสีย {x:0.#} มม.", d => d.LiftEx = x, d => Near(d.LiftEx, x, 0.06f))).ToArray()),
 
         new("เรือนลิ้นเร่ง", "เรือนใหญ่ = ปลายไหล แต่ต้องมีวาล์ว/แคมรองรับ ไม่งั้นรอบล่างตก",
