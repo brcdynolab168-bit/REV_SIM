@@ -16,6 +16,8 @@ public sealed class EngineDesign
     public float Duration = 225f;   // องศาแคมไอดี IN (ช่วงวาล์วเปิด @1mm) องศาข้อเหวี่ยง
     public float DurationEx = 225f; // องศาแคมไอเสีย EX
     public float DurAvg => 0.5f * (Duration + DurationEx);
+    public float ValveIn = 0f;      // ขนาดวาล์วไอดีต่อตัว (มม.)  0 = ตามรถ (สัดส่วนกระบอก)
+    public float ValveEx = 0f;      // ขนาดวาล์วไอเสียต่อตัว (มม.)  0 = ตามรถ (85% ของไอดี)
     public float Lift = 7.5f;       // ระยะยกวาล์วไอดี IN mm
     public float LiftEx = 7.5f;     // ระยะยกวาล์วไอเสีย EX mm
     public float Cr = 9.3f;         // อัตราส่วนกำลังอัด (เรขาคณิต) :1 -> ประสิทธิภาพเชิงความร้อน
@@ -282,8 +284,14 @@ public sealed class EngineDesign
             "คูณแรงบิดของโมเดลทั้งช่วงรอบ (1.00 = ไม่ปรับ) ปกติให้กด C ปรับเทียบอัตโนมัติจากแรงม้า/แรงบิดรถจริง  ค่านี้คงที่เมื่อเปลี่ยนอะไหล่ จึงเทียบก่อน/หลังได้"),
         new("durationex", "องศาแคม ไอเสีย (EX)", "°", 200f, 320f, 2f, "0", d => d.DurationEx, (d, v) => d.DurationEx = v,
             "ไอเสียยาวกว่าไอดี = ไอเสียไหลดี ปลายไปไกล แต่โอเวอร์แลปมาก เดินเบาสะดุด  สั้นกว่าไอดีมาก = ไอเสียอั้น ปลายตก"),
+        new("valvein", "ขนาดวาล์วไอดี (ต่อตัว)", "มม.", 0f, 70f, 0.5f, "0.0", d => d.ValveIn, (d, v) => d.ValveIn = v,
+            "ขนาดหัวจานวาล์วไอดีต่อ 1 ตัว (ตามรถ = สัดส่วนกระบอก: 2 วาล์ว ~0.52 / 4 วาล์ว ~0.40 ของเส้นผ่านกระบอก)  ใหญ่ขึ้น = ไหลมากขึ้นที่รอบสูง ค่าพีคย้ายไปรอบสูง แต่วาล์วหนักขึ้น ลอยง่าย  รวมวาล์วแล้วต้องไม่เกินที่หัวสูบจุได้",
+            textD: (d, v) => v <= 0f ? $"ตามรถ {EngineModel.AutoValveIn(d):0.0} มม." : $"{v:0.0} มม.") { AutoVal = EngineModel.AutoValveIn },
+        new("valveex", "ขนาดวาล์วไอเสีย (ต่อตัว)", "มม.", 0f, 70f, 0.5f, "0.0", d => d.ValveEx, (d, v) => d.ValveEx = v,
+            "ขนาดวาล์วไอเสียต่อ 1 ตัว (ตามรถ = 85% ของไอดี ตามจริงไอเสียเล็กกว่าเพราะแรงดันในกระบอกช่วยไล่)  เล็กไป = ไอเสียอั้น ปลายตก  ใหญ่เกินไอดี ได้ผลเล็กน้อยแต่ลอยง่าย",
+            textD: (d, v) => v <= 0f ? $"ตามรถ {EngineModel.AutoValveEx(d):0.0} มม." : $"{v:0.0} มม.") { AutoVal = EngineModel.AutoValveEx },
         new("lift", "ระยะยกแคม ไอดี (IN)", "มม.", 5f, 16f, 0.1f, "0.0", d => d.Lift, (d, v) => d.Lift = v,
-            "ยกสูง = ไอดีไหลดี แต่วาล์วลอยที่รอบต่ำลง"),
+            "ยกสูง = ไอดีไหลดี แต่ได้ผลจริงถึงราว 0.30 เท่าของเส้นผ่านวาล์วเท่านั้น (เกินนั้นไหลไม่เพิ่ม สปริงหนัก วาล์วลอยง่าย เสี่ยงชนลูกสูบ)"),
         new("liftex", "ระยะยกแคม ไอเสีย (EX)", "มม.", 5f, 16f, 0.1f, "0.0", d => d.LiftEx, (d, v) => d.LiftEx = v,
             "ยกไอเสียน้อยกว่าไอดีมาก = ไอเสียอั้น ปลายตก  ยกมากกว่า = ไอเสียไหลดีขึ้นเล็กน้อย แต่วาล์วลอยง่ายขึ้น"),
         new("cr", "อัตราส่วนกำลังอัด (CR)", ":1", 7f, 20f, 0.1f, "0.0", d => d.Cr, (d, v) => d.Cr = v,
@@ -375,6 +383,7 @@ public sealed class EngineDesign
 
 public sealed class ParamDef
 {
+    public Func<EngineDesign, float>? AutoVal { get; init; }      // ค่า "ตามรถ" ของพารามิเตอร์ที่ 0 = อัตโนมัติ
     public readonly string Key, Name, Unit, Format, Hint;
     public readonly bool Persist;
     public readonly float Min, Max, Step;
@@ -406,8 +415,10 @@ public sealed class ParamDef
     public void Nudge(EngineDesign d, int dir, bool coarse)
     {
         float step = Step * (coarse && Step < 2f ? 10f : 1f);
-        float v = Get(d) + dir * step;
+        float v0 = Get(d); if (v0 <= 0f && AutoVal != null) v0 = AutoVal(d);
+        float v = v0 + dir * step;
         v = MathF.Round(v / Step) * Step;
+        if (AutoVal != null && v < 12f) v = 0f;          // ต่ำกว่า 12 มม. = กลับไปตามรถ
         Set(d, Math.Clamp(v, Min, Max));
     }
 }
@@ -418,6 +429,8 @@ public sealed class ParamDef
 /// </summary>
 public sealed class EngineModel
 {
+    public static float AutoValveIn(EngineDesign d) => d.Bore * (d.Valves == 4 ? 0.40f : 0.52f);
+    public static float AutoValveEx(EngineDesign d) => 0.85f * (d.ValveIn > 0f ? d.ValveIn : AutoValveIn(d));
     public const float MaxRpm = 16000f;
     private const int Step = 50;
     private const int N = (int)(MaxRpm / Step) + 2;
@@ -428,6 +441,7 @@ public sealed class EngineModel
     public readonly float Overlap;           // องศาโอเวอร์แลป
     public readonly float RpmCam;            // รอบที่แคมทำงานดีสุด
     public readonly float RpmFlow;           // รอบที่ไอดีเริ่มอั้น (วาล์ว + เรือน)
+    public readonly float VdIn, VdEx, VdAuto, ValveFit, LiftDia;     // ขนาดวาล์วจริงที่ใช้ (มม.) / ตัวลดเมื่อหัวสูบจุไม่พอ / ยก÷ขนาดวาล์ว
     public readonly float FloatRpm;          // รอบที่วาล์วเริ่มลอย
     public readonly float CrLimit;           // กำลังอัดไดนามิกสูงสุดก่อนน็อก (ขึ้นกับน้ำมันและขนาดลูก)
     public readonly float CrDyn;             // กำลังอัดไดนามิกจริงในกระบอก (แคมองศามากปิดวาล์วไอดีช้า ความดันรั่วกลับ จึงต่ำกว่าสถิต)
@@ -463,15 +477,21 @@ public sealed class EngineModel
         Overlap = MathF.Max(0f, D.DurAvg - 2f * D.Lsa);
 
         // ----- แคม: องศามาก = ทำงานรอบสูง, มุมแคบ = พีคแรงขึ้นแต่ช่วงแคบ -----
-        RpmCam = 6300f + (D.DurAvg - 220f) * 82f + (D.Lsa - 108f) * 60f;
+        // ---- วาล์ว: ขนาดจริงที่ใช้ (หัวสูบจุได้จำกัด) ----
+        int nIn = D.Valves == 4 ? 2 : 1;
+        float vdAuto = bore * (D.Valves == 4 ? 0.40f : 0.52f);
+        float vd = D.ValveIn > 0f ? D.ValveIn : vdAuto, exD = D.ValveEx > 0f ? D.ValveEx : 0.85f * vd;
+        float fitMax = (D.Valves == 4 ? 1.55f : 1.0f) * bore, fitTot = nIn * (vd + exD);
+        ValveFit = fitTot > fitMax ? fitMax / fitTot : 1f;          // < 1 = วาล์วใหญ่เกินกว่าหัวสูบจุได้ ถูกลดลง
+        vd *= ValveFit; exD *= ValveFit;
+        VdIn = vd; VdEx = exD; VdAuto = vdAuto;
+        RpmCam = (6300f + (D.DurAvg - 220f) * 82f + (D.Lsa - 108f) * 60f) * MathF.Pow(vd / vdAuto, 0.5f);
         float lsaN = D.Lsa / 108f;
         float wLow = RpmCam * 0.55f * MathF.Pow(lsaN, 1.5f);
         float wHigh = RpmCam * 0.42f * lsaN;
         float peakBoost = 1f + (108f - D.Lsa) * 0.006f;
 
         // ----- ทางไอดี: วาล์ว (ม่านวาล์ว) ต่ออนุกรมกับเรือนลิ้นเร่ง -----
-        int nIn = D.Valves == 4 ? 2 : 1;
-        float vd = bore * (D.Valves == 4 ? 0.40f : 0.52f);
         float area = nIn * MathF.PI / 4f * vd * vd;
         float curtain = nIn * MathF.PI * vd * D.Lift;
         float valveEff = 0.6f * MathF.Min(area, curtain);
@@ -482,6 +502,7 @@ public sealed class EngineModel
         float exDiff = D.DurationEx - D.Duration;
         float exLift = D.LiftEx / D.Lift;
         RpmFlow *= exLift < 1f ? MathF.Max(0.6f, 1f - 0.8f * (1f - exLift)) : 1f + 0.15f * MathF.Min(exLift - 1f, 0.4f);
+        { float exRel = MathF.Pow(exD / (0.85f * vd), 2f); RpmFlow *= exRel < 1f ? MathF.Max(0.7f, 1f - 0.6f * (1f - exRel)) : 1f + 0.08f * MathF.Min(exRel - 1f, 0.5f); }      // ขนาดวาล์วไอเสียเทียบไอดี
         RpmFlow *= exDiff < 0f ? MathF.Max(0.6f, 1f + 0.012f * exDiff) : 1f + 0.0025f * MathF.Min(exDiff, 40f);
 
         // ระยะยกเทียบขนาดวาล์ว: ~0.28 ถือว่าพอดี
@@ -495,7 +516,9 @@ public sealed class EngineModel
         float vePeak = 0.92f * liftF * valveGain * camGain * peakBoost;
 
         // ----- วาล์วลอย -----
-        FloatRpm = 14200f - 400f * (MathF.Max(D.Lift, D.LiftEx) - 6f) + (D.Valves == 4 ? 2500f : 0f) + (D.DurAvg - 220f) * 6f;
+        FloatRpm = (14200f - 400f * (MathF.Max(D.Lift, D.LiftEx) - 6f) + (D.Valves == 4 ? 2500f : 0f) + (D.DurAvg - 220f) * 6f) * Math.Clamp(MathF.Pow((vd + exD) / (1.85f * vdAuto), -0.6f), 0.7f, 1.2f)
+            - 900f * MathF.Max(0f, MathF.Max(D.Lift / vd, D.LiftEx / exD) - 0.33f) / 0.1f;      // วาล์วหนักลอยเร็ว / ยกเกิน 0.33D สปริงต้องหนักมาก
+        LiftDia = D.Lift / vd;
 
         // ----- น็อก: ลูกใหญ่เปลวไฟวิ่งไกล น็อกง่าย -----
         // พิกัดน็อก: ลูกใหญ่ เปลวไฟวิ่งไกลน็อกง่าย, ออกเทนสูงขึ้นทน +0.30 ต่อ 1 RON (95 = ฐาน)

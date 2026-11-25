@@ -18,7 +18,7 @@ const fuelOf = d => Fuels[clamp(Math.round(d.Fuel), 0, Fuels.length - 1)];
 // ---------------------------------------------------------------- แบบเครื่อง
 export function newDesign(o = {}) {
   const r = Object.assign({
-    Bore: 52.4, Stroke: 57.9, Rod: 90, CrankKg: 2.8, FlywheelKg: 0.6, Valves: 2, Throttle: 20,
+    Bore: 52.4, Stroke: 57.9, Rod: 90, CrankKg: 2.8, FlywheelKg: 0.6, Valves: 2, ValveIn: 0, ValveEx: 0, Throttle: 20,
     Lsa: 114, Duration: 225, DurationEx: 225, Lift: 7.5, LiftEx: 7.5, Cr: 9.3, Seal: 1,
     RealHp: 0, RealHpRpm: 0, RealTq: 0, RealTqRpm: 0, CalK: 1,
     Limiter: 9500, ResumeGap: 80, SoftGap: 0,
@@ -88,11 +88,14 @@ export const Presets = [
   ['ดรักเมทานอล 1000 ลูก 120*', newDesign({ Bore: 120, Stroke: 88, Rod: 150, CrankKg: 10, FlywheelKg: 2.0, Valves: 4, Throttle: 60, Lsa: 106, Duration: 270, DurationEx: 270, Lift: 13, LiftEx: 13, Cr: 14.5, Limiter: 9500, Fuel: 5, BikeKg: 160 })],
 ];
 
+/** ขนาดวาล์วไอดีที่ "ตามรถ" (มม. ต่อตัว) และไอเสียที่ตามไอดี */
+export const autoValveIn = d => d.Bore * (d.Valves === 4 ? 0.40 : 0.52);
+export const autoValveEx = d => 0.85 * (d.ValveIn > 0 ? d.ValveIn : autoValveIn(d));
 // ---------------------------------------------------------------- รายการค่าที่ปรับได้ในอู่
 const fmt = (v, f) => v.toFixed(f === '0' ? 0 : f.length - 2);
 // P(key, name, unit, min, max, step, format, get, set, hint, {visible, text, persist})
 function P(key, name, unit, min, max, step, format, get, set, hint, o = {}) {
-  return { key, name, unit, min, max, step, format, get, set, hint, visible: o.visible || null, text: o.text || null, hidden: !!o.hidden };
+  return { key, name, unit, min, max, step, format, get, set, hint, visible: o.visible || null, text: o.text || null, hidden: !!o.hidden, auto: o.auto || null };
 }
 const pr = (k, p) => [d => d[p], (d, v) => { d[p] = v; }];
 const num = (key, name, unit, min, max, step, format, prop, hint, o) => P(key, name, unit, min, max, step, format, ...pr(key, prop), hint, o);
@@ -110,7 +113,9 @@ export const Params = [
   num('lsa', 'มุมแคม (LSA)', '°', 98, 118, 1, '0', 'Lsa', 'มุมแคบ = แรงบิดพีคสูงแต่ช่วงแคบ โอเวอร์แลปมาก เดินเบาสะดุด'),
   num('duration', 'องศาแคม ไอดี (IN)', '°', 200, 320, 2, '0', 'Duration', 'องศามาก = แรงย้ายไปรอบสูง เดินเบาสั่น  ไอดีปิดช้า = กำลังอัดจริงลด'),
   num('durationex', 'องศาแคม ไอเสีย (EX)', '°', 200, 320, 2, '0', 'DurationEx', 'ไอเสียยาวกว่าไอดี = ปลายไหลดี แต่โอเวอร์แลปมาก  สั้นกว่าไอดีมาก = ไอเสียอั้น ปลายตก'),
-  num('lift', 'ระยะยกแคม ไอดี (IN)', 'มม.', 5, 16, 0.1, '0.0', 'Lift', 'ยกสูง = ไอดีไหลดี แต่วาล์วลอยที่รอบต่ำลง'),
+  num('valvein', 'ขนาดวาล์วไอดี (ต่อตัว)', 'มม.', 0, 70, 0.5, '0.0', 'ValveIn', "ขนาดหัวจานวาล์วไอดีต่อ 1 ตัว (ตามรถ = สัดส่วนกระบอก: 2 วาล์ว ~0.52 / 4 วาล์ว ~0.40 ของเส้นผ่านกระบอก)  ใหญ่ขึ้น = ไหลมากขึ้นที่รอบสูง ค่าพีคย้ายไปรอบสูง แต่วาล์วหนักขึ้น ลอยง่าย  รวมวาล์วแล้วต้องไม่เกินที่หัวสูบจุได้", { auto: autoValveIn, text: (v, d) => (v <= 0 ? 'ตามรถ ' + autoValveIn(d).toFixed(1) + ' มม.' : v.toFixed(1) + ' มม.') }),
+  num('valveex', 'ขนาดวาล์วไอเสีย (ต่อตัว)', 'มม.', 0, 70, 0.5, '0.0', 'ValveEx', "ขนาดวาล์วไอเสียต่อ 1 ตัว (ตามรถ = 85% ของไอดี ตามจริงไอเสียเล็กกว่าเพราะแรงดันในกระบอกช่วยไล่)  เล็กไป = ไอเสียอั้น ปลายตก  ใหญ่เกินไอดี ได้ผลเล็กน้อยแต่ลอยง่าย", { auto: autoValveEx, text: (v, d) => (v <= 0 ? 'ตามรถ ' + autoValveEx(d).toFixed(1) + ' มม.' : v.toFixed(1) + ' มม.') }),
+  num('lift', 'ระยะยกแคม ไอดี (IN)', 'มม.', 5, 16, 0.1, '0.0', 'Lift', "ยกสูง = ไอดีไหลดี แต่ได้ผลจริงถึงราว 0.30 เท่าของเส้นผ่านวาล์วเท่านั้น (เกินนั้นไหลไม่เพิ่ม สปริงหนัก วาล์วลอยง่าย เสี่ยงชนลูกสูบ)"),
   num('liftex', 'ระยะยกแคม ไอเสีย (EX)', 'มม.', 5, 16, 0.1, '0.0', 'LiftEx', 'ยกไอเสียน้อยกว่าไอดีมาก = ไอเสียอั้น ปลายตก  ยกมากกว่า = ไหลดีขึ้นเล็กน้อย แต่วาล์วลอยง่ายขึ้น'),
   P('cr', 'อัตราส่วนกำลังอัด (CR)', ':1', 7, 20, 0.1, '0.0', ...pr('cr', 'Cr'),
     'ค่าเรขาคณิต สูง = ประสิทธิภาพเชิงความร้อนดี เสียงแผด  แยกจากแรงดันอัด (psi) ที่ปรับอีกบรรทัด', { text: v => v.toFixed(1) + ' : 1' }),
@@ -169,15 +174,17 @@ export function paramDisplay(p, d) {
 }
 export function nudge(p, d, dir, coarse) {
   const step = p.step * (coarse && p.step < 2 ? 10 : 1);
-  let v = p.get(d) + dir * step;
+  let v0 = p.get(d); if (v0 <= 0 && p.auto) v0 = p.auto(d);
+  let v = v0 + dir * step;
   v = Math.round(v / p.step) * p.step;
+  if (p.auto && v < 12) v = 0;          // ต่ำกว่า 12 มม. = กลับไปตามรถ
   p.set(d, clamp(+v.toFixed(6), p.min, p.max));
 }
 
 // ---------------------------------------------------------------- แท็บอู่
 export const GarageTabs = [
   ['อะไหล่', []],
-  ['เครื่องยนต์', ['bore', 'stroke', 'rod', 'crank', 'fly', 'valves']],
+  ['เครื่องยนต์', ['bore', 'stroke', 'rod', 'crank', 'fly', 'valves', 'valvein', 'valveex']],
   ['ไอดี·แคม·ท่อ', ['throttle', 'lsa', 'duration', 'durationex', 'lift', 'liftex', 'pipe']],
   ['อัด·น้ำมัน', ['cr', 'psi', 'fuel', 'inj', 'limiter', 'resume', 'softcut']],
   ['ส่งกำลัง', ['auto', 'prim', 'gears', 'g1', 'g2', 'g3', 'g4', 'g5', 'g6', 'sprf', 'sprr', 'ramp', 'rampout', 'rollers', 'rollerg', 'rollerg2', 'fdf', 'fdr', 'firstred', 'spring', 'clbite', 'clcap']],
@@ -199,6 +206,9 @@ export const PartCats = [
     items: [0.3, 0.45, 0.6, 0.8, 1.0, 1.3, 1.6, 2.0, 2.5].map(w => item(`จานไฟ ${w.toFixed(2)} กก.`, d => { d.FlywheelKg = w; }, d => near(d.FlywheelKg, w, 0.026))) },
   { name: 'ฝาสูบ (วาล์ว)', hint: '4 วาล์วหายใจดี ลากรอบสูงได้',
     items: [item('2 วาล์ว', d => { d.Valves = 2; }, d => d.Valves === 2), item('4 วาล์ว', d => { d.Valves = 4; }, d => d.Valves === 4)] },
+  { name: 'ขนาดวาล์ว (ไอดี/ไอเสีย)', hint: 'ขนาดหัวจานวาล์วต่อตัว  วาล์วใหญ่ = ปลายไหลดี พีคย้ายขึ้น แต่หนักขึ้น ลอยง่าย  ต้องใส่ได้ในหัวสูบ (4 วาล์วจุได้ ~1.55 เท่ากระบอก  2 วาล์ว ~1.0)',
+    items: [[0, 0, 'ตามรถ (เดิมโรงงาน)'], [20, 17, ''], [22, 19, ''], [24, 20.5, ''], [26, 22, ''], [27.5, 23.5, ''], [29, 25, ''], [31, 26.5, ''], [33, 28, ''], [36, 31, ''], [40, 34, ''], [44, 37.5, ''], [48, 41, ''], [52, 44, '']]
+      .map(([i, e, n]) => item(n || `ไอดี ${i} / ไอเสีย ${e} มม.`, d => { d.ValveIn = i; d.ValveEx = e; }, d => near(d.ValveIn, i, 0.3) && near(d.ValveEx, e, 0.3))) },
   { name: 'แคมชาฟท์ (IN=EX)', hint: 'LSA / องศา / ยก  องศามาก = แรงย้ายไปรอบสูง เดินเบาสะดุด',
     items: [['แคมเดิมโรงงาน', 114, 225, 7.5], ['แคมแต่งเบา', 112, 235, 8], ['แคมแต่งถนน', 108, 245, 8.5], ['แคมแข่ง', 106, 270, 9.5], ['แคมซิ่ง', 104, 290, 10], ['แคมสายแข่งหนัก', 102, 310, 12]]
       .map(([n, l, du, h]) => item(`${n}  ${l}°/${du}°/${h} มม.`, d => { d.Lsa = l; d.Duration = du; d.DurationEx = du; d.Lift = h; d.LiftEx = h; },
@@ -256,13 +266,18 @@ export class EngineModel {
     this.RodRatio = D.Rod / stroke;
     const durAvg = 0.5 * (D.Duration + D.DurationEx);
     this.Overlap = Math.max(0, durAvg - 2 * D.Lsa);
-    this.RpmCam = 6300 + (durAvg - 220) * 82 + (D.Lsa - 108) * 60;
+    // ---- วาล์ว: ขนาดจริงที่ใช้ (หัวสูบจุได้จำกัด) ----
+    const nIn = D.Valves === 4 ? 2 : 1, vdAuto = bore * (D.Valves === 4 ? 0.40 : 0.52);
+    let vd = D.ValveIn > 0 ? D.ValveIn : vdAuto, exD = D.ValveEx > 0 ? D.ValveEx : 0.85 * vd;
+    const fitMax = (D.Valves === 4 ? 1.55 : 1.0) * bore, fitTot = nIn * (vd + exD);
+    this.ValveFit = fitTot > fitMax ? fitMax / fitTot : 1;          // < 1 = วาล์วใหญ่เกินกว่าหัวสูบจุได้ ถูกลดลง
+    vd *= this.ValveFit; exD *= this.ValveFit;
+    this.VdIn = vd; this.VdEx = exD; this.VdAuto = vdAuto;
+    this.RpmCam = (6300 + (durAvg - 220) * 82 + (D.Lsa - 108) * 60) * Math.pow(vd / vdAuto, 0.5);
     const lsaN = D.Lsa / 108;
     const wLow = this.RpmCam * 0.55 * Math.pow(lsaN, 1.5), wHigh = this.RpmCam * 0.42 * lsaN;
     const peakBoost = 1 + (108 - D.Lsa) * 0.006;
 
-    const nIn = D.Valves === 4 ? 2 : 1;
-    const vd = bore * (D.Valves === 4 ? 0.40 : 0.52);
     const area = nIn * PI / 4 * vd * vd;
     const curtain = nIn * PI * vd * D.Lift;
     const valveEff = 0.6 * Math.min(area, curtain);
@@ -272,6 +287,7 @@ export class EngineModel {
     const exDiff = D.DurationEx - D.Duration;
     const exLift = D.LiftEx / D.Lift;
     this.RpmFlow *= exLift < 1 ? Math.max(0.6, 1 - 0.8 * (1 - exLift)) : 1 + 0.15 * Math.min(exLift - 1, 0.4);
+    { const exRel = (exD / (0.85 * vd)) ** 2; this.RpmFlow *= exRel < 1 ? Math.max(0.7, 1 - 0.6 * (1 - exRel)) : 1 + 0.08 * Math.min(exRel - 1, 0.5); }      // ขนาดวาล์วไอเสียเทียบไอดี
     this.RpmFlow *= exDiff < 0 ? Math.max(0.6, 1 + 0.012 * exDiff) : 1 + 0.0025 * Math.min(exDiff, 40);
 
     const ld = D.Lift / vd;
@@ -280,7 +296,9 @@ export class EngineModel {
     const valveGain = D.Valves === 4 ? 1.10 + 0.12 * camPower : 1;
     const camGain = 1 + 0.07 * clamp((durAvg - 250) / 50, 0, 1);
     const vePeak = 0.92 * liftF * valveGain * camGain * peakBoost;
-    this.FloatRpm = 14200 - 400 * (Math.max(D.Lift, D.LiftEx) - 6) + (D.Valves === 4 ? 2500 : 0) + (durAvg - 220) * 6;
+    this.FloatRpm = (14200 - 400 * (Math.max(D.Lift, D.LiftEx) - 6) + (D.Valves === 4 ? 2500 : 0) + (durAvg - 220) * 6) * clamp(Math.pow((vd + exD) / (1.85 * vdAuto), -0.6), 0.7, 1.2)
+      - 900 * Math.max(0, Math.max(D.Lift / vd, D.LiftEx / exD) - 0.33) / 0.1;      // วาล์วหนักลอยเร็ว / ยกเกิน 0.33D สปริงต้องหนักมาก
+    this.LiftDia = D.Lift / vd;
 
     const octane = fuelOf(D).ron, fuelPower = fuelOf(D).power;
     this.CrLimit = 12.6 - 0.05 * (bore - 50) + 0.30 * (octane - 95);
