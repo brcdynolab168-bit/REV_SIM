@@ -16,6 +16,7 @@ public sealed class EngineDesign
     public float Duration = 225f;   // องศาแคมไอดี IN (ช่วงวาล์วเปิด @1mm) องศาข้อเหวี่ยง
     public float DurationEx = 225f; // องศาแคมไอเสีย EX
     public float DurAvg => 0.5f * (Duration + DurationEx);
+    public float ValveSpring = 1f;  // ความแข็งสปริงวาล์ว (เท่าของโรงงาน) รอบลอย ∝ รากที่สอง
     public float ValveIn = 0f;      // ขนาดวาล์วไอดีต่อตัว (มม.)  0 = ตามรถ (สัดส่วนกระบอก)
     public float ValveEx = 0f;      // ขนาดวาล์วไอเสียต่อตัว (มม.)  0 = ตามรถ (85% ของไอดี)
     public float Lift = 7.5f;       // ระยะยกวาล์วไอดี IN mm
@@ -131,7 +132,7 @@ public sealed class EngineDesign
         ("ลูก 67 ซิ่ง*", new EngineDesign
         {
             Bore = 67f, Stroke = 55.6f, Rod = 89f, CrankKg = 1.4f, FlywheelKg = 0.4f, Valves = 2, Throttle = 34f,
-            Lsa = 104f, Duration = 290f, DurationEx = 290f, Lift = 9.0f, LiftEx = 9.0f, Cr = 11.5f, Limiter = 12800f,
+            Lsa = 104f, Duration = 290f, DurationEx = 290f, Lift = 9.0f, LiftEx = 9.0f, Cr = 11.5f, ValveSpring = 1.7f, Limiter = 12800f,
             SprocketF = 14f, SprocketR = 36f,
         }),
         ("ออโต้ 125 (CVT)*", new EngineDesign
@@ -290,6 +291,9 @@ public sealed class EngineDesign
         new("valveex", "ขนาดวาล์วไอเสีย (ต่อตัว)", "มม.", 0f, 70f, 0.5f, "0.0", d => d.ValveEx, (d, v) => d.ValveEx = v,
             "ขนาดวาล์วไอเสียต่อ 1 ตัว (ตามรถ = 85% ของไอดี ตามจริงไอเสียเล็กกว่าเพราะแรงดันในกระบอกช่วยไล่)  เล็กไป = ไอเสียอั้น ปลายตก  ใหญ่เกินไอดี ได้ผลเล็กน้อยแต่ลอยง่าย",
             textD: (d, v) => v <= 0f ? $"ตามรถ {EngineModel.AutoValveEx(d):0.0} มม." : $"{v:0.0} มม.") { AutoVal = EngineModel.AutoValveEx },
+        new("valvespring", "สปริงวาล์ว (ความแข็ง)", "x", 0.8f, 3.5f, 0.05f, "0.00", d => d.ValveSpring, (d, v) => d.ValveSpring = v,
+            "ความแข็งสปริงวาล์ว (เท่าของโรงงาน)  แข็งขึ้น = วาล์วไม่ลอยจนรอบสูงขึ้น (รอบลอยเพิ่มตามรากที่สองของความแข็ง) แต่ฝืดเพิ่ม กินกำลังที่รอบต่ำ  สปริงเดิมของ 2 วาล์วลอยราว 11,000 รอบ",
+            text: v => $"{v:0.00}x " + (v < 1.15f ? "เดิม" : v < 1.5f ? "แต่งเบา" : v < 2f ? "แข่ง" : "แข่งหนัก")),
         new("lift", "ระยะยกแคม ไอดี (IN)", "มม.", 5f, 16f, 0.1f, "0.0", d => d.Lift, (d, v) => d.Lift = v,
             "ยกสูง = ไอดีไหลดี แต่ได้ผลจริงถึงราว 0.30 เท่าของเส้นผ่านวาล์วเท่านั้น (เกินนั้นไหลไม่เพิ่ม สปริงหนัก วาล์วลอยง่าย เสี่ยงชนลูกสูบ)"),
         new("liftex", "ระยะยกแคม ไอเสีย (EX)", "มม.", 5f, 16f, 0.1f, "0.0", d => d.LiftEx, (d, v) => d.LiftEx = v,
@@ -516,7 +520,8 @@ public sealed class EngineModel
         float vePeak = 0.92f * liftF * valveGain * camGain * peakBoost;
 
         // ----- วาล์วลอย -----
-        FloatRpm = (14200f - 400f * (MathF.Max(D.Lift, D.LiftEx) - 6f) + (D.Valves == 4 ? 2500f : 0f) + (D.DurAvg - 220f) * 6f) * Math.Clamp(MathF.Pow((vd + exD) / (1.85f * vdAuto), -0.6f), 0.7f, 1.2f)
+        float springF = MathF.Sqrt(Math.Clamp(D.ValveSpring, 0.5f, 4f));      // รอบลอย ∝ √(ความแข็งสปริง / มวลวาล์ว)
+        FloatRpm = (D.Valves == 4 ? 0.80f : 0.82f) * springF * (14200f - 400f * (MathF.Max(D.Lift, D.LiftEx) - 6f) + (D.Valves == 4 ? 2500f : 0f) + (D.DurAvg - 220f) * 6f) * Math.Clamp(MathF.Pow((vd + exD) / (1.85f * vdAuto), -0.6f), 0.7f, 1.2f)
             - 900f * MathF.Max(0f, MathF.Max(D.Lift / vd, D.LiftEx / exD) - 0.33f) / 0.1f;      // วาล์วหนักลอยเร็ว / ยกเกิน 0.33D สปริงต้องหนักมาก
         LiftDia = D.Lift / vd;
 
@@ -539,7 +544,7 @@ public sealed class EngineModel
 
         // ----- แรงเสียดทาน -----
         float rodF = Math.Clamp(1f + 0.25f * (1.65f - RodRatio), 0.85f, 1.3f);
-        FrictionScale = MathF.Pow(Cc / 150f, 0.6f) * (D.Valves == 4 ? 1.08f : 1f) * rodF;
+        FrictionScale = MathF.Pow(Cc / 150f, 0.6f) * (D.Valves == 4 ? 1.08f : 1f) * rodF * (1f + 0.045f * (D.ValveSpring - 1f));      // สปริงแข็ง = ฝืดเพิ่ม
 
         // ความเฉื่อยหมุน (kg·m²): อ้างอิงเวฟ (ข้อ 2.8 กก. + จานไฟ 0.6 กก.) = 0.0145  ข้อ/จานไฟหนักขึ้นเร่งรอบช้าลงชัดเจน เบาลงเร่งไวแต่เดินเบาไม่นิ่ง
         Inertia = MathF.Max(0.006f, 0.0145f + (D.CrankKg - 2.8f) * 0.0026f + (D.FlywheelKg - 0.6f) * 0.0065f);

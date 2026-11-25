@@ -66,7 +66,7 @@ public sealed partial class MainForm
     {
         ("อะไหล่", Array.Empty<string>()),
         ("เครื่องยนต์", new[] { "bore", "stroke", "rod", "crank", "fly", "valves", "valvein", "valveex" }),
-        ("ไอดี·แคม·ท่อ", new[] { "throttle", "lsa", "duration", "durationex", "lift", "liftex", "pipe" }),
+        ("ไอดี·แคม·ท่อ", new[] { "throttle", "lsa", "duration", "durationex", "lift", "liftex", "valvespring", "pipe" }),
         ("อัด·น้ำมัน", new[] { "cr", "psi", "fuel", "inj", "limiter", "resume", "softcut" }),
         ("ส่งกำลัง", new[] { "auto", "prim", "gears", "g1", "g2", "g3", "g4", "g5", "g6", "sprf", "sprr", "ramp", "rampout", "rollers", "rollerg", "rollerg2", "fdf", "fdr", "firstred", "spring", "clbite", "clcap" }),
         ("ตัวรถ", new[] { "rider", "bikekg", "rim", "rimw", "tirew", "tireasp", "cda" }),
@@ -479,7 +479,7 @@ public sealed partial class MainForm
 
         { bool wb = m.ValveFit < 0.999f || m.LiftDia > 0.34f; Line($"วาล์ว ไอดี {m.VdIn:0.0} / ไอเสีย {m.VdEx:0.0} มม. x{(d.Valves == 4 ? 2 : 1)}  •  ยก/ขนาด {m.LiftDia:0.00}" + (m.ValveFit < 0.999f ? "  หัวสูบจุไม่พอ ถูกลดขนาด" : m.LiftDia > 0.34f ? "  ยกเกินที่วาล์วใช้ได้" : m.LiftDia < 0.2f ? "  ยกน้อย ไหลไม่เต็ม" : ""), wb ? 2 : 1); }
         bool floatBad = d.Limiter >= m.FloatRpm;
-        Line($"วาล์วลอยที่ {m.FloatRpm:N0} rpm" + (floatBad ? "  รอบตัดสูงไป" : ""), floatBad ? 2 : 1);
+        Line($"วาล์วลอยที่ {m.FloatRpm:N0} rpm" + (floatBad ? "  รอบตัดสูงไป (ใส่สปริงวาล์วแข็งขึ้น)" : ""), floatBad ? 2 : 1);
 
         float vpL = m.PistonSpeed(d.Limiter);
         {

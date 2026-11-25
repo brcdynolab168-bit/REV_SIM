@@ -1232,7 +1232,7 @@ function drawGarageStats() {
   line(`เดินเบา ~${fmtN(m.IdleRpm)} rpm  •  โอเวอร์แลป ${f0(m.Overlap)}°${m.Overlap > 40 ? '  (สะดุด)' : ''}`, m.Overlap > 40 ? 2 : 1);
   const flowLimit = m.RpmFlow < m.PeakPsRpm; line(`ไอดีเริ่มอั้นที่ ${fmtN(m.RpmFlow)} rpm${flowLimit ? '  (เรือน/วาล์วเล็กไป)' : ''}`, flowLimit ? 2 : 1);
   { const wb = m.ValveFit < 0.999 || m.LiftDia > 0.34; line(`วาล์ว ไอดี ${f1(m.VdIn)} / ไอเสีย ${f1(m.VdEx)} มม. x${d.Valves === 4 ? 2 : 1}  •  ยก/ขนาด ${f2(m.LiftDia)}` + (m.ValveFit < 0.999 ? '  หัวสูบจุไม่พอ ถูกลดขนาด' : m.LiftDia > 0.34 ? '  ยกเกินที่วาล์วใช้ได้' : m.LiftDia < 0.2 ? '  ยกน้อย ไหลไม่เต็ม' : ''), wb ? 2 : 1); }
-  const floatBad = d.Limiter >= m.FloatRpm; line(`วาล์วลอยที่ ${fmtN(m.FloatRpm)} rpm${floatBad ? '  รอบตัดสูงไป' : ''}`, floatBad ? 2 : 1);
+  const floatBad = d.Limiter >= m.FloatRpm; line(`วาล์วลอยที่ ${fmtN(m.FloatRpm)} rpm${floatBad ? '  รอบตัดสูงไป (ใส่สปริงวาล์วแข็งขึ้น)' : ''}`, floatBad ? 2 : 1);
   { const ra = Math.round(d.Limiter * 0.35 / 100) * 100, rb = Math.round(d.Limiter * 0.80 / 100) * 100, up = m.RevUpTime(ra, rb), dn = m.CoastTime(rb, ra);
     line(`เร่งรอบ ${fmtN(ra)}→${fmtN(rb)}: ${up.toFixed(2)} วิ  •  ปล่อยคันเร่งตก: ${dn.toFixed(2)} วิ  (เครื่องเปล่า)` + (up > 1.6 ? '  เร่งยาน' : up < 0.35 ? '  เร่งไวมาก' : ''), up > 1.6 ? 2 : 1); }
   { const rb = Math.round(d.Limiter * 0.6 / 500) * 500; line(`เบรกเครื่อง @${fmtN(rb)} rpm: ${m.EngineBrake(rb).toFixed(1)} N·m (หนืดตามรอบ + แรงอัด ${m.CompDrag.toFixed(2)}x)`, 0); }
