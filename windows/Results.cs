@@ -85,7 +85,7 @@ public sealed class SaveData
                 else if (k == "idlegain") s.IdleGain = Math.Clamp(F(v, 0.4f), 0f, 1f);
                 else if (k == "fullscreen") s.Fullscreen = v != "0";
                 else if (k == "clutchsys") s.ClutchSys = v != "0";
-                else if (k == "gaugemode") s.GaugeMode = Math.Clamp((int)F(v, 0f), 0, 1);
+                else if (k == "gaugemode") s.GaugeMode = Math.Clamp((int)F(v, 0f), 0, 2);
                 else if (k == "surface") s.Surface = Math.Clamp((int)F(v, 0f), 0, 3);
                 else if (k == "besttop") s.BestTop = F(v, 0f);
             }

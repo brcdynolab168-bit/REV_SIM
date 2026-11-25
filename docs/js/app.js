@@ -363,7 +363,7 @@ function drawDrive() {
   const sf = Surfaces[save.surface];
   ui.txt(`${sf.note}   •   แรงเกาะ x${f2(sf.muK)}   •   ต้านการกลิ้ง x${f2(sf.crrK)}`, F.xs, C.Dim, 254, 158);
   drawGauge(640, 552, 335);
-  ui.btn(R(868, 196, 168, 34), 'M  จอ: ' + (save.gaugeMode === 1 ? 'TFT' : 'เข็ม'), false, C.Blue, toggleGaugeMode, F.cap);
+  ui.btn(R(868, 196, 168, 34), 'M  จอ: ' + GaugeModeNames[save.gaugeMode | 0], false, C.Blue, toggleGaugeMode, F.cap);
   drawThrottle(1056, 170, 64, 660);
 
   ui.txt('ระดับเสียง', F.sm, C.Dim, 270, 954);
@@ -515,7 +515,8 @@ function driveOverlay(cx, msgY) {
   else if (!S.running) ui.txtC(S.ignition ? 'กด S ค้างเพื่อสตาร์ท' : 'ดับเครื่องอยู่ - กด S ค้างเพื่อสตาร์ท', F.md, C.Accent, cx, msgY);
 }
 
-const toggleGaugeMode = () => { save.gaugeMode = save.gaugeMode === 1 ? 0 : 1; persist(); };
+const GaugeModeNames = ['เข็ม', 'XMAX', 'FORZA'];
+const toggleGaugeMode = () => { save.gaugeMode = ((save.gaugeMode | 0) + 1) % GaugeModeNames.length; persist(); };
 /** จอ TFT แบบ XMAX: จอเล็กด้านบน (ความเร็ว/อุณหภูมิ/ระยะ) + จอใหญ่เกจรอบเป็นแท่งโค้งเรียงจากซ้ายไปขวา */
 function drawGaugeTft(cx, cy) {
   const g = ui.g, lim = installed.D.Limiter, red = lim - 600, gm = gaugeMaxOf(lim), T = S.engT ?? 30;
@@ -562,7 +563,46 @@ function drawGaugeTft(cx, cy) {
   driveOverlay(cx, cy - 172);
 }
 
+/** จอ TFT แบบ Honda Forza: มาตรรอบวงโค้ง + ความเร็วตัวใหญ่กลางจอ + มาตรด้านซ้าย + แถบเตือนด้านล่าง */
+function drawGaugeForza(cx, cy) {
+  const g = ui.g, lim = installed.D.Limiter, red = lim - 600, gm = gaugeMaxOf(lim), T = S.engT ?? 30, hot = T > 135, ink = 'rgb(214,242,234)';
+  const pn = R(cx - 345, cy - 262, 690, 480);
+  ui.fillRR(pn, 26, 'rgb(7,9,13)'); ui.drawRR(pn, 26, 'rgb(58,64,74)', 4);
+  const d = new Date(), pad2 = v => String(v).padStart(2, '0');
+  ui.txtR(`${pad2(d.getHours())}:${pad2(d.getMinutes())}`, F.md, 'rgb(236,240,244)', pn.x + pn.w - 34, pn.y + 20);
+  const warn = S.seized ? 'ลูกสูบล็อก! ' + S.seizeCause : T > 150 ? 'เครื่องร้อนจัด!' : (S.wear ?? 0) > 0.5 ? 'ลูกสึกหนัก ตรวจเครื่อง' : S.cut ? 'ตัดรอบ' : '';
+  if (warn) { const tr = R(cx - 22, pn.y + 14, 44, 38); ui.fillRR(tr, 6, 'rgb(240,90,40)'); ui.txtC('!', F.md, 'rgb(20,12,8)', cx, pn.y + 33); }
+  const ax = cx, ay = cy + 10, ar = 195, a0 = 150 * Math.PI / 180, sw = 240 * Math.PI / 180, ang = rpm => a0 + sw * clamp(rpm, 0, gm) / gm;
+  g.lineCap = 'butt';
+  g.beginPath(); g.arc(ax, ay, ar, a0, ang(red)); g.strokeStyle = 'rgb(40,50,52)'; g.lineWidth = 22; g.stroke();
+  g.beginPath(); g.arc(ax, ay, ar, ang(red), ang(gm)); g.strokeStyle = 'rgb(96,40,22)'; g.lineWidth = 22; g.stroke();
+  if (needle > 30) { g.beginPath(); g.arc(ax, ay, ar, a0, ang(Math.min(needle, red))); g.strokeStyle = 'rgb(222,242,236)'; g.lineWidth = 22; g.stroke(); }
+  if (needle > red) { g.beginPath(); g.arc(ax, ay, ar, ang(red), ang(needle)); g.strokeStyle = 'rgb(255,96,40)'; g.lineWidth = 22; g.stroke(); }
+  for (let r = 0; r <= gm; r += 500) {
+    const a = ang(r), major = r % 1000 === 0, c = Math.cos(a), s2 = Math.sin(a);
+    ui.line(ax + c * (ar + 16), ay + s2 * (ar + 16), ax + c * (ar + (major ? 34 : 26)), ay + s2 * (ar + (major ? 34 : 26)), major ? 'rgb(214,222,228)' : 'rgb(96,104,112)', major ? 2.6 : 1.4);
+    if (major && (r / 1000) % 2 === 0) ui.txtC(String(r / 1000), F.sm, r >= red ? 'rgb(255,110,60)' : 'rgb(222,230,236)', ax + c * (ar - 40), ay + s2 * (ar - 40));
+  }
+  ui.txtC('x1000 r/min', F.xs, 'rgb(150,160,168)', ax, ay - 125);
+  ui.txtC(String(Math.round(S.speed * 3.6)), F.rpm, ink, ax, ay - 20);
+  ui.txtC('km/h', F.sm, 'rgb(200,210,214)', ax, ay + 62);
+  const fx = pn.x + 38, fy = pn.y + 150, fh = 190;
+  ui.txt('H', F.cap, hot ? C.Red : 'rgb(190,200,206)', fx + 2, fy - 28);
+  const fill = Math.round(clamp((T - 30) / 160, 0, 1) * 8);
+  for (let i = 0; i < 8; i++) ui.rect(fx, fy + i * (fh / 8), 30, fh / 8 - 5, 8 - i <= fill ? (hot && i < 2 ? C.Red : 'rgb(214,242,234)') : 'rgb(30,38,42)');
+  ui.txt('C', F.cap, 'rgb(190,200,206)', fx + 4, fy + fh + 6);
+  const rx = pn.x + pn.w - 150;
+  ui.txtR(S.isAuto ? 'D' : (S.gear === 0 ? 'N' : String(S.gear)), F.numL, 'rgb(236,240,244)', pn.x + pn.w - 30, pn.y + 100);
+  ui.txtR(S.isAuto ? 'AUTO' : 'GEAR', F.cap, 'rgb(150,160,168)', pn.x + pn.w - 30, pn.y + 180);
+  ui.txtR('TRIP', F.cap, 'rgb(150,160,168)', pn.x + pn.w - 30, pn.y + 330); ui.txtR((S.dist / 1000).toFixed(2) + ' km', F.sm, 'rgb(236,240,244)', pn.x + pn.w - 30, pn.y + 352);
+  const bar = R(cx - 160, pn.y + pn.h - 86, 320, 56);
+  ui.fillRR(bar, 8, warn ? 'rgb(240,96,40)' : 'rgb(24,30,34)');
+  ui.txtC(warn ? '! ' + warn : `${Math.round(needle / 10) * 10} rpm`, F.sm, warn ? 'rgb(24,14,8)' : 'rgb(222,230,236)', cx, bar.y + 28);
+  driveOverlay(cx, cy - 288);
+}
+
 function drawGauge(cx, cy, r) {
+  if (save.gaugeMode === 2) { drawGaugeForza(cx, cy); return; }
   if (save.gaugeMode === 1) { drawGaugeTft(cx, cy); return; }
   const g = ui.g, k = r / 215, lim = installed.D.Limiter, red = lim - 600, gm = gaugeMaxOf(lim);
   const ang = rpm => (135 + 270 * clamp(rpm, 0, gm) / gm) * Math.PI / 180;

@@ -31,7 +31,7 @@ public sealed partial class MainForm
         var sf = Vehicle.Surfaces[Vehicle.SurfaceIndex];
         Txt(g, $"{sf.Note}   •   แรงเกาะ x{sf.MuK:0.00}   •   ต้านการกลิ้ง x{sf.CrrK:0.00}", _fXs, Palette.Dim, 254, 158);
         DrawGauge(g, 640, 552, 335);
-        Btn(g, new RectangleF(868, 196, 168, 34), "M  จอ: " + (_save.GaugeMode == 1 ? "TFT" : "เข็ม"), false, Palette.Blue, () => { _save.GaugeMode = 1 - _save.GaugeMode; _save.Save(); }, _fCap);
+        Btn(g, new RectangleF(868, 196, 168, 34), "M  จอ: " + new[] { "เข็ม", "XMAX", "FORZA" }[_save.GaugeMode], false, Palette.Blue, () => { _save.GaugeMode = (_save.GaugeMode + 1) % 3; _save.Save(); }, _fCap);
         DrawThrottle(g, 1056, 170, 64, 660);
 
         // ระดับเสียง + คลื่นเสียง (ใต้เกจ)
@@ -367,8 +367,52 @@ public sealed partial class MainForm
         DriveOverlay(g, cx, cy - 172);
     }
 
+    /// <summary>จอ TFT แบบ Honda Forza: มาตรรอบวงโค้ง + ความเร็วตัวใหญ่กลางจอ + มาตรด้านซ้าย + แถบเตือนด้านล่าง</summary>
+    private void DrawGaugeForza(Graphics g, float cx, float cy)
+    {
+        float lim = _eng.LimiterRpm, red = lim - 600f, gm = _gaugeMax, T = _eng.EngT;
+        bool hot = T > 135f;
+        var ink = Color.FromArgb(214, 242, 234); var white = Color.FromArgb(236, 240, 244); var grey = Color.FromArgb(150, 160, 168);
+        var pn = new RectangleF(cx - 345, cy - 262, 690, 480);
+        FillRR(g, pn, 26, Color.FromArgb(7, 9, 13)); DrawRR(g, pn, 26, Color.FromArgb(58, 64, 74), 4f);
+        TxtR(g, DateTime.Now.ToString("HH:mm"), _fMd, white, pn.Right - 34, pn.Y + 20);
+        string warn = _eng.Seized ? "ลูกสูบล็อก! " + _eng.SeizeCause : T > 150f ? "เครื่องร้อนจัด!" : _eng.Wear > 0.5f ? "ลูกสึกหนัก ตรวจเครื่อง" : _eng.LimiterActive ? "ตัดรอบ" : "";
+        if (warn.Length > 0) { var tr = new RectangleF(cx - 22, pn.Y + 14, 44, 38); FillRR(g, tr, 6, Color.FromArgb(240, 90, 40)); TxtC(g, "!", _fMd, Color.FromArgb(20, 12, 8), cx, pn.Y + 33); }
+        float ax = cx, ay = cy + 10, ar = 195f;
+        var arc = new RectangleF(ax - ar, ay - ar, ar * 2, ar * 2);
+        float Ang(float rpm) => 150f + 240f * Math.Clamp(rpm, 0f, gm) / gm;
+        using (var p = new Pen(Color.FromArgb(40, 50, 52), 22f)) g.DrawArc(p, arc, 150f, 240f * red / gm);
+        using (var p = new Pen(Color.FromArgb(96, 40, 22), 22f)) g.DrawArc(p, arc, Ang(red), 240f * (gm - red) / gm);
+        if (_needleRpm > 30f) using (var p = new Pen(Color.FromArgb(222, 242, 236), 22f)) g.DrawArc(p, arc, 150f, Ang(MathF.Min(_needleRpm, red)) - 150f);
+        if (_needleRpm > red) using (var p = new Pen(Color.FromArgb(255, 96, 40), 22f)) g.DrawArc(p, arc, Ang(red), Ang(_needleRpm) - Ang(red));
+        for (int r = 0; r <= (int)gm; r += 500)
+        {
+            float a = Ang(r) * MathF.PI / 180f; bool major = r % 1000 == 0;
+            float c = MathF.Cos(a), s2 = MathF.Sin(a);
+            g.DrawLine(major ? Pn(Color.FromArgb(214, 222, 228), 2.6f) : Pn(Color.FromArgb(96, 104, 112), 1.4f), ax + c * (ar + 16), ay + s2 * (ar + 16), ax + c * (ar + (major ? 34 : 26)), ay + s2 * (ar + (major ? 34 : 26)));
+            if (major && (r / 1000) % 2 == 0) TxtC(g, (r / 1000).ToString(), _fSm, r >= red ? Color.FromArgb(255, 110, 60) : Color.FromArgb(222, 230, 236), ax + c * (ar - 40), ay + s2 * (ar - 40));
+        }
+        TxtC(g, "x1000 r/min", _fXs, grey, ax, ay - 125);
+        TxtC(g, $"{_eng.SpeedKmh:0}", _fRpm, ink, ax, ay - 20);
+        TxtC(g, "km/h", _fSm, Color.FromArgb(200, 210, 214), ax, ay + 62);
+        float fx = pn.X + 38, fy = pn.Y + 150, fh = 190;
+        Txt(g, "H", _fCap, hot ? Palette.Red : Color.FromArgb(190, 200, 206), fx + 2, fy - 28);
+        int fill = (int)MathF.Round(Math.Clamp((T - 30f) / 160f, 0f, 1f) * 8f);
+        for (int i = 0; i < 8; i++) g.FillRectangle(Br(8 - i <= fill ? (hot && i < 2 ? Palette.Red : ink) : Color.FromArgb(30, 38, 42)), fx, fy + i * (fh / 8), 30, fh / 8 - 5);
+        Txt(g, "C", _fCap, Color.FromArgb(190, 200, 206), fx + 4, fy + fh + 6);
+        float rx = pn.Right - 150;
+        TxtR(g, _eng.IsAuto ? "D" : (_eng.Gear == 0 ? "N" : _eng.Gear.ToString()), _fNumL, white, pn.Right - 30, pn.Y + 100);
+        TxtR(g, _eng.IsAuto ? "AUTO" : "GEAR", _fCap, grey, pn.Right - 30, pn.Y + 180);
+        TxtR(g, "TRIP", _fCap, grey, pn.Right - 30, pn.Y + 330); TxtR(g, (_eng.DistanceM / 1000f).ToString("0.00") + " km", _fSm, white, pn.Right - 30, pn.Y + 352);
+        var bar = new RectangleF(cx - 160, pn.Bottom - 86, 320, 56);
+        FillRR(g, bar, 8, warn.Length > 0 ? Color.FromArgb(240, 96, 40) : Color.FromArgb(24, 30, 34));
+        TxtC(g, warn.Length > 0 ? "! " + warn : $"{(int)(MathF.Round(_needleRpm / 10f) * 10f)} rpm", _fSm, warn.Length > 0 ? Color.FromArgb(24, 14, 8) : Color.FromArgb(222, 230, 236), cx, bar.Y + 28);
+        DriveOverlay(g, cx, cy - 288);
+    }
+
     private void DrawGauge(Graphics g, float cx, float cy, float r)
     {
+        if (_save.GaugeMode == 2) { DrawGaugeForza(g, cx, cy); return; }
         if (_save.GaugeMode == 1) { DrawGaugeTft(g, cx, cy); return; }
         float redline = _eng.RedlineRpm;
         float k = r / 215f;
