@@ -49,16 +49,17 @@ public sealed partial class MainForm
             string w = d.Rollers == 6 && d.RollerG != d.RollerG2 ? $"{d.RollerG:0.#}/{d.RollerG2:0.#} g" : $"{d.RollerG:0.#} g";
             Txt(g, $"ชาม {d.RampDeg:0.0}°/{d.RampOutDeg:0.0}°  •  {d.Rollers} เม็ด {w}  •  สปริง {d.SpringK:0} N/มม.", _fMd, Palette.Text, px + 20, 140);
             Txt(g, $"{m.Cc:0} cc  •  {m.PeakHp:0.0} HP @ {m.PeakPsRpm:N0}", _fSm, Palette.Dim, px + 20, 176);
-            Txt(g, $"สายพาน {_eng.CvtRatio:0.00}  •  เฟืองท้าย {d.GearF}/{d.GearR} x {d.FirstRed:0.00} (ทดรวม {Cvt.Final(d):0.00})", _fSm, Palette.Dim, px + 20, 208);
+            Txt(g, $"อัตราทดตอนนี้ {_eng.CvtRatio * Cvt.Final(d):0.00} :1   (สายพาน {_eng.CvtRatio:0.00} x ทดท้าย {Cvt.Final(d):0.00})", _fSm, Palette.Text, px + 20, 208);
             Bar(g, new RectangleF(px + 20, 240, pw - 40, 12), _eng.CvtPosition, Palette.Accent);
             if (_autoDrive) Txt(g, AutopilotText(), _fXs, Palette.Green, px + 20, 254);
         }
         else
         {
-            Txt(g, $"เกียร์ 4 สปีด  •  สเตอร์ {d.SprocketF:0}/{d.SprocketR:0}", _fMd, Palette.Text, px + 20, 140);
+            Txt(g, $"เกียร์ {d.Gears} สปีด  •  สเตอร์ {d.SprocketF:0}/{d.SprocketR:0}", _fMd, Palette.Text, px + 20, 140);
             Txt(g, $"{m.Cc:0} cc  •  {m.PeakHp:0.0} HP @ {m.PeakPsRpm:N0}", _fSm, Palette.Dim, px + 20, 176);
-            Txt(g, $"ทดสุดท้าย {Vehicle.Final(d):0.000}   รถ+คน {Vehicle.Mass(d):0} กก.", _fSm, Palette.Dim, px + 20, 208);
-            if (_autoDrive) Txt(g, AutopilotText(), _fXs, Palette.Green, px + 20, 244);
+            Txt(g, _eng.Gear > 0 ? $"อัตราทด เกียร์ {_eng.Gear}:  {d.GearAt(_eng.Gear):0.000} :1   ทดรวม {Vehicle.Total(d, _eng.Gear):0.00} :1" : "อัตราทด: เกียร์ว่าง (N)", _fSm, Palette.Text, px + 20, 208);
+            Txt(g, $"ทดสุดท้าย {Vehicle.Final(d):0.000}   รถ+คน {Vehicle.Mass(d):0} กก.", _fXs, Palette.Dim, px + 20, 240);
+            if (_autoDrive) Txt(g, AutopilotText(), _fXs, Palette.Green, px + 20, 258);
         }
         Btn(g, new RectangleF(px + pw - 236, 108, 216, 34), _autoDrive ? "P ขับเอง: เปิด" : "P ขับเอง: ปิด", _autoDrive, Palette.Green, ToggleAutopilot, _fXs);
 

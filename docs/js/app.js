@@ -376,14 +376,15 @@ function drawDrive() {
     const w = d.Rollers === 6 && d.RollerG !== d.RollerG2 ? `${+d.RollerG.toFixed(1)}/${+d.RollerG2.toFixed(1)} g` : `${+d.RollerG.toFixed(1)} g`;
     ui.txt(`ชาม ${f1(d.RampDeg)}°/${f1(d.RampOutDeg)}°  •  ${d.Rollers} เม็ด ${w}  •  สปริง ${f0(d.SpringK)} N/มม.`, F.md, C.Text, px + 20, 140);
     ui.txt(`${f0(m.Cc)} cc  •  ${f1(m.PeakHp)} HP @ ${fmtN(m.PeakPsRpm)}`, F.sm, C.Dim, px + 20, 176);
-    ui.txt(`สายพาน ${f2(Cvt.ratio(S.cvtS))}  •  เฟืองท้าย ${d.GearF}/${d.GearR} x ${f2(d.FirstRed)} (ทดรวม ${f2(Cvt.final(d))})`, F.sm, C.Dim, px + 20, 208);
+    ui.txt(`อัตราทดตอนนี้ ${f2(Cvt.ratio(S.cvtS) * Cvt.final(d))} :1   (สายพาน ${f2(Cvt.ratio(S.cvtS))} x ทดท้าย ${f2(Cvt.final(d))})`, F.sm, C.Text, px + 20, 208);
     ui.bar(R(px + 20, 240, pw - 40, 12), S.cvtS, C.Accent);
     if (autoDrive) ui.txt(apText(), F.xs, C.Green, px + 20, 254);
   } else {
-    ui.txt(`เกียร์ 4 สปีด  •  สเตอร์ ${f0(d.SprocketF)}/${f0(d.SprocketR)}`, F.md, C.Text, px + 20, 140);
+    ui.txt(`เกียร์ ${d.Gears} สปีด  •  สเตอร์ ${f0(d.SprocketF)}/${f0(d.SprocketR)}`, F.md, C.Text, px + 20, 140);
     ui.txt(`${f0(m.Cc)} cc  •  ${f1(m.PeakHp)} HP @ ${fmtN(m.PeakPsRpm)}`, F.sm, C.Dim, px + 20, 176);
-    ui.txt(`ทดสุดท้าย ${Veh.final(d).toFixed(3)}   รถ+คน ${f0(Veh.mass(d))} กก.`, F.sm, C.Dim, px + 20, 208);
-    if (autoDrive) ui.txt(apText(), F.xs, C.Green, px + 20, 244);
+    ui.txt(S.gear > 0 ? `อัตราทด เกียร์ ${S.gear}:  ${Veh.gearOf(d, S.gear).toFixed(3)} :1   ทดรวม ${Veh.total(d, S.gear).toFixed(2)} :1` : 'อัตราทด: เกียร์ว่าง (N)', F.sm, C.Text, px + 20, 208);
+    ui.txt(`ทดสุดท้าย ${Veh.final(d).toFixed(3)}   รถ+คน ${f0(Veh.mass(d))} กก.`, F.xs, C.Dim, px + 20, 240);
+    if (autoDrive) ui.txt(apText(), F.xs, C.Green, px + 20, 258);
   }
   ui.btn(R(px + pw - 236, 108, 216, 34), autoDrive ? 'P ขับเอง: เปิด' : 'P ขับเอง: ปิด', autoDrive, C.Green, toggleAutopilot, F.xs);
 
