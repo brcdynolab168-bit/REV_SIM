@@ -87,6 +87,7 @@ export class EngineSim {
     let target = clamp(this.throttleInput, 0, 1);
     if (this.dynoPhase === 1) target = rpm < DynoStartRpm - 400 ? 0.35 : 0.08;
     if (this.dynoPhase === 2) target = 1;
+    if ((this._blipT || 0) > 0) { this._blipT -= dt; target = Math.max(target, 0.4); }
     let thr = this.thr;
     thr += (target - thr) * Math.min(1, (target > thr ? 12 : 20) * dt);
     this.thr = thr;
@@ -136,7 +137,8 @@ export class EngineSim {
     if (rpm > D.Limiter - derate) this.cut = true;
     else if (rpm < D.Limiter - D.ResumeGap - derate) this.cut = false;
     this.softK = D.SoftGap > 0 ? clamp((rpm - (D.Limiter - D.SoftGap)) / D.SoftGap, 0, 1) : 0;
-    this._fuelOn = ign && !this.cut && rpm > 220;
+    if ((this._qsT || 0) > 0) this._qsT -= dt;
+    this._fuelOn = ign && !this.cut && rpm > 220 && !(this._qsT > 0);      // ควิกชิฟเตอร์: ตัดไฟชั่วขณะ
     this._starterActive = this.starterHeld && rpm < 1000;
 
     let drive = 0;
@@ -170,7 +172,12 @@ export class EngineSim {
     if (!auto) {
       const want = this.clutchEnabled ? clamp(this.clutchInput, 0, 1) : 0;
       this._lever += (want - this._lever) * Math.min(1, dt * (want > this._lever ? 30 : 7));
-      if (g !== this._gearApplied) { this._gearApplied = g; this.gear = g; this._shiftT = ShiftTime; }
+      if (g !== this._gearApplied) {
+        const prev = this._gearApplied; this._gearApplied = g; this.gear = g; this._shiftT = ShiftTime;
+        const qs = d.Quickshift || 0, noClutch = this._lever < 0.3;
+        if (qs >= 1 && noClutch && prev > 0 && g > prev) { this._shiftT = clamp((d.QsCutMs || 80) / 1000, 0.03, 0.3); this._qsT = this._shiftT; }     // ควิกชิฟต์ขึ้น: ตัดไฟสั้น ๆ ไม่ใช้ครัช
+        else if (qs === 2 && noClutch && prev > 0 && g > 0 && g < prev) { this._shiftT = 0.12; this._blipT = 0.12; }                                   // ลงเกียร์: ออโต้บลิปคันเร่ง
+      }
       if (this._shiftT > 0) this._shiftT -= dt;
     } else { this._lever = 0; this.gear = 0; this._shiftT = 0; }
 

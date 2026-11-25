@@ -111,7 +111,8 @@ const down = k => keys.has(k);
 
 function selectGear(gi) {
   if (S.isAuto || gi === gearSel) return;
-  if (save.clutchSys && S.running && S.lever < 0.6 && S.cfLock > 0.05) {
+  const qs = installed.D.Quickshift || 0, qsOk = qs >= 1 && ((gi > gearSel && gearSel > 0) || (qs === 2 && gi < gearSel && gi > 0));      // ควิกชิฟเตอร์: ชิฟต์ไม่ต้องกำครัช
+  if (save.clutchSys && S.running && S.lever < 0.6 && S.cfLock > 0.05 && !qsOk) {
     if (save.assist) { assistUntil = now() + 0.5; setTimeout(() => { gearSel = gi; }, 130); return; }
     toast('กำครัตช์ก่อน: ค้าง Shift (หรือกดค้างแถบครัตช์) แล้วกดเปลี่ยนเกียร์'); return;
   }

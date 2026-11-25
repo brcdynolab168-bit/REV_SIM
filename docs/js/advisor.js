@@ -35,7 +35,7 @@ export function predict(m) {
       ratio = Veh.total(d, gear);
       wr = v / r * ratio * 9.5493;
       rpm = Math.max(wr, gear === 1 ? launch : 2500);
-      if (rpm >= shiftRpm && gear < d.Gears && shift <= 0) { gear++; shift = 0.2; }
+      if (rpm >= shiftRpm && gear < d.Gears && shift <= 0) { gear++; shift = d.Quickshift >= 1 ? (d.QsCutMs || 80) / 1000 : 0.2; }
       rpm = Math.min(rpm, lim);
     }
     const tq = Math.max(0, m.BrakeTorqueWot(rpm));

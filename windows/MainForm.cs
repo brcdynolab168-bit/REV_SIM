@@ -269,7 +269,9 @@ public sealed partial class MainForm : Form
     private void SelectGear(int gi)
     {
         if (_eng.IsAuto || gi == _gearSel) return;
-        if (_eng.ClutchEnabled && _eng.Running && _eng.ClutchLever < 0.6f && _eng.CentrifugalLock > 0.05f)
+        int qsMode = (int)MathF.Round(_eng.Model.D.Quickshift);
+        bool qsOk = qsMode >= 1 && ((gi > _gearSel && _gearSel > 0) || (qsMode == 2 && gi < _gearSel && gi > 0));      // ควิกชิฟเตอร์: ชิฟต์ไม่ต้องกำครัช
+        if (_eng.ClutchEnabled && _eng.Running && _eng.ClutchLever < 0.6f && _eng.CentrifugalLock > 0.05f && !qsOk)
         {
             Toast("กำครัตช์ก่อน: ค้าง Shift ไว้ แล้วกดเปลี่ยนเกียร์");
             return;

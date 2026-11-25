@@ -87,7 +87,7 @@ public static class Advisor
                 ratio = Vehicle.Total(d, gear);
                 float wr = v / r * ratio * 9.5493f;
                 rpm = MathF.Max(wr, gear == 1 ? launch : 2500f);
-                if (rpm >= shiftRpm && gear < d.Gears && shift <= 0f) { gear++; shift = 0.2f; }
+                if (rpm >= shiftRpm && gear < d.Gears && shift <= 0f) { gear++; shift = d.Quickshift >= 1f ? d.QsCutMs / 1000f : 0.2f; }
                 wheelRpmFactor = wr;
                 rpm = MathF.Min(rpm, lim);
             }

@@ -222,6 +222,7 @@ public sealed class EngineSim
         float target = Clamp(ThrottleInput, 0f, 1f);
         if (_dynoPhase == 1) target = rpm < DynoStartRpm - 400f ? 0.35f : 0.08f;
         if (_dynoPhase == 2) target = 1f;
+        if (_blipT > 0f) { _blipT -= dt; target = MathF.Max(target, 0.4f); }
         float thr = _thr;
         float k = target > thr ? 12f : 20f;
         thr += (target - thr) * MathF.Min(1f, k * dt);
@@ -279,7 +280,8 @@ public sealed class EngineSim
 
         // soft cut: ใต้ hard cut ลงมา ค่อย ๆ หน่วงไฟ/ข้ามจังหวะระเบิดมากขึ้นจนถึง hard cut
         _softK = m.D.SoftGap > 0f ? Clamp((rpm - m.D.SoftRpm) / m.D.SoftGap, 0f, 1f) : 0f;
-        _fuelOn = ign && !_cut && rpm > 220f;
+        if (_qsT > 0f) _qsT -= dt;
+        _fuelOn = ign && !_cut && rpm > 220f && !(_qsT > 0f);      // ควิกชิฟเตอร์: ตัดไฟชั่วขณะ
         _starterActive = StarterHeld && rpm < 1000f;
 
         float drive = 0f;
@@ -329,6 +331,7 @@ public sealed class EngineSim
 
     // ---------- ระบบขับเคลื่อน ----------
     private int _gearApplied;
+    private float _qsT, _blipT;                // ควิกชิฟเตอร์: เวลาตัดไฟที่เหลือ / ออโต้บลิปตอนลงเกียร์
     private float _shiftT;                      // เวลาที่คลัตช์ถูกตัดตอนเปลี่ยนเกียร์ (วินาที)
     private float _tcSmooth;                    // แรงบิดผ่านคลัตช์ (เฉลี่ย) ใช้คำนวณแรงหนีบชุดขับหลังของ CVT
     private const float ShiftTime = 0.20f;
@@ -355,9 +358,13 @@ public sealed class EngineSim
         {
             if (g != _gearApplied)
             {
+                int prevG = _gearApplied;
                 _gearApplied = g;
                 _gear = g;
                 _shiftT = ShiftTime;            // ตัดคลัตช์ชั่วขณะเปลี่ยนเกียร์
+                int qs = (int)MathF.Round(m.D.Quickshift); bool noClutch = _lever < 0.3f;
+                if (qs >= 1 && noClutch && prevG > 0 && g > prevG) { _shiftT = Clamp(m.D.QsCutMs / 1000f, 0.03f, 0.3f); _qsT = _shiftT; }      // ควิกชิฟต์ขึ้น: ตัดไฟสั้น ๆ ไม่ใช้ครัช
+                else if (qs == 2 && noClutch && prevG > 0 && g > 0 && g < prevG) { _shiftT = 0.12f; _blipT = 0.12f; }                           // ลงเกียร์: ออโต้บลิปคันเร่ง
             }
             if (_shiftT > 0f) _shiftT -= dt;
         }

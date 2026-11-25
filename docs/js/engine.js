@@ -18,7 +18,7 @@ const fuelOf = d => Fuels[clamp(Math.round(d.Fuel), 0, Fuels.length - 1)];
 // ---------------------------------------------------------------- แบบเครื่อง
 export function newDesign(o = {}) {
   const r = Object.assign({
-    Bore: 52.4, Stroke: 57.9, Rod: 90, CrankKg: 2.8, FlywheelKg: 0.6, Valves: 2, ValveIn: 0, ValveEx: 0, ValveSpring: 1, Throttle: 20,
+    Bore: 52.4, Stroke: 57.9, Rod: 90, CrankKg: 2.8, FlywheelKg: 0.6, Valves: 2, ValveIn: 0, ValveEx: 0, ValveSpring: 1, Quickshift: 0, QsCutMs: 80, Throttle: 20,
     Lsa: 114, Duration: 225, DurationEx: 225, Lift: 7.5, LiftEx: 7.5, Cr: 9.3, Seal: 1,
     RealHp: 0, RealHpRpm: 0, RealTq: 0, RealTqRpm: 0, CalK: 1,
     Limiter: 9500, ResumeGap: 80, SoftGap: 0,
@@ -131,6 +131,8 @@ export const Params = [
   P('softcut', 'Soft cut ห่างใต้ hard cut', 'rpm', 0, 2000, 50, '0', ...pr('softcut', 'SoftGap'),
     'หน่วงไฟ/ข้ามจังหวะระเบิดตั้งแต่ใต้ hard cut ลงมา 0 = ไม่ใช้', { text: (v, d) => (v <= 0 ? 'ปิด' : `${Math.round(d.Limiter - v)} rpm  (ห่าง ${Math.round(v)})`) }),
   num('prim', 'อัตราทดขั้นต้น', ':1', 2.5, 4.5, 0.01, '0.000', 'Primary', 'ทดขั้นต้นสูง = ทุกเกียร์ทดจัดขึ้นเท่ากัน (Wave 125i = 3.350)', { visible: manual }),
+  num('qs', 'ควิกชิฟเตอร์', 'โหมด', 0, 2, 1, '0', 'Quickshift', "ควิกชิฟเตอร์: เซ็นเซอร์ที่คันเกียร์สั่งตัดไฟชั่วขณะ ให้เปลี่ยนเกียร์ขึ้นโดยไม่ต้องบีบครัชและไม่ต้องปล่อยคันเร่ง  ขึ้นอย่างเดียว = ขึ้นเกียร์เท่านั้น  ขึ้น+ลง = ลงเกียร์มีระบบเติมคันเร่ง (ออโต้บลิป) ให้รอบเครื่องตรงกับล้อ", { visible: d => d.Auto !== 1, text: v => ["ไม่มี","ขึ้นอย่างเดียว","ขึ้น + ลง (ออโต้บลิป)"][Math.round(v)] }),
+  num('qscut', 'เวลาตัดไฟตอนชิฟต์', 'ms', 30, 250, 5, '0', 'QsCutMs', "เวลาตัดไฟตอนชิฟต์ (มิลลิวินาที): สั้น = เปลี่ยนเกียร์ไว กำลังไม่หาย แต่สั้นเกินเฟืองยังไม่ปลด เกียร์กระแทก/ติด  ยาว = นุ่มแต่เสียเวลา  ปกติ 50–100 ms", { visible: d => d.Auto !== 1 && d.Quickshift >= 1, text: v => v.toFixed(0) + ' ms' }),
   num('gears', 'จำนวนเกียร์', 'สปีด', 4, 6, 1, '0', 'Gears', 'รถเกียร์ธรรมดามี 4 / 5 / 6 สปีด ตามรุ่นรถจริง (Wave 4 สปีด, Sonic/CBR150 5 สปีด, MX King/R15 6 สปีด)  เกียร์มากขึ้น = ช่วงห่างแคบลง รอบตกน้อยตอนเปลี่ยน', { visible: manual }),
   num('g1', 'อัตราทดเกียร์ 1', ':1', 1.6, 4, 0.01, '0.000', 'Gear1', 'ตัวเลขมาก = ทดจัด ออกตัวแรง (Wave 2.500)', { visible: manual }),
   num('g2', 'อัตราทดเกียร์ 2', ':1', 1.1, 2.8, 0.01, '0.000', 'Gear2', 'ช่วงห่างเกียร์ 1-2 กว้าง = รอบตกมากตอนเปลี่ยน (Wave 1.550)', { visible: manual }),
@@ -188,7 +190,7 @@ export const GarageTabs = [
   ['เครื่องยนต์', ['bore', 'stroke', 'rod', 'crank', 'fly', 'valves', 'valvein', 'valveex']],
   ['ไอดี·แคม·ท่อ', ['throttle', 'lsa', 'duration', 'durationex', 'lift', 'liftex', 'valvespring', 'pipe']],
   ['อัด·น้ำมัน', ['cr', 'psi', 'fuel', 'inj', 'limiter', 'resume', 'softcut']],
-  ['ส่งกำลัง', ['auto', 'prim', 'gears', 'g1', 'g2', 'g3', 'g4', 'g5', 'g6', 'sprf', 'sprr', 'ramp', 'rampout', 'rollers', 'rollerg', 'rollerg2', 'fdf', 'fdr', 'firstred', 'spring', 'clbite', 'clcap']],
+  ['ส่งกำลัง', ['auto', 'prim', 'gears', 'qs', 'qscut', 'g1', 'g2', 'g3', 'g4', 'g5', 'g6', 'sprf', 'sprr', 'ramp', 'rampout', 'rollers', 'rollerg', 'rollerg2', 'fdf', 'fdr', 'firstred', 'spring', 'clbite', 'clcap']],
   ['ตัวรถ', ['rider', 'bikekg', 'rim', 'rimw', 'tirew', 'tireasp', 'cda']],
   ['จูนกล่อง', []],
   ['รถจริง', ['realhp', 'realhprpm', 'realtq', 'realtqrpm', 'calk']],
@@ -232,6 +234,8 @@ export const PartCats = [
         d => near(d.RimInch, r, 0.1) && near(d.RimW, w, 0.03) && near(d.TireW, t, 2) && near(d.TireAsp, a, 2))) },
   { name: 'ชนิดน้ำมัน', hint: 'ออกเทนสูง = ทนกำลังอัดสูงก่อนน็อก',
     items: Fuels.map((f, i) => item(`${f.name}  RON ${f.ron}`, d => { d.Fuel = i; }, d => d.Fuel === i)) },
+  { name: 'ควิกชิฟเตอร์', hint: "ควิกชิฟเตอร์: เซ็นเซอร์ที่คันเกียร์สั่งตัดไฟชั่วขณะ ให้เปลี่ยนเกียร์ขึ้นโดยไม่ต้องบีบครัชและไม่ต้องปล่อยคันเร่ง  ขึ้นอย่างเดียว = ขึ้นเกียร์เท่านั้น  ขึ้น+ลง = ลงเกียร์มีระบบเติมคันเร่ง (ออโต้บลิป) ให้รอบเครื่องตรงกับล้อ",
+    items: [["ไม่มีควิกชิฟเตอร์ (ใช้ครัช)",0,80],["ควิกชิฟเตอร์ ขึ้นอย่างเดียว",1,90],["ควิกชิฟเตอร์ ขึ้น-ลง",2,70],["ควิกชิฟเตอร์แข่ง ขึ้น-ลง",2,45]].map(([n, m, c]) => item(`${n}${m ? '  ตัดไฟ ' + c + ' ms' : ''}`, d => { d.Quickshift = m; d.QsCutMs = c; }, d => d.Quickshift === m && (m === 0 || near(d.QsCutMs, c, 2)))) },
   { name: 'ชุดเกียร์ (4 / 5 / 6 สปีด)', hint: 'เลือกชุดเกียร์ทั้งชุด รวมจำนวนสปีด  ชิด = ไล่เกียร์ต่อเนื่อง  ห่าง = ออกตัวแรงแต่รอบตกมาก (ชุด 5-6 สปีดเป็นค่าประมาณตามรถประเภทเดียวกัน)',
     items: [['4 สปีด เดิม Wave 125i', 3.35, [2.5, 1.55, 1.15, 0.923]], ['4 สปีด ชิด', 3.35, [2.4, 1.7, 1.3, 1.05]], ['4 สปีด ออกตัวจัด', 3.35, [2.9, 1.8, 1.3, 1.0]], ['4 สปีด ปลายยาว', 3.35, [2.5, 1.55, 1.15, 0.85]], ['4 สปีด ดรัก (ชิดจัด)', 3.6, [2.7, 1.9, 1.45, 1.15]],
       ['5 สปีด มาตรฐาน', 3.2, [2.833, 1.882, 1.409, 1.13, 0.958]], ['5 สปีด ชิด', 3.2, [2.6, 1.85, 1.45, 1.2, 1.02]],
