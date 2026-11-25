@@ -31,6 +31,7 @@ public sealed partial class MainForm
         var sf = Vehicle.Surfaces[Vehicle.SurfaceIndex];
         Txt(g, $"{sf.Note}   •   แรงเกาะ x{sf.MuK:0.00}   •   ต้านการกลิ้ง x{sf.CrrK:0.00}", _fXs, Palette.Dim, 254, 158);
         DrawGauge(g, 640, 552, 335);
+        Btn(g, new RectangleF(868, 196, 168, 34), "M  จอ: " + (_save.GaugeMode == 1 ? "TFT" : "เข็ม"), false, Palette.Blue, () => { _save.GaugeMode = 1 - _save.GaugeMode; _save.Save(); }, _fCap);
         DrawThrottle(g, 1056, 170, 64, 660);
 
         // ระดับเสียง + คลื่นเสียง (ใต้เกจ)
@@ -286,8 +287,89 @@ public sealed partial class MainForm
         TxtC(g, "x1000 rpm", _fSm, Palette.Dim, cx, cy - 80 * k);
     }
 
+    /// <summary>ระยะจากจอด + ข้อความสถานะ (ใช้ร่วมกันทั้งจอเข็มและจอ TFT)</summary>
+    private void DriveOverlay(Graphics g, float cx, float msgY)
+    {
+        Txt(g, "ระยะจากจอด", _fXs, Palette.Dim, 262, 800);
+        Txt(g, _runDist < 0f ? "-" : (_runDist < 1000f ? $"{_runDist:0} ม." : $"{_runDist / 1000f:0.00} กม."), _fNum, Palette.Accent, 262, 826);
+        Txt(g, _runDist < 0f ? "ออกตัวจากหยุดนิ่งเพื่อวัด" : $"{_runTime:0.0} วิ  " + (_runFull ? "• เต็มคันเร่ง" : "• ไม่เต็มคันเร่ง"), _fXs, _runDist >= 0f && _runFull ? Palette.Green : Palette.Dim, 262, 876);
+
+        // ข้อความสถานะ
+        if (_eng.DynoRunning)
+            TxtC(g, "กำลังวัดไดโน...", _fBtn, Palette.Green, cx, msgY);
+        else if (_eng.Seized)
+            TxtC(g, "ลูกสูบล็อก! " + _eng.SeizeCause, _fBtn, Palette.Red, cx, msgY);
+        else if (_eng.EngT > 150f)
+            TxtC(g, "เครื่องร้อนจัด! ปล่อยคันเร่ง ให้ลมระบาย", _fBtn, Palette.Red, cx, msgY);
+        else if (!_eng.Running)
+            TxtC(g, _eng.Ignition ? "กด S ค้างเพื่อสตาร์ท" : "ดับเครื่องอยู่ - กด S ค้างเพื่อสตาร์ท", _fMd, Palette.Accent, cx, msgY);
+
+    }
+
+    /// <summary>จอ TFT แบบ XMAX: จอเล็กด้านบน (ความเร็ว/อุณหภูมิ/ระยะ) + จอใหญ่เกจรอบเป็นแท่งโค้งเรียงจากซ้ายไปขวา</summary>
+    private void DrawGaugeTft(Graphics g, float cx, float cy)
+    {
+        float lim = _eng.LimiterRpm, red = lim - 600f, gm = _gaugeMax, T = _eng.EngT;
+        bool hot = T > 135f;
+        var ink = Color.FromArgb(236, 242, 248);
+        var top = new RectangleF(cx - 330, cy - 330, 660, 150);
+        FillRR(g, top, 14, Color.FromArgb(8, 11, 16)); DrawRR(g, top, 14, Color.FromArgb(46, 52, 62), 3f);
+        TxtR(g, $"{_eng.SpeedKmh:0}", _fSpeed, ink, top.X + 250, top.Y + 14);
+        Txt(g, "km/h", _fSm, Palette.Dim, top.X + 262, top.Y + 96);
+        float gx = top.X + 340, gw = 280;
+        Txt(g, "C", _fCap, Palette.Dim, gx - 22, top.Y + 22); Txt(g, "H", _fCap, hot ? Palette.Red : Palette.Dim, gx + gw + 8, top.Y + 22);
+        int filled = (int)MathF.Round(Math.Clamp((T - 30f) / 160f, 0f, 1f) * 10f);
+        for (int i = 0; i < 10; i++)
+            g.FillRectangle(Br(i < filled ? (hot && i > 6 ? Palette.Red : ink) : Color.FromArgb(28, 34, 42)), gx + i * (gw / 10) + 2, top.Y + 16, gw / 10 - 6, 30);
+        Txt(g, $"{T:0}°C", _fXs, hot ? Palette.Red : Palette.Dim, gx, top.Y + 54);
+        Txt(g, _eng.IsAuto ? "AUTO " + _eng.CvtRatio.ToString("0.00") : "GEAR " + (_eng.Gear == 0 ? "N" : _eng.Gear.ToString()), _fSm, Palette.Text, gx + 150, top.Y + 52);
+        Txt(g, "TRIP", _fCap, Palette.Dim, gx, top.Y + 98); TxtR(g, (_eng.DistanceM / 1000f).ToString("0.00") + " km", _fSm, ink, gx + gw, top.Y + 92);
+
+        var tft = new RectangleF(cx - 350, cy - 160, 700, 340);
+        FillRR(g, tft, 16, Color.FromArgb(4, 7, 12)); DrawRR(g, tft, 16, Color.FromArgb(46, 52, 62), 3f);
+        var now = DateTime.Now;
+        Txt(g, now.ToString("HH:mm"), _fMd, ink, tft.X + 28, tft.Y + 14);
+        TxtR(g, $"{T:0}°C", _fMd, hot ? Palette.Red : ink, tft.Right - 28, tft.Y + 14);
+        var abs = new RectangleF(tft.X + tft.Width / 2 - 28, tft.Y + 18, 56, 26);
+        FillRR(g, abs, 13, _eng.WheelSpin ? Palette.Accent : Color.FromArgb(60, 50, 20));
+        TxtC(g, "ABS", _fCap, _eng.WheelSpin ? Color.FromArgb(14, 14, 16) : Color.FromArgb(150, 120, 40), abs.X + 28, abs.Y + 13);
+        float x0 = tft.X + 44, w = tft.Width - 88, yT = tft.Y + 70, yB = tft.Y + 262, yM = (yT + yB) / 2;
+        int n = Math.Max(20, (int)MathF.Round(gm / 250f));
+        for (int i = 0; i <= n; i++)
+        {
+            float rp = i * gm / n, x = x0 + w * i / n, bow = 40f * MathF.Pow(1f - (float)i / n, 1.5f) + 4f;
+            bool on = rp <= _needleRpm, isRed = rp >= red;
+            Color col = isRed ? (on ? Color.FromArgb(255, 72, 60) : Color.FromArgb(96, 28, 28))
+                : on ? Color.FromArgb(Math.Clamp((int)(150 + 90 * (1 - (float)i / n)), 0, 255), Math.Clamp((int)(190 + 50 * (1 - (float)i / n)), 0, 255), 255) : Color.FromArgb(30, 56, 92);
+            if (on && rp > _needleRpm - gm / n * 3f)       // หัวแท่งเรืองแสง
+                using (var glow = new Pen(Color.FromArgb(70, isRed ? Palette.Red : Color.FromArgb(80, 150, 255)), 11f))
+                    g.DrawBezier(glow, x, yT, x - bow, yM, x - bow, yM, x, yB);
+            using var pen = new Pen(col, on ? 3.4f : 1.7f);
+            g.DrawBezier(pen, x, yT, x - bow * 1.33f, yM - 20, x - bow * 1.33f, yM + 20, x, yB);
+        }
+        for (int r = 0; r <= (int)gm; r += 500)
+        {
+            float x = x0 + w * r / gm; bool major = r % 1000 == 0, on = r <= _needleRpm;
+            if (major)
+            {
+                g.FillRectangle(Br(Color.FromArgb(200, 4, 7, 12)), x - 13, yM - 14, 26, 28);
+                TxtC(g, (r / 1000).ToString(), _fSm, r >= red ? Palette.Red : on ? Color.FromArgb(240, 246, 255) : Color.FromArgb(110, 122, 140), x, yM);
+            }
+            else g.FillEllipse(Br(on ? Color.FromArgb(240, 246, 255) : Color.FromArgb(80, 90, 106)), x - 2.6f, yM - 2.6f, 5.2f, 5.2f);
+        }
+        TxtR(g, "x1000r/min", _fXs, Palette.Dim, tft.Right - 24, tft.Bottom - 36);
+
+        TxtC(g, ((int)(MathF.Round(_needleRpm / 10f) * 10f)).ToString(), _fNumL, Palette.Text, cx, cy + 238);
+        bool limiter = _eng.LimiterActive || _needleRpm > _eng.LimiterRpm - 150f;
+        var lamp = new RectangleF(cx - 70, cy + 296, 140, 28);
+        FillRR(g, lamp, 8, limiter ? Palette.Red : Color.FromArgb(50, 54, 62));
+        TxtC(g, "ตัดรอบ", _fSm, limiter ? Color.White : Palette.Dim, lamp.X + lamp.Width / 2, lamp.Y + lamp.Height / 2);
+        DriveOverlay(g, cx, cy - 172);
+    }
+
     private void DrawGauge(Graphics g, float cx, float cy, float r)
     {
+        if (_save.GaugeMode == 1) { DrawGaugeTft(g, cx, cy); return; }
         float redline = _eng.RedlineRpm;
         float k = r / 215f;
 
@@ -323,19 +405,7 @@ public sealed partial class MainForm
         string gear = _eng.IsAuto ? "ออโต้ " + _eng.CvtRatio.ToString("0.00") : "เกียร์ " + (_eng.Gear == 0 ? "N" : _eng.Gear.ToString());
         TxtC(g, $"{_eng.SpeedKmh:0}", _fSpeed, Palette.Accent, cx, cy + 205 * k);
         TxtC(g, $"กม./ชม.     {gear}", _fSm, Palette.Text, cx, cy + 238 * k);
-        Txt(g, "ระยะจากจอด", _fXs, Palette.Dim, 262, 800);
-        Txt(g, _runDist < 0f ? "-" : (_runDist < 1000f ? $"{_runDist:0} ม." : $"{_runDist / 1000f:0.00} กม."), _fNum, Palette.Accent, 262, 826);
-        Txt(g, _runDist < 0f ? "ออกตัวจากหยุดนิ่งเพื่อวัด" : $"{_runTime:0.0} วิ  " + (_runFull ? "• เต็มคันเร่ง" : "• ไม่เต็มคันเร่ง"), _fXs, _runDist >= 0f && _runFull ? Palette.Green : Palette.Dim, 262, 876);
-
-        // ข้อความสถานะ
-        if (_eng.DynoRunning)
-            TxtC(g, "กำลังวัดไดโน...", _fBtn, Palette.Green, cx, cy - 112 * k);
-        else if (_eng.Seized)
-            TxtC(g, "ลูกสูบล็อก! " + _eng.SeizeCause, _fBtn, Palette.Red, cx, cy - 112 * k);
-        else if (_eng.EngT > 150f)
-            TxtC(g, "เครื่องร้อนจัด! ปล่อยคันเร่ง ให้ลมระบาย", _fBtn, Palette.Red, cx, cy - 112 * k);
-        else if (!_eng.Running)
-            TxtC(g, _eng.Ignition ? "กด S ค้างเพื่อสตาร์ท" : "ดับเครื่องอยู่ - กด S ค้างเพื่อสตาร์ท", _fMd, Palette.Accent, cx, cy - 112 * k);
+        DriveOverlay(g, cx, cy - 112 * k);
 
         // เข็ม
         float na = GaugeAngle(_needleRpm);

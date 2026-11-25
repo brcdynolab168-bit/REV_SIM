@@ -13,7 +13,7 @@ const f1 = v => v.toFixed(1), f0 = v => v.toFixed(0), f2 = v => v.toFixed(2);
 // ================================================================= บันทึก
 const KEY = 'revlab.web.v2';
 const save = (() => {
-  const s = { design: null, best: { b060: -1, b100: -1, b402: -1, top: 0 }, volume: 0.8, idleGain: 0.4, assist: matchMedia('(pointer:coarse)').matches, clutchSys: true, surface: 0 };
+  const s = { design: null, best: { b060: -1, b100: -1, b402: -1, top: 0 }, volume: 0.8, idleGain: 0.4, assist: matchMedia('(pointer:coarse)').matches, clutchSys: true, surface: 0, gaugeMode: 0 };
   try { Object.assign(s, JSON.parse(localStorage.getItem(KEY) || '{}')); } catch { /* เริ่มใหม่ */ }
   return s;
 })();
@@ -213,6 +213,7 @@ function driveKey(k) {
   else if (k === 'c') toggleClutchSys();
   else if (k === 'p') toggleAutopilot();
   else if (k === 'v') setSurface((save.surface + 1) % Surfaces.length);
+  else if (k === 'm') toggleGaugeMode();
   else if (k === '[') changeSlope(-1);
   else if (k === ']') changeSlope(1);
   else if (k === 'escape') goTo('menu');
@@ -362,6 +363,7 @@ function drawDrive() {
   const sf = Surfaces[save.surface];
   ui.txt(`${sf.note}   •   แรงเกาะ x${f2(sf.muK)}   •   ต้านการกลิ้ง x${f2(sf.crrK)}`, F.xs, C.Dim, 254, 158);
   drawGauge(640, 552, 335);
+  ui.btn(R(868, 196, 168, 34), 'M  จอ: ' + (save.gaugeMode === 1 ? 'TFT' : 'เข็ม'), false, C.Blue, toggleGaugeMode, F.cap);
   drawThrottle(1056, 170, 64, 660);
 
   ui.txt('ระดับเสียง', F.sm, C.Dim, 270, 954);
@@ -501,7 +503,67 @@ function drawThrottle(x, y, w, h) {
   ui.hit(R(x - 30, y - 10, w + 60, h + 20), apply, apply, () => { mouseThrottle = false; });
 }
 
+/** ระยะจากจอด + ข้อความสถานะ (ใช้ร่วมกันทั้งจอเข็มและจอ TFT) */
+function driveOverlay(cx, msgY) {
+  const g = ui.g;
+  ui.txt('ระยะจากจอด', F.xs, C.Dim, 262, 800);
+  ui.txt(runDist < 0 ? '-' : `${runDist < 1000 ? f0(runDist) + ' ม.' : f2(runDist / 1000) + ' กม.'}`, F.num, C.Accent, 262, 826);
+  ui.txt(runDist < 0 ? 'ออกตัวจากหยุดนิ่งเพื่อวัด' : `${f1(runTime)} วิ  ${runFull ? '• เต็มคันเร่ง' : '• ไม่เต็มคันเร่ง'}`, F.xs, runDist >= 0 && runFull ? C.Green : C.Dim, 262, 876);
+  if (S.dynoPhase !== 0) ui.txtC('กำลังวัดไดโน...', F.btn, C.Green, cx, msgY);
+  else if (S.seized) ui.txtC('ลูกสูบล็อก! ' + S.seizeCause, F.btn, C.Red, cx, msgY);
+  else if ((S.engT ?? 0) > 150) ui.txtC('เครื่องร้อนจัด! ปล่อยคันเร่ง ให้ลมระบาย', F.btn, C.Red, cx, msgY);
+  else if (!S.running) ui.txtC(S.ignition ? 'กด S ค้างเพื่อสตาร์ท' : 'ดับเครื่องอยู่ - กด S ค้างเพื่อสตาร์ท', F.md, C.Accent, cx, msgY);
+}
+
+const toggleGaugeMode = () => { save.gaugeMode = save.gaugeMode === 1 ? 0 : 1; persist(); };
+/** จอ TFT แบบ XMAX: จอเล็กด้านบน (ความเร็ว/อุณหภูมิ/ระยะ) + จอใหญ่เกจรอบเป็นแท่งโค้งเรียงจากซ้ายไปขวา */
+function drawGaugeTft(cx, cy) {
+  const g = ui.g, lim = installed.D.Limiter, red = lim - 600, gm = gaugeMaxOf(lim), T = S.engT ?? 30;
+  // ---- จอเล็กด้านบน ----
+  const top = R(cx - 330, cy - 330, 660, 150);
+  ui.fillRR(top, 14, 'rgb(8,11,16)'); ui.drawRR(top, 14, 'rgb(46,52,62)', 3);
+  ui.txtR(String(Math.round(S.speed * 3.6)), F.speed, 'rgb(236,242,248)', top.x + 250, top.y + 14);
+  ui.txt('km/h', F.sm, C.Dim, top.x + 262, top.y + 96);
+  const gx = top.x + 340, gw = 280, hot = T > 135;
+  ui.txt('C', F.cap, C.Dim, gx - 22, top.y + 22); ui.txt('H', F.cap, hot ? C.Red : C.Dim, gx + gw + 8, top.y + 22);
+  const filled = Math.round(clamp((T - 30) / 160, 0, 1) * 10);
+  for (let i = 0; i < 10; i++) { const x = gx + i * (gw / 10); ui.rect(x + 2, top.y + 16, gw / 10 - 6, 30, i < filled ? (hot && i > 6 ? C.Red : 'rgb(232,238,244)') : 'rgb(28,34,42)'); }
+  ui.txt(`${f0(T)}°C`, F.xs, hot ? C.Red : C.Dim, gx, top.y + 54);
+  ui.txt(S.isAuto ? 'AUTO ' + f2(Cvt.ratio(S.cvtS)) : 'GEAR ' + (S.gear === 0 ? 'N' : S.gear), F.sm, C.Text, gx + 150, top.y + 52);
+  ui.txt('TRIP', F.cap, C.Dim, gx, top.y + 98); ui.txtR((S.dist / 1000).toFixed(2) + ' km', F.sm, 'rgb(236,242,248)', gx + gw, top.y + 92);
+  // ---- จอ TFT หลัก ----
+  const tft = R(cx - 350, cy - 160, 700, 340);
+  ui.fillRR(tft, 16, 'rgb(4,7,12)'); ui.drawRR(tft, 16, 'rgb(46,52,62)', 3);
+  const d = new Date(), pad2 = v => String(v).padStart(2, '0');
+  ui.txt(`${pad2(d.getHours())}:${pad2(d.getMinutes())}`, F.md, 'rgb(236,242,248)', tft.x + 28, tft.y + 14);
+  ui.txtR(`${f0(T)}°C`, F.md, hot ? C.Red : 'rgb(236,242,248)', tft.x + tft.w - 28, tft.y + 14);
+  const abs = R(tft.x + tft.w / 2 - 28, tft.y + 18, 56, 26); ui.fillRR(abs, 13, S.spin ? C.Accent : 'rgb(60,50,20)'); ui.txtC('ABS', F.cap, S.spin ? C.Black : 'rgb(150,120,40)', abs.x + 28, abs.y + 13);
+  const x0 = tft.x + 44, w = tft.w - 88, yT = tft.y + 70, yB = tft.y + 262, yM = (yT + yB) / 2, n = Math.max(20, Math.round(gm / 250));
+  g.lineCap = 'butt';
+  for (let i = 0; i <= n; i++) {
+    const rp = i * gm / n, x = x0 + w * i / n, on = rp <= needle, isRed = rp >= red, bow = 40 * Math.pow(1 - i / n, 1.5) + 4;
+    let col;
+    if (isRed) col = on ? 'rgb(255,72,60)' : 'rgb(96,28,28)';
+    else col = on ? `rgb(${Math.round(150 + 90 * (1 - i / n))},${Math.round(190 + 50 * (1 - i / n))},255)` : 'rgb(30,56,92)';
+    const head = on && rp > needle - gm / n * 3;
+    g.save(); if (head) { g.shadowColor = isRed ? 'rgb(255,70,60)' : 'rgb(80,150,255)'; g.shadowBlur = 20; }
+    g.strokeStyle = col; g.lineWidth = on ? 3.4 : 1.7; g.beginPath(); g.moveTo(x, yT); g.quadraticCurveTo(x - bow, yM, x, yB); g.stroke(); g.restore();
+  }
+  for (let r = 0; r <= gm; r += 500) {
+    const x = x0 + w * r / gm, major = r % 1000 === 0, on = r <= needle;
+    if (major) { ui.rect(x - 13, yM - 14, 26, 28, 'rgba(4,7,12,0.78)'); ui.txtC(String(r / 1000), F.sm, r >= red ? C.Red : on ? 'rgb(240,246,255)' : 'rgb(110,122,140)', x, yM); }
+    else { g.beginPath(); g.arc(x, yM, 2.6, 0, 7); g.fillStyle = on ? 'rgb(240,246,255)' : 'rgb(80,90,106)'; g.fill(); }
+  }
+  ui.txtR('x1000r/min', F.xs, C.Dim, tft.x + tft.w - 24, tft.y + tft.h - 36);
+  // ---- ตัวเลขรอบ + ไฟตัดรอบ ----
+  ui.txtC(String(Math.round(needle / 10) * 10), F.numL, C.Text, cx, cy + 238);
+  const limOn = S.cut || needle > lim - 150, lamp = R(cx - 70, cy + 296, 140, 28);
+  ui.fillRR(lamp, 8, limOn ? C.Red : 'rgb(50,54,62)'); ui.txtC('ตัดรอบ', F.sm, limOn ? C.White : C.Dim, lamp.x + lamp.w / 2, lamp.y + lamp.h / 2);
+  driveOverlay(cx, cy - 172);
+}
+
 function drawGauge(cx, cy, r) {
+  if (save.gaugeMode === 1) { drawGaugeTft(cx, cy); return; }
   const g = ui.g, k = r / 215, lim = installed.D.Limiter, red = lim - 600, gm = gaugeMaxOf(lim);
   const ang = rpm => (135 + 270 * clamp(rpm, 0, gm) / gm) * Math.PI / 180;
   g.beginPath(); g.arc(cx, cy, r + 26, 0, 7); g.fillStyle = 'rgb(14,17,21)'; g.fill(); g.strokeStyle = C.Border; g.lineWidth = 3; g.stroke();
@@ -522,13 +584,7 @@ function drawGauge(cx, cy, r) {
   const gear = S.isAuto ? 'ออโต้ ' + f2(Cvt.ratio(S.cvtS)) : 'เกียร์ ' + (S.gear === 0 ? 'N' : S.gear);
   ui.txtC(f0(S.speed * 3.6), F.speed, C.Accent, cx, cy + 205 * k);
   ui.txtC(`กม./ชม.     ${gear}`, F.sm, C.Text, cx, cy + 238 * k);
-  ui.txt('ระยะจากจอด', F.xs, C.Dim, 262, 800);
-  ui.txt(runDist < 0 ? '-' : `${runDist < 1000 ? f0(runDist) + ' ม.' : f2(runDist / 1000) + ' กม.'}`, F.num, C.Accent, 262, 826);
-  ui.txt(runDist < 0 ? 'ออกตัวจากหยุดนิ่งเพื่อวัด' : `${f1(runTime)} วิ  ${runFull ? '• เต็มคันเร่ง' : '• ไม่เต็มคันเร่ง'}`, F.xs, runDist >= 0 && runFull ? C.Green : C.Dim, 262, 876);
-  if (S.dynoPhase !== 0) ui.txtC('กำลังวัดไดโน...', F.btn, C.Green, cx, cy - 112 * k);
-  else if (S.seized) ui.txtC('ลูกสูบล็อก! ' + S.seizeCause, F.btn, C.Red, cx, cy - 112 * k);
-  else if ((S.engT ?? 0) > 150) ui.txtC('เครื่องร้อนจัด! ปล่อยคันเร่ง ให้ลมระบาย', F.btn, C.Red, cx, cy - 112 * k);
-  else if (!S.running) ui.txtC(S.ignition ? 'กด S ค้างเพื่อสตาร์ท' : 'ดับเครื่องอยู่ - กด S ค้างเพื่อสตาร์ท', F.md, C.Accent, cx, cy - 112 * k);
+  driveOverlay(cx, cy - 112 * k);
   const na = ang(needle);
   g.lineCap = 'round'; g.strokeStyle = C.Accent; g.lineWidth = 9 * k; g.beginPath();
   g.moveTo(cx + Math.cos(na + Math.PI) * 26 * k, cy + Math.sin(na + Math.PI) * 26 * k); g.lineTo(cx + Math.cos(na) * (r - 26 * k), cy + Math.sin(na) * (r - 26 * k)); g.stroke();

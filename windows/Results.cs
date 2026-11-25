@@ -53,6 +53,7 @@ public sealed class SaveData
     public float IdleGain = 0.4f;                         // ความดังเสียงเดินเบา 0..1 (x(1+30*IdleGain))
     public float Volume = 0.8f;                           // ระดับเสียงที่ตั้งไว้
     public bool Fullscreen = true;
+    public int GaugeMode = 0;                             // จอมาตรวัด: 0 = เข็ม, 1 = TFT แบบ XMAX
     public int Surface = 0;                               // พื้นถนน (0 ทั่วไป, 1 ราดยาง, 2 คอนกรีต, 3 แทร็ก)
     public bool ClutchSys = true;                         // ระบบครัตช์มือ (เปิด/ปิด)
 
@@ -84,6 +85,7 @@ public sealed class SaveData
                 else if (k == "idlegain") s.IdleGain = Math.Clamp(F(v, 0.4f), 0f, 1f);
                 else if (k == "fullscreen") s.Fullscreen = v != "0";
                 else if (k == "clutchsys") s.ClutchSys = v != "0";
+                else if (k == "gaugemode") s.GaugeMode = Math.Clamp((int)F(v, 0f), 0, 1);
                 else if (k == "surface") s.Surface = Math.Clamp((int)F(v, 0f), 0, 3);
                 else if (k == "besttop") s.BestTop = F(v, 0f);
             }
@@ -114,6 +116,7 @@ public sealed class SaveData
                 "fullscreen=" + (Fullscreen ? "1" : "0"),
                 "clutchsys=" + (ClutchSys ? "1" : "0"),
                 "surface=" + Surface,
+                "gaugemode=" + GaugeMode,
                 "besttop=" + S(BestTop),
             });
         }

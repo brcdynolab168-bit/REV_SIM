@@ -239,6 +239,7 @@ public sealed partial class MainForm : Form
             case Keys.N: SelectGear(0); break;
             case Keys.C: ToggleClutchSystem(); break;
             case Keys.P: ToggleAutopilot(); break;
+            case Keys.M: _save.GaugeMode = 1 - _save.GaugeMode; _save.Save(); break;
             case Keys.V: SetSurface((Vehicle.SurfaceIndex + 1) % Vehicle.Surfaces.Length); break;
             case Keys.OemOpenBrackets: ChangeSlope(-1); break;
             case Keys.OemCloseBrackets: ChangeSlope(+1); break;
